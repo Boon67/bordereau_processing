@@ -1,0 +1,33 @@
+{
+  "comment": "Snowflake Backend Configuration Example - JSON Format",
+  "SNOWFLAKE_ACCOUNT": "your-account.region",
+  "SNOWFLAKE_USER": "your-username",
+  "SNOWFLAKE_ROLE": "SYSADMIN",
+  "SNOWFLAKE_WAREHOUSE": "COMPUTE_WH",
+  
+  "DATABASE_NAME": "BORDEREAU_PROCESSING_PIPELINE",
+  "BRONZE_SCHEMA_NAME": "BRONZE",
+  "SILVER_SCHEMA_NAME": "SILVER",
+  
+  "comment_auth": "Choose one authentication method below",
+  
+  "comment_password": "Option 1: Password Authentication (not recommended)",
+  "SNOWFLAKE_PASSWORD": "your-password",
+  
+  "comment_pat": "Option 2: Personal Access Token (PAT) - Recommended",
+  "SNOWFLAKE_AUTHENTICATOR": "oauth",
+  "SNOWFLAKE_TOKEN": "your-pat-token",
+  
+  "comment_keypair": "Option 3: Keypair Authentication - Most Secure",
+  "SNOWFLAKE_PRIVATE_KEY_PATH": "/path/to/your/private_key.p8",
+  "SNOWFLAKE_PRIVATE_KEY_PASSPHRASE": "your-passphrase",
+  
+  "ENVIRONMENT": "development",
+  "API_PREFIX": "/api",
+  "CORS_ORIGINS": ["http://localhost:3000", "http://localhost:5173"],
+  
+  "MAX_UPLOAD_SIZE": 104857600,
+  "ALLOWED_EXTENSIONS": [".csv", ".xlsx", ".xls"],
+  "BATCH_SIZE": 10000,
+  "MAX_RETRIES": 3
+}

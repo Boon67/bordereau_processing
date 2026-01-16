@@ -1,0 +1,23 @@
+table_name,column_name,tpa,data_type,nullable,default_value,description
+CLAIMS,CLAIM_ID,provider_a,VARCHAR(100),FALSE,,Unique claim identifier
+CLAIMS,PATIENT_FIRST_NAME,provider_a,VARCHAR(100),TRUE,,Patient first name
+CLAIMS,PATIENT_LAST_NAME,provider_a,VARCHAR(100),TRUE,,Patient last name
+CLAIMS,DATE_OF_BIRTH,provider_a,DATE,TRUE,,Patient date of birth
+CLAIMS,PROVIDER_NAME,provider_a,VARCHAR(500),TRUE,,Healthcare provider name
+CLAIMS,PROVIDER_NPI,provider_a,VARCHAR(20),TRUE,,National Provider Identifier
+CLAIMS,SERVICE_DATE,provider_a,DATE,TRUE,,Date of service
+CLAIMS,DIAGNOSIS_CODE,provider_a,VARCHAR(20),TRUE,,Diagnosis code (ICD-10)
+CLAIMS,PROCEDURE_CODE,provider_a,VARCHAR(20),TRUE,,Procedure code (CPT/HCPCS)
+CLAIMS,BILLED_AMOUNT,provider_a,NUMBER(18,2),TRUE,,Amount billed
+CLAIMS,PAID_AMOUNT,provider_a,NUMBER(18,2),TRUE,,Amount paid
+CLAIMS,CLAIM_ID,provider_b,VARCHAR(100),FALSE,,Unique claim identifier
+CLAIMS,PATIENT_FIRST_NAME,provider_b,VARCHAR(100),TRUE,,Patient first name
+CLAIMS,PATIENT_LAST_NAME,provider_b,VARCHAR(100),TRUE,,Patient last name
+CLAIMS,DATE_OF_BIRTH,provider_b,DATE,TRUE,,Patient date of birth
+CLAIMS,PROVIDER_NAME,provider_b,VARCHAR(500),TRUE,,Healthcare provider name
+CLAIMS,PROVIDER_NPI,provider_b,VARCHAR(20),TRUE,,National Provider Identifier
+CLAIMS,SERVICE_DATE,provider_b,DATE,TRUE,,Date of service
+CLAIMS,DIAGNOSIS_CODE,provider_b,VARCHAR(20),TRUE,,Diagnosis code (ICD-10)
+CLAIMS,PROCEDURE_CODE,provider_b,VARCHAR(20),TRUE,,Procedure code (CPT/HCPCS)
+CLAIMS,BILLED_AMOUNT,provider_b,NUMBER(18,2),TRUE,,Amount billed
+CLAIMS,PAID_AMOUNT,provider_b,NUMBER(18,2),TRUE,,Amount paid

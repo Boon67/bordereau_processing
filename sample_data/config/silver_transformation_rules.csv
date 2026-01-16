@@ -1,0 +1,8 @@
+rule_id,tpa,rule_name,rule_type,target_table,target_column,rule_logic,error_action,priority,active,description
+DQ001,provider_a,Claim ID Not Null,DATA_QUALITY,CLAIMS,CLAIM_ID,CLAIM_ID IS NOT NULL,REJECT,100,TRUE,Claim ID must not be null
+DQ002,provider_a,Valid Service Date,DATA_QUALITY,CLAIMS,SERVICE_DATE,SERVICE_DATE <= CURRENT_DATE(),QUARANTINE,100,TRUE,Service date cannot be in future
+DQ003,provider_a,Positive Amounts,DATA_QUALITY,CLAIMS,BILLED_AMOUNT,BILLED_AMOUNT >= 0,QUARANTINE,100,TRUE,Billed amount must be non-negative
+BL001,provider_a,Calculate Discount,BUSINESS_LOGIC,CLAIMS,,PAID_AMOUNT / BILLED_AMOUNT AS DISCOUNT_RATE,FLAG,200,TRUE,Calculate discount rate
+DQ001,provider_b,Claim ID Not Null,DATA_QUALITY,CLAIMS,CLAIM_ID,CLAIM_ID IS NOT NULL,REJECT,100,TRUE,Claim ID must not be null
+DQ002,provider_b,Valid Service Date,DATA_QUALITY,CLAIMS,SERVICE_DATE,SERVICE_DATE <= CURRENT_DATE(),QUARANTINE,100,TRUE,Service date cannot be in future
+DQ003,provider_b,Positive Amounts,DATA_QUALITY,CLAIMS,BILLED_AMOUNT,BILLED_AMOUNT >= 0,QUARANTINE,100,TRUE,Billed amount must be non-negative

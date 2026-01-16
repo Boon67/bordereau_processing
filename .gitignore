@@ -1,0 +1,163 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.cursor/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Environment and Configuration Files
+.env
+.env.local
+.env.*.local
+config.toml
+config.json
+*.config
+!default.config
+!*.example
+!*.example.*
+!vite.config.ts
+!tsconfig*.json
+
+# Snowflake
+.snowflake/
+snowflake-credentials.json
+*.p8
+*.pem
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+dist/
+dist-ssr/
+*.local
+
+# Frontend build outputs
+frontend/dist/
+frontend/build/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.cache
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.spyderproject
+.spyproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS specific
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Docker
+.dockerignore
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Sensitive data
+sample_data/claims_data/*/
+!sample_data/claims_data/provider_a/
+!sample_data/claims_data/provider_b/
+!sample_data/claims_data/provider_e/
+!sample_data/claims_data/*/*.csv

@@ -1,0 +1,29 @@
+# ============================================
+# CUSTOM CONFIGURATION EXAMPLE
+# ============================================
+# Copy this file to custom.config and fill in your values.
+# custom.config will override default.config settings.
+
+# Snowflake Connection (REQUIRED)
+SNOWFLAKE_ACCOUNT="abc12345.us-east-1"
+SNOWFLAKE_USER="your_username"
+SNOWFLAKE_PASSWORD="your_password"
+SNOWFLAKE_ROLE="SYSADMIN"
+SNOWFLAKE_WAREHOUSE="COMPUTE_WH"
+
+# Database Configuration (Optional - defaults provided)
+# DATABASE_NAME="MY_PIPELINE"
+# BRONZE_SCHEMA_NAME="BRONZE"
+# SILVER_SCHEMA_NAME="SILVER"
+
+# Task Configuration (Optional)
+# BRONZE_DISCOVERY_SCHEDULE="30 MINUTE"  # More frequent discovery
+# SILVER_SENSOR_SCHEDULE="2 MINUTE"      # More frequent checks
+
+# Processing Configuration (Optional)
+# BATCH_SIZE="50000"                     # Larger batches for performance
+# MAX_RETRIES="5"                        # More retry attempts
+# RETENTION_DAYS="60"                    # Longer retention
+
+# Environment
+# ENVIRONMENT="prod"

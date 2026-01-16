@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Page</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1890ff;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        button {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #40a9ff;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .success {
+            background: #f6ffed;
+            border: 1px solid #b7eb8f;
+            color: #52c41a;
+        }
+        .error {
+            background: #fff1f0;
+            border: 1px solid #ffa39e;
+            color: #ff4d4f;
+        }
+        .info {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .endpoint {
+            font-weight: bold;
+            color: #1890ff;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Snowflake Pipeline API Test</h1>
+        <p class="subtitle">Direct API testing without browser cache</p>
+        
+        <div class="info">
+            <strong>ℹ️ This page bypasses all browser caching</strong><br>
+            Use this to verify the API is working correctly.
+        </div>
+
+        <div>
+            <button onclick="testTpas()">Test /api/tpas</button>
+            <button onclick="testSchemas()">Test /api/silver/schemas</button>
+            <button onclick="testMappings()">Test /api/silver/mappings</button>
+            <button onclick="testQueue()">Test /api/bronze/queue</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        const resultDiv = document.getElementById('result');
+        
+        function clearResults() {
+            resultDiv.textContent = '';
+            resultDiv.className = 'result';
+        }
+
+        async function testApi(endpoint, description) {
+            resultDiv.textContent = `Testing ${endpoint}...\n`;
+            resultDiv.className = 'result';
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    },
+                    cache: 'no-store'
+                });
+                
+                const duration = Date.now() - startTime;
+                const data = await response.json();
+                
+                let output = `✅ SUCCESS\n\n`;
+                output += `Endpoint: ${endpoint}\n`;
+                output += `Status: ${response.status} ${response.statusText}\n`;
+                output += `Duration: ${duration}ms\n`;
+                output += `Content-Type: ${response.headers.get('content-type')}\n\n`;
+                output += `Response:\n`;
+                output += JSON.stringify(data, null, 2);
+                
+                resultDiv.textContent = output;
+                resultDiv.className = 'result success';
+                
+            } catch (error) {
+                let output = `❌ ERROR\n\n`;
+                output += `Endpoint: ${endpoint}\n`;
+                output += `Error: ${error.message}\n\n`;
+                output += `Details:\n${error.stack}`;
+                
+                resultDiv.textContent = output;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        function testTpas() {
+            testApi('/api/tpas', 'TPAs');
+        }
+
+        function testSchemas() {
+            testApi('/api/silver/schemas?tpa=provider_a', 'Silver Schemas');
+        }
+
+        function testMappings() {
+            testApi('/api/silver/mappings?tpa=provider_a', 'Silver Mappings');
+        }
+
+        function testQueue() {
+            testApi('/api/bronze/queue', 'Bronze Queue');
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testTpas();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

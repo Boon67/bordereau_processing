@@ -1,0 +1,12 @@
+.ant-layout-header {
+  background: #001529;
+  padding: 0 24px;
+}
+
+.ant-layout-sider {
+  background: #fff;
+}
+
+.ant-menu {
+  border-right: 1px solid #f0f0f0;
+}

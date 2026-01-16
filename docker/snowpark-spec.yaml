@@ -1,0 +1,66 @@
+# Snowpark Container Services Specification
+# Deploy the application in Snowflake Snowpark Container Services
+
+spec:
+  containers:
+  - name: backend
+    image: /snowflake_pipeline/backend:latest
+    env:
+      ENVIRONMENT: production
+      SNOWFLAKE_ACCOUNT: <SNOWFLAKE_ACCOUNT>
+      SNOWFLAKE_USER: <SNOWFLAKE_USER>
+      SNOWFLAKE_PASSWORD: <SNOWFLAKE_PASSWORD>
+      SNOWFLAKE_ROLE: SYSADMIN
+      SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+      DATABASE_NAME: FILE_PROCESSING_PIPELINE
+      BRONZE_SCHEMA_NAME: BRONZE
+      SILVER_SCHEMA_NAME: SILVER
+    resources:
+      requests:
+        cpu: 1
+        memory: 2Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
+    readinessProbe:
+      httpGet:
+        path: /api/health
+        port: 8000
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    livenessProbe:
+      httpGet:
+        path: /api/health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 30
+  
+  - name: frontend
+    image: /snowflake_pipeline/frontend:latest
+    resources:
+      requests:
+        cpu: 0.5
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 15
+      periodSeconds: 30
+
+  endpoints:
+  - name: frontend
+    port: 80
+    public: true
+  - name: backend
+    port: 8000
+    public: false
