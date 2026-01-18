@@ -21,19 +21,27 @@ class SnowflakeService:
         logger.info(f"Initialized Snowflake service for account: {self.connection_params.get('account')}")
     
     def get_connection(self):
-        """Get Snowflake connection"""
+        """Get Snowflake connection with timeout settings"""
         try:
-            conn = snowflake.connector.connect(**self.connection_params)
+            # Add timeout parameters to prevent hanging
+            connection_params = self.connection_params.copy()
+            connection_params['network_timeout'] = 60  # 60 seconds for network operations
+            connection_params['login_timeout'] = 30    # 30 seconds for login
+            
+            conn = snowflake.connector.connect(**connection_params)
             return conn
         except Exception as e:
             logger.error(f"Failed to connect to Snowflake: {str(e)}")
             raise
     
-    def execute_query(self, query: str, params: Optional[Dict] = None) -> List[tuple]:
-        """Execute a query and return results"""
+    def execute_query(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[tuple]:
+        """Execute a query and return results with timeout"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
+                    # Set statement timeout (in seconds)
+                    cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout}")
+                    
                     if params:
                         cursor.execute(query, params)
                     else:
@@ -43,11 +51,14 @@ class SnowflakeService:
             logger.error(f"Query execution failed: {str(e)}")
             raise
     
-    def execute_query_dict(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
-        """Execute a query and return results as list of dictionaries"""
+    def execute_query_dict(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[Dict[str, Any]]:
+        """Execute a query and return results as list of dictionaries with timeout"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor(DictCursor) as cursor:
+                    # Set statement timeout (in seconds)
+                    cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout}")
+                    
                     if params:
                         cursor.execute(query, params)
                     else:
@@ -106,7 +117,7 @@ class SnowflakeService:
         return self.execute_query_dict(query)
     
     def get_processing_queue(self, tpa: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get file processing queue"""
+        """Get file processing queue with timeout"""
         query = f"""
             SELECT 
                 queue_id,
@@ -128,7 +139,7 @@ class SnowflakeService:
         
         query += " ORDER BY discovered_timestamp DESC LIMIT 100"
         
-        return self.execute_query_dict(query)
+        return self.execute_query_dict(query, timeout=30)
     
     def get_raw_data(self, tpa: str, file_name: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
         """Get raw data records"""

@@ -25,6 +25,7 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [typeFilter, setTypeFilter] = useState<string[]>([])
   const [tpaFilter, setTpaFilter] = useState<string[]>([selectedTpa])
+  const [totalRows, setTotalRows] = useState(0)
 
   useEffect(() => {
     if (selectedTpa) {
@@ -34,6 +35,7 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
 
   useEffect(() => {
     loadQueue()
+    loadStats()
   }, [])
 
   const loadQueue = async () => {
@@ -45,6 +47,15 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
       message.error('Failed to load processing queue')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadStats = async () => {
+    try {
+      const stats = await apiService.getBronzeStats()
+      setTotalRows(stats.total_rows || 0)
+    } catch (error) {
+      console.error('Failed to load Bronze stats:', error)
     }
   }
 
@@ -61,7 +72,6 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
   const failedFiles = filteredQueue.filter(f => f.STATUS === 'FAILED').length
   const processingFiles = filteredQueue.filter(f => f.STATUS === 'PROCESSING').length
   const pendingFiles = filteredQueue.filter(f => f.STATUS === 'PENDING').length
-  const totalRows = filteredQueue.reduce((sum, f) => sum + (f.FILE_SIZE_BYTES || 0), 0)
   const successRate = totalFiles > 0 ? ((successFiles / totalFiles) * 100).toFixed(1) : '0.0'
 
   const statusOptions = [

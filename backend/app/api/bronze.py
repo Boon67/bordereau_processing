@@ -3,6 +3,7 @@ Bronze Layer API Endpoints
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from pydantic import BaseModel
 from typing import List, Optional
 import tempfile
 import os
@@ -79,6 +80,48 @@ async def get_processing_status():
         return sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get processing status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/stats")
+async def get_bronze_stats(tpa: Optional[str] = None):
+    """Get Bronze layer statistics including total row count"""
+    try:
+        sf_service = SnowflakeService()
+        
+        # Build WHERE clause for TPA filter
+        tpa_filter = f"WHERE TPA = '{tpa}'" if tpa else ""
+        
+        # Get total row count from RAW_DATA_TABLE
+        row_count_query = f"""
+            SELECT COUNT(*) as total_rows
+            FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE
+            {tpa_filter}
+        """
+        row_count_result = sf_service.execute_query(row_count_query)
+        total_rows = row_count_result[0][0] if row_count_result else 0
+        
+        # Get file statistics
+        file_stats_query = f"""
+            SELECT 
+                COUNT(DISTINCT FILE_NAME) as total_files,
+                COUNT(DISTINCT TPA) as total_tpas,
+                MIN(LOAD_TIMESTAMP) as earliest_load,
+                MAX(LOAD_TIMESTAMP) as latest_load
+            FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE
+            {tpa_filter}
+        """
+        file_stats_result = sf_service.execute_query_dict(file_stats_query)
+        file_stats = file_stats_result[0] if file_stats_result else {}
+        
+        return {
+            "total_rows": total_rows,
+            "total_files": file_stats.get('TOTAL_FILES', 0),
+            "total_tpas": file_stats.get('TOTAL_TPAS', 0),
+            "earliest_load": file_stats.get('EARLIEST_LOAD'),
+            "latest_load": file_stats.get('LATEST_LOAD')
+        }
+    except Exception as e:
+        logger.error(f"Failed to get Bronze stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/raw-data")
@@ -321,14 +364,14 @@ async def process_queue():
     try:
         sf_service = SnowflakeService()
         
-        # Get pending files from queue
+        # Get pending files from queue with short timeout
         query = f"""
             SELECT queue_id, file_name, tpa, file_type 
             FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
             WHERE status = 'PENDING'
             LIMIT 10
         """
-        pending_files = sf_service.execute_query_dict(query)
+        pending_files = sf_service.execute_query_dict(query, timeout=30)
         
         files_processed = 0
         for file_info in pending_files:
@@ -357,8 +400,8 @@ async def process_queue():
                 else:
                     raise Exception(f"Unsupported file type: {file_type}")
                 
-                # Execute procedure and get result
-                result = sf_service.execute_query(proc_query)
+                # Execute procedure and get result with longer timeout (10 minutes for file processing)
+                result = sf_service.execute_query(proc_query, timeout=600)
                 result_msg = result[0][0] if result and len(result) > 0 else "No result returned"
                 
                 logger.info(f"Processing result for {file_name}: {result_msg}")
@@ -402,11 +445,30 @@ async def process_queue():
 
 @router.get("/tasks")
 async def get_tasks():
-    """Get Bronze tasks status"""
+    """Get Bronze tasks status with predecessor information"""
     try:
         sf_service = SnowflakeService()
         query = f"SHOW TASKS IN SCHEMA {settings.BRONZE_SCHEMA_NAME}"
-        return sf_service.execute_query_dict(query)
+        tasks = sf_service.execute_query_dict(query, timeout=30)
+        
+        # Add predecessor information to each task
+        for task in tasks:
+            task_name = task.get('name', '')
+            # Get task details including predecessors
+            desc_query = f"DESC TASK {settings.BRONZE_SCHEMA_NAME}.{task_name}"
+            try:
+                desc_result = sf_service.execute_query_dict(desc_query, timeout=30)
+                # Find predecessor info in description
+                for row in desc_result:
+                    if row.get('property', '').upper() == 'PREDECESSORS':
+                        task['predecessors'] = row.get('value', '')
+                        break
+                else:
+                    task['predecessors'] = ''
+            except:
+                task['predecessors'] = ''
+        
+        return tasks
     except Exception as e:
         logger.error(f"Failed to get tasks: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -429,8 +491,111 @@ async def suspend_task(task_name: str):
     try:
         sf_service = SnowflakeService()
         query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} SUSPEND"
-        sf_service.execute_query(query)
+        sf_service.execute_query(query, timeout=30)
         return {"message": f"Task {task_name} suspended successfully"}
     except Exception as e:
         logger.error(f"Failed to suspend task: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ScheduleUpdate(BaseModel):
+    schedule: str
+
+@router.put("/tasks/{task_name}/schedule")
+async def update_task_schedule(task_name: str, schedule_update: ScheduleUpdate):
+    """Update task schedule (only for root tasks without predecessors)"""
+    try:
+        sf_service = SnowflakeService()
+        schedule = schedule_update.schedule
+        
+        # Check if task has predecessors
+        desc_query = f"DESC TASK {settings.BRONZE_SCHEMA_NAME}.{task_name}"
+        desc_result = sf_service.execute_query_dict(desc_query, timeout=30)
+        
+        has_predecessors = False
+        for row in desc_result:
+            if row.get('property', '').upper() == 'PREDECESSORS':
+                predecessors = row.get('value', '')
+                if predecessors and predecessors.strip():
+                    has_predecessors = True
+                    break
+        
+        if has_predecessors:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot modify schedule for tasks with predecessors. Only root tasks can have their schedule changed."
+            )
+        
+        # Update the schedule
+        alter_query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} SET SCHEDULE = '{schedule}'"
+        sf_service.execute_query(alter_query, timeout=30)
+        
+        return {"message": f"Task {task_name} schedule updated successfully", "new_schedule": schedule}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update task schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/clear-all-data")
+async def clear_all_data():
+    """
+    Clear all data from Bronze layer including:
+    - All files from all stages (@SRC, @COMPLETED, @ERROR, @ARCHIVE)
+    - All records from RAW_DATA_TABLE
+    - All entries from file_processing_queue
+    
+    WARNING: This is a destructive operation that cannot be undone!
+    """
+    try:
+        sf_service = SnowflakeService()
+        results = {
+            "stages_cleared": [],
+            "tables_truncated": [],
+            "errors": []
+        }
+        
+        logger.warning("⚠️  CLEARING ALL BRONZE DATA - This is a destructive operation!")
+        
+        # Clear all stages
+        stages = ["SRC", "COMPLETED", "ERROR", "ARCHIVE"]
+        for stage in stages:
+            try:
+                remove_query = f"REMOVE @{settings.BRONZE_SCHEMA_NAME}.{stage}"
+                sf_service.execute_query(remove_query)
+                results["stages_cleared"].append(stage)
+                logger.info(f"Cleared stage: @{stage}")
+            except Exception as e:
+                error_msg = f"Failed to clear stage {stage}: {str(e)}"
+                results["errors"].append(error_msg)
+                logger.error(error_msg)
+        
+        # Truncate tables (preserve structure, delete data)
+        tables = ["RAW_DATA_TABLE", "file_processing_queue"]
+        for table in tables:
+            try:
+                truncate_query = f"TRUNCATE TABLE IF EXISTS {settings.BRONZE_SCHEMA_NAME}.{table}"
+                sf_service.execute_query(truncate_query)
+                results["tables_truncated"].append(table)
+                logger.info(f"Truncated table: {table}")
+            except Exception as e:
+                error_msg = f"Failed to truncate table {table}: {str(e)}"
+                results["errors"].append(error_msg)
+                logger.error(error_msg)
+        
+        # Build summary message
+        success_count = len(results["stages_cleared"]) + len(results["tables_truncated"])
+        error_count = len(results["errors"])
+        
+        if error_count == 0:
+            message = f"✅ All Bronze data cleared successfully! Cleared {len(results['stages_cleared'])} stages and truncated {len(results['tables_truncated'])} tables."
+        else:
+            message = f"⚠️  Partial success: {success_count} operations succeeded, {error_count} failed. Check errors for details."
+        
+        return {
+            "message": message,
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to clear all data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

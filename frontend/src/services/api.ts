@@ -88,6 +88,13 @@ export const apiService = {
     return response.data
   },
 
+  getBronzeStats: async (tpa?: string): Promise<any> => {
+    const response = await api.get('/bronze/stats', {
+      params: tpa ? { tpa } : {},
+    })
+    return response.data
+  },
+
   getRawData: async (tpa: string, fileName?: string, limit = 100): Promise<RawDataRecord[]> => {
     const response = await api.get('/bronze/raw-data', {
       params: { tpa, file_name: fileName, limit },
@@ -122,6 +129,11 @@ export const apiService = {
     return response.data
   },
 
+  clearAllData: async (): Promise<any> => {
+    const response = await api.post('/bronze/clear-all-data')
+    return response.data
+  },
+
   getTasks: async (): Promise<any[]> => {
     const response = await api.get('/bronze/tasks')
     return response.data
@@ -134,6 +146,11 @@ export const apiService = {
 
   suspendTask: async (taskName: string): Promise<any> => {
     const response = await api.post(`/bronze/tasks/${taskName}/suspend`)
+    return response.data
+  },
+
+  updateTaskSchedule: async (taskName: string, schedule: string): Promise<any> => {
+    const response = await api.put(`/bronze/tasks/${taskName}/schedule`, { schedule })
     return response.data
   },
 

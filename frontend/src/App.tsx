@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Select, Spin, message } from 'antd'
+import { Layout, Menu, Select, Spin, message, Button, Popconfirm, Modal } from 'antd'
 import {
   DatabaseOutlined,
   CloudUploadOutlined,
@@ -10,6 +10,8 @@ import {
   SettingOutlined,
   ThunderboltOutlined,
   ApiOutlined,
+  DeleteOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
 import BronzeUpload from './pages/BronzeUpload'
 import BronzeStatus from './pages/BronzeStatus'
@@ -49,6 +51,61 @@ function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleClearAllData = () => {
+    Modal.confirm({
+      title: '⚠️ Clear All Bronze Data',
+      icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
+      content: (
+        <div>
+          <p><strong>This will permanently delete:</strong></p>
+          <ul style={{ marginLeft: 20 }}>
+            <li>All files from all stages (SRC, COMPLETED, ERROR, ARCHIVE)</li>
+            <li>All records from RAW_DATA_TABLE</li>
+            <li>All entries from file_processing_queue</li>
+          </ul>
+          <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            ⚠️ This action CANNOT be undone!
+          </p>
+          <p>Type "DELETE" below to confirm:</p>
+        </div>
+      ),
+      okText: 'Yes, Delete Everything',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      width: 600,
+      onOk: async () => {
+        try {
+          const result = await apiService.clearAllData()
+          message.success(result.message || 'All data cleared successfully')
+          
+          // Show detailed results if available
+          if (result.results) {
+            const { stages_cleared, tables_truncated, errors } = result.results
+            if (errors && errors.length > 0) {
+              Modal.warning({
+                title: 'Some operations failed',
+                content: (
+                  <div>
+                    <p>Cleared: {stages_cleared.join(', ')}</p>
+                    <p>Truncated: {tables_truncated.join(', ')}</p>
+                    <p style={{ color: '#ff4d4f' }}>Errors:</p>
+                    <ul>
+                      {errors.map((err: string, idx: number) => (
+                        <li key={idx}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ),
+              })
+            }
+          }
+        } catch (error: any) {
+          message.error(error.response?.data?.detail || 'Failed to clear data')
+        }
+      },
+    })
   }
 
   // Get the selected TPA object
@@ -131,7 +188,19 @@ function App() {
           <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
           <h1 style={{ color: '#fff', margin: 0 }}>Snowflake Pipeline</h1>
         </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            onClick={handleClearAllData}
+            style={{ 
+              backgroundColor: '#ff4d4f',
+              borderColor: '#ff4d4f',
+              color: '#fff'
+            }}
+          >
+            Clear All Data
+          </Button>
           <Select
             value={selectedTpa}
             onChange={setSelectedTpa}
