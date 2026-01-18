@@ -63,6 +63,36 @@ cleanup() {
     exit 0
 }
 
+# Function to kill process using a specific port
+kill_port() {
+    local port=$1
+    local port_name=$2
+    
+    echo -e "${BLUE}ℹ Checking if port $port is in use...${NC}"
+    
+    # Find PID using the port (macOS compatible)
+    local pid=$(lsof -ti :$port 2>/dev/null)
+    
+    if [ ! -z "$pid" ]; then
+        echo -e "${YELLOW}⚠ Port $port is in use by process $pid ($port_name)${NC}"
+        echo -e "${YELLOW}  Killing process...${NC}"
+        kill -9 $pid 2>/dev/null || true
+        sleep 1
+        
+        # Verify the port is now free
+        local check_pid=$(lsof -ti :$port 2>/dev/null)
+        if [ -z "$check_pid" ]; then
+            echo -e "${GREEN}✓ Port $port is now free${NC}"
+        else
+            echo -e "${RED}✗ Failed to free port $port${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}✓ Port $port is available${NC}"
+    fi
+    echo ""
+}
+
 # Set up signal handlers
 trap cleanup SIGINT SIGTERM
 
@@ -185,6 +215,19 @@ echo "  Backend API: http://localhost:$BACKEND_PORT"
 echo ""
 
 # ============================================
+# CHECK AND FREE PORTS
+# ============================================
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BLUE}  CHECKING PORTS${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# Check and free backend port
+kill_port "$BACKEND_PORT" "Backend"
+
+# Check and free frontend port
+kill_port "$FRONTEND_PORT" "Frontend"
+
+# ============================================
 # START SERVICES
 # ============================================
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -201,10 +244,8 @@ export HOST="${HOST:-0.0.0.0}"
 export PORT="$BACKEND_PORT"
 export DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
 
-# If using Snow CLI, set the connection name
-if [ "$AUTH_METHOD" = "Snow CLI" ]; then
-    export SNOW_CONNECTION_NAME="${SNOW_CONNECTION_NAME:-DEPLOYMENT}"
-fi
+# Set Snow CLI connection name (will be used if available)
+export SNOW_CONNECTION_NAME="${SNOW_CONNECTION_NAME:-DEPLOYMENT}"
 
 python -m uvicorn app.main:app \
     --host "${HOST:-0.0.0.0}" \
@@ -226,7 +267,7 @@ echo ""
 echo -e "${GREEN}🚀 Starting frontend server...${NC}"
 cd "$FRONTEND_DIR"
 
-VITE_API_URL="http://localhost:$BACKEND_PORT" npm run dev > "$FRONTEND_LOG" 2>&1 &
+npm run dev > "$FRONTEND_LOG" 2>&1 &
 
 FRONTEND_PID=$!
 echo $FRONTEND_PID > "$FRONTEND_PID_FILE"

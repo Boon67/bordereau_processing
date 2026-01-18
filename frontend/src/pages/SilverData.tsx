@@ -7,9 +7,10 @@ const { Title } = Typography
 
 interface SilverDataProps {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
-const SilverData: React.FC<SilverDataProps> = ({ selectedTpa }) => {
+const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<any[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
@@ -129,7 +130,7 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa }) => {
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
-        View transformed and validated data in the Silver layer. TPA: <strong>{selectedTpa}</strong>
+        View transformed and validated data in the Silver layer. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
 
       {/* Statistics */}

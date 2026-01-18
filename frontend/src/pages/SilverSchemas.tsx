@@ -9,9 +9,10 @@ const { TextArea } = Input
 
 interface SilverSchemasProps {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
-const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa }) => {
+const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [schemas, setSchemas] = useState<TargetSchema[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
@@ -183,7 +184,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa }) => {
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
-        View target table schemas for data transformation. TPA: <strong>{selectedTpa}</strong>
+        View target table schemas for data transformation. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
 
       <Card style={{ marginBottom: 16 }}>

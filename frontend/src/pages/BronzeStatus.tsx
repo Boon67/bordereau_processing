@@ -16,9 +16,10 @@ const { Title } = Typography
 
 interface BronzeStatusProps {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
-const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa }) => {
+const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [queue, setQueue] = useState<FileQueueItem[]>([])
   const [statusFilter, setStatusFilter] = useState<string[]>([])

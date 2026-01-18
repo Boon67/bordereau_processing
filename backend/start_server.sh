@@ -22,6 +22,35 @@ echo -e "${NC}"
 # Change to backend directory
 cd "$(dirname "$0")"
 
+# Function to kill process using a specific port
+kill_port() {
+    local port=$1
+    
+    echo -e "${BLUE}ℹ Checking if port $port is in use...${NC}"
+    
+    # Find PID using the port (macOS compatible)
+    local pid=$(lsof -ti :$port 2>/dev/null)
+    
+    if [ ! -z "$pid" ]; then
+        echo -e "${YELLOW}⚠ Port $port is in use by process $pid${NC}"
+        echo -e "${YELLOW}  Killing process...${NC}"
+        kill -9 $pid 2>/dev/null || true
+        sleep 1
+        
+        # Verify the port is now free
+        local check_pid=$(lsof -ti :$port 2>/dev/null)
+        if [ -z "$check_pid" ]; then
+            echo -e "${GREEN}✓ Port $port is now free${NC}"
+        else
+            echo -e "${RED}✗ Failed to free port $port${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}✓ Port $port is available${NC}"
+    fi
+    echo ""
+}
+
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
     echo -e "${YELLOW}⚠ Virtual environment not found. Creating...${NC}"
@@ -86,23 +115,26 @@ else
     exit 1
 fi
 
+# Set default values
+HOST="${HOST:-0.0.0.0}"
+PORT="${PORT:-8000}"
+RELOAD="${RELOAD:-true}"
+
 # Display configuration
 echo ""
 echo -e "${BLUE}Configuration:${NC}"
 echo "  Authentication: $AUTH_METHOD"
 echo "  Database: ${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
-echo "  Host: ${HOST:-0.0.0.0}"
-echo "  Port: ${PORT:-8000}"
+echo "  Host: $HOST"
+echo "  Port: $PORT"
 echo ""
+
+# Check and free port if in use
+kill_port "$PORT"
 
 # Start the server
 echo -e "${GREEN}🚀 Starting backend server...${NC}"
 echo ""
-
-# Set default values
-HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8000}"
-RELOAD="${RELOAD:-true}"
 
 # Start uvicorn
 if [ "$RELOAD" = "true" ]; then

@@ -9,9 +9,10 @@ const { TextArea } = Input
 
 interface SilverMappingsProps {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
-const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa }) => {
+const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [mappings, setMappings] = useState<FieldMapping[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
@@ -288,7 +289,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa }) => {
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
-        View field mappings from Bronze (raw data) to Silver (target tables). TPA: <strong>{selectedTpa}</strong>
+        View field mappings from Bronze (raw data) to Silver (target tables). TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
 
       <Card style={{ marginBottom: 16 }}>

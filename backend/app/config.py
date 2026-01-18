@@ -315,14 +315,26 @@ class Settings(BaseSettings):
             
             conn = config[connection_name]
             
-            return {
+            conn_config = {
                 'account': conn.get('account'),
                 'user': conn.get('user'),
-                'password': conn.get('password'),
                 'role': conn.get('role', self.SNOWFLAKE_ROLE),
                 'warehouse': conn.get('warehouse', self.SNOWFLAKE_WAREHOUSE),
                 'database': conn.get('database', self.DATABASE_NAME),
             }
+            
+            # Snow CLI stores PAT tokens in the 'password' field
+            # Check if it looks like a JWT token (starts with 'eyJ')
+            password = conn.get('password', '')
+            if password and password.startswith('eyJ'):
+                # This is a PAT token, use OAuth authentication
+                conn_config['authenticator'] = 'oauth'
+                conn_config['token'] = password
+            elif password:
+                # Regular password authentication
+                conn_config['password'] = password
+            
+            return conn_config
         except Exception as e:
             logger.error(f"Error loading snow connection: {e}")
             return None

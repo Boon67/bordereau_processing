@@ -107,6 +107,11 @@ export const apiService = {
     return response.data
   },
 
+  bulkDeleteStageFiles: async (stage: string, filePaths: string[]): Promise<any> => {
+    const response = await api.post(`/bronze/stages/${stage}/files/bulk-delete`, filePaths)
+    return response.data
+  },
+
   discoverFiles: async (): Promise<any> => {
     const response = await api.post('/bronze/discover')
     return response.data

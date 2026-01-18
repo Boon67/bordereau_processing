@@ -8,9 +8,10 @@ const { Step } = Steps
 
 interface SilverTransformProps {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
-const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa }) => {
+const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [sourceTable, setSourceTable] = useState<string>('')
   const [targetTable, setTargetTable] = useState<string>('')
@@ -118,7 +119,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa }) => {
       <Title level={2}>⚡ Transform Bronze to Silver</Title>
       
       <p style={{ marginBottom: 24, color: '#666' }}>
-        Transform raw data from Bronze layer to structured tables in Silver layer. TPA: <strong>{selectedTpa}</strong>
+        Transform raw data from Bronze layer to structured tables in Silver layer. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
 
       <Card style={{ marginBottom: 24 }}>

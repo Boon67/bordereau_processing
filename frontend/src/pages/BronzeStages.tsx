@@ -15,14 +15,22 @@ interface StageFile {
 
 interface BronzeStagesProps {
   selectedTpa?: string
+  selectedTpaName?: string
 }
 
-const BronzeStages: React.FC<BronzeStagesProps> = () => {
+const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [srcFiles, setSrcFiles] = useState<StageFile[]>([])
   const [completedFiles, setCompletedFiles] = useState<StageFile[]>([])
   const [errorFiles, setErrorFiles] = useState<StageFile[]>([])
   const [archiveFiles, setArchiveFiles] = useState<StageFile[]>([])
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Record<string, React.Key[]>>({
+    SRC: [],
+    COMPLETED: [],
+    ERROR: [],
+    ARCHIVE: []
+  })
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => {
     loadAllStages()
@@ -65,14 +73,48 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
       await apiService.deleteStageFile(stageName, filePath)
       message.success('File deleted successfully')
       // Reload the specific stage
-      if (stageName === 'SRC') loadStage('SRC', setSrcFiles)
-      else if (stageName === 'COMPLETED') loadStage('COMPLETED', setCompletedFiles)
-      else if (stageName === 'ERROR') loadStage('ERROR', setErrorFiles)
-      else if (stageName === 'ARCHIVE') loadStage('ARCHIVE', setArchiveFiles)
+      reloadStage(stageName)
     } catch (error) {
       message.error('Failed to delete file')
       console.error('Delete error:', error)
     }
+  }
+
+  const handleBulkDelete = async (stageName: string) => {
+    const selectedFiles = selectedRowKeys[stageName]
+    if (selectedFiles.length === 0) {
+      message.warning('Please select files to delete')
+      return
+    }
+
+    setBulkDeleting(true)
+    try {
+      const result = await apiService.bulkDeleteStageFiles(stageName, selectedFiles as string[])
+      
+      if (result.results.failed.length === 0) {
+        message.success(`Successfully deleted ${result.results.success.length} file(s)`)
+      } else {
+        message.warning(
+          `Deleted ${result.results.success.length} file(s), ${result.results.failed.length} failed`
+        )
+      }
+      
+      // Clear selection and reload
+      setSelectedRowKeys(prev => ({ ...prev, [stageName]: [] }))
+      reloadStage(stageName)
+    } catch (error) {
+      message.error('Bulk delete failed')
+      console.error('Bulk delete error:', error)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const reloadStage = (stageName: string) => {
+    if (stageName === 'SRC') loadStage('SRC', setSrcFiles)
+    else if (stageName === 'COMPLETED') loadStage('COMPLETED', setCompletedFiles)
+    else if (stageName === 'ERROR') loadStage('ERROR', setErrorFiles)
+    else if (stageName === 'ARCHIVE') loadStage('ARCHIVE', setArchiveFiles)
   }
 
   const getColumns = (stageName: string) => [
@@ -195,10 +237,39 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
         >
           <Card>
             <div style={{ marginBottom: 16 }}>
-              <Space direction="vertical">
-                <div><strong>Description:</strong> {getStageInfo('SRC', srcFiles).description}</div>
-                <div><strong>Files:</strong> {getStageInfo('SRC', srcFiles).count}</div>
-                <div><strong>Total Size:</strong> {getStageInfo('SRC', srcFiles).totalSize}</div>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <div><strong>Description:</strong> {getStageInfo('SRC', srcFiles).description}</div>
+                </Space>
+                <Space>
+                  <div><strong>Files:</strong> {getStageInfo('SRC', srcFiles).count}</div>
+                  <div><strong>Total Size:</strong> {getStageInfo('SRC', srcFiles).totalSize}</div>
+                </Space>
+                {selectedRowKeys.SRC.length > 0 && (
+                  <Space>
+                    <Popconfirm
+                      title={`Delete ${selectedRowKeys.SRC.length} selected file(s)?`}
+                      description="This will remove the files from the stage and update the processing queue."
+                      onConfirm={() => handleBulkDelete('SRC')}
+                      okText="Yes, delete all"
+                      cancelText="Cancel"
+                    >
+                      <Button 
+                        type="primary" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        loading={bulkDeleting}
+                      >
+                        Delete Selected ({selectedRowKeys.SRC.length})
+                      </Button>
+                    </Popconfirm>
+                    <Button 
+                      onClick={() => setSelectedRowKeys(prev => ({ ...prev, SRC: [] }))}
+                    >
+                      Clear Selection
+                    </Button>
+                  </Space>
+                )}
               </Space>
             </div>
             <Table
@@ -207,6 +278,10 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
               rowKey="name"
               loading={loading}
               pagination={{ pageSize: 20, showSizeChanger: true }}
+              rowSelection={{
+                selectedRowKeys: selectedRowKeys.SRC,
+                onChange: (keys) => setSelectedRowKeys(prev => ({ ...prev, SRC: keys })),
+              }}
             />
           </Card>
         </TabPane>
@@ -222,10 +297,39 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
         >
           <Card>
             <div style={{ marginBottom: 16 }}>
-              <Space direction="vertical">
-                <div><strong>Description:</strong> {getStageInfo('COMPLETED', completedFiles).description}</div>
-                <div><strong>Files:</strong> {getStageInfo('COMPLETED', completedFiles).count}</div>
-                <div><strong>Total Size:</strong> {getStageInfo('COMPLETED', completedFiles).totalSize}</div>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <div><strong>Description:</strong> {getStageInfo('COMPLETED', completedFiles).description}</div>
+                </Space>
+                <Space>
+                  <div><strong>Files:</strong> {getStageInfo('COMPLETED', completedFiles).count}</div>
+                  <div><strong>Total Size:</strong> {getStageInfo('COMPLETED', completedFiles).totalSize}</div>
+                </Space>
+                {selectedRowKeys.COMPLETED.length > 0 && (
+                  <Space>
+                    <Popconfirm
+                      title={`Delete ${selectedRowKeys.COMPLETED.length} selected file(s)?`}
+                      description="This will remove the files from the stage and update the processing queue."
+                      onConfirm={() => handleBulkDelete('COMPLETED')}
+                      okText="Yes, delete all"
+                      cancelText="Cancel"
+                    >
+                      <Button 
+                        type="primary" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        loading={bulkDeleting}
+                      >
+                        Delete Selected ({selectedRowKeys.COMPLETED.length})
+                      </Button>
+                    </Popconfirm>
+                    <Button 
+                      onClick={() => setSelectedRowKeys(prev => ({ ...prev, COMPLETED: [] }))}
+                    >
+                      Clear Selection
+                    </Button>
+                  </Space>
+                )}
               </Space>
             </div>
             <Table
@@ -234,6 +338,10 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
               rowKey="name"
               loading={loading}
               pagination={{ pageSize: 20, showSizeChanger: true }}
+              rowSelection={{
+                selectedRowKeys: selectedRowKeys.COMPLETED,
+                onChange: (keys) => setSelectedRowKeys(prev => ({ ...prev, COMPLETED: keys })),
+              }}
             />
           </Card>
         </TabPane>
@@ -249,10 +357,39 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
         >
           <Card>
             <div style={{ marginBottom: 16 }}>
-              <Space direction="vertical">
-                <div><strong>Description:</strong> {getStageInfo('ERROR', errorFiles).description}</div>
-                <div><strong>Files:</strong> {getStageInfo('ERROR', errorFiles).count}</div>
-                <div><strong>Total Size:</strong> {getStageInfo('ERROR', errorFiles).totalSize}</div>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <div><strong>Description:</strong> {getStageInfo('ERROR', errorFiles).description}</div>
+                </Space>
+                <Space>
+                  <div><strong>Files:</strong> {getStageInfo('ERROR', errorFiles).count}</div>
+                  <div><strong>Total Size:</strong> {getStageInfo('ERROR', errorFiles).totalSize}</div>
+                </Space>
+                {selectedRowKeys.ERROR.length > 0 && (
+                  <Space>
+                    <Popconfirm
+                      title={`Delete ${selectedRowKeys.ERROR.length} selected file(s)?`}
+                      description="This will remove the files from the stage and update the processing queue."
+                      onConfirm={() => handleBulkDelete('ERROR')}
+                      okText="Yes, delete all"
+                      cancelText="Cancel"
+                    >
+                      <Button 
+                        type="primary" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        loading={bulkDeleting}
+                      >
+                        Delete Selected ({selectedRowKeys.ERROR.length})
+                      </Button>
+                    </Popconfirm>
+                    <Button 
+                      onClick={() => setSelectedRowKeys(prev => ({ ...prev, ERROR: [] }))}
+                    >
+                      Clear Selection
+                    </Button>
+                  </Space>
+                )}
               </Space>
             </div>
             <Table
@@ -261,6 +398,10 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
               rowKey="name"
               loading={loading}
               pagination={{ pageSize: 20, showSizeChanger: true }}
+              rowSelection={{
+                selectedRowKeys: selectedRowKeys.ERROR,
+                onChange: (keys) => setSelectedRowKeys(prev => ({ ...prev, ERROR: keys })),
+              }}
             />
           </Card>
         </TabPane>
@@ -276,10 +417,39 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
         >
           <Card>
             <div style={{ marginBottom: 16 }}>
-              <Space direction="vertical">
-                <div><strong>Description:</strong> {getStageInfo('ARCHIVE', archiveFiles).description}</div>
-                <div><strong>Files:</strong> {getStageInfo('ARCHIVE', archiveFiles).count}</div>
-                <div><strong>Total Size:</strong> {getStageInfo('ARCHIVE', archiveFiles).totalSize}</div>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <div><strong>Description:</strong> {getStageInfo('ARCHIVE', archiveFiles).description}</div>
+                </Space>
+                <Space>
+                  <div><strong>Files:</strong> {getStageInfo('ARCHIVE', archiveFiles).count}</div>
+                  <div><strong>Total Size:</strong> {getStageInfo('ARCHIVE', archiveFiles).totalSize}</div>
+                </Space>
+                {selectedRowKeys.ARCHIVE.length > 0 && (
+                  <Space>
+                    <Popconfirm
+                      title={`Delete ${selectedRowKeys.ARCHIVE.length} selected file(s)?`}
+                      description="This will remove the files from the stage and update the processing queue."
+                      onConfirm={() => handleBulkDelete('ARCHIVE')}
+                      okText="Yes, delete all"
+                      cancelText="Cancel"
+                    >
+                      <Button 
+                        type="primary" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        loading={bulkDeleting}
+                      >
+                        Delete Selected ({selectedRowKeys.ARCHIVE.length})
+                      </Button>
+                    </Popconfirm>
+                    <Button 
+                      onClick={() => setSelectedRowKeys(prev => ({ ...prev, ARCHIVE: [] }))}
+                    >
+                      Clear Selection
+                    </Button>
+                  </Space>
+                )}
               </Space>
             </div>
             <Table
@@ -288,6 +458,10 @@ const BronzeStages: React.FC<BronzeStagesProps> = () => {
               rowKey="name"
               loading={loading}
               pagination={{ pageSize: 20, showSizeChanger: true }}
+              rowSelection={{
+                selectedRowKeys: selectedRowKeys.ARCHIVE,
+                onChange: (keys) => setSelectedRowKeys(prev => ({ ...prev, ARCHIVE: keys })),
+              }}
             />
           </Card>
         </TabPane>

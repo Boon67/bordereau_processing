@@ -51,6 +51,9 @@ function App() {
     }
   }
 
+  // Get the selected TPA object
+  const selectedTpaObject = tpas.find(tpa => tpa.TPA_CODE === selectedTpa)
+
   const menuItems = [
     {
       key: 'bronze',
@@ -164,15 +167,15 @@ function App() {
           >
             <Routes>
               <Route path="/" element={<Navigate to="/bronze/upload" replace />} />
-              <Route path="/bronze/upload" element={<BronzeUpload selectedTpa={selectedTpa} />} />
-              <Route path="/bronze/status" element={<BronzeStatus selectedTpa={selectedTpa} />} />
-              <Route path="/bronze/stages" element={<BronzeStages selectedTpa={selectedTpa} />} />
-              <Route path="/bronze/data" element={<BronzeData selectedTpa={selectedTpa} />} />
+              <Route path="/bronze/upload" element={<BronzeUpload selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/status" element={<BronzeStatus selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/stages" element={<BronzeStages selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/data" element={<BronzeData selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/bronze/tasks" element={<BronzeTasks />} />
-              <Route path="/silver/schemas" element={<SilverSchemas selectedTpa={selectedTpa} />} />
-              <Route path="/silver/mappings" element={<SilverMappings selectedTpa={selectedTpa} />} />
-              <Route path="/silver/transform" element={<SilverTransform selectedTpa={selectedTpa} />} />
-              <Route path="/silver/data" element={<SilverData selectedTpa={selectedTpa} />} />
+              <Route path="/silver/schemas" element={<SilverSchemas selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/mappings" element={<SilverMappings selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/transform" element={<SilverTransform selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/data" element={<SilverData selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
             </Routes>
           </Content>
         </Layout>

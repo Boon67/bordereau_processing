@@ -8,9 +8,10 @@ const { Dragger } = Upload
 
 interface Props {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
-const BronzeUpload: React.FC<Props> = ({ selectedTpa }) => {
+const BronzeUpload: React.FC<Props> = ({ selectedTpa, selectedTpaName }) => {
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -106,7 +107,7 @@ const BronzeUpload: React.FC<Props> = ({ selectedTpa }) => {
   return (
     <div>
       <h2>📤 Upload Files</h2>
-      <p>Upload CSV or Excel files for TPA: <strong>{selectedTpa}</strong></p>
+      <p>Upload CSV or Excel files for TPA: <strong>{selectedTpaName || selectedTpa}</strong></p>
 
       <Card style={{ marginTop: 16 }}>
         <Dragger {...uploadProps} accept=".csv,.xlsx,.xls">

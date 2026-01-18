@@ -167,6 +167,69 @@ async def delete_stage_file(stage_name: str, file_path: str):
         logger.error(f"Failed to delete file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/stages/{stage_name}/files/bulk-delete")
+async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
+    """Delete multiple files from a stage at once"""
+    try:
+        sf_service = SnowflakeService()
+        
+        results = {
+            "success": [],
+            "failed": [],
+            "total": len(file_paths)
+        }
+        
+        for file_path in file_paths:
+            try:
+                # Remove the file from the stage
+                stage_file_path = f"@{settings.BRONZE_SCHEMA_NAME}.{stage_name.upper()}/{'/'.join(file_path.split('/')[1:])}"
+                
+                remove_query = f"REMOVE {stage_file_path}"
+                sf_service.execute_query(remove_query)
+                logger.info(f"Removed file from stage: {stage_file_path}")
+                
+                # Update or remove from processing queue
+                check_query = f"""
+                    SELECT queue_id, status 
+                    FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+                    WHERE file_name = '{file_path}'
+                """
+                queue_result = sf_service.execute_query_dict(check_query)
+                
+                if queue_result:
+                    queue_id = queue_result[0]['QUEUE_ID']
+                    current_status = queue_result[0]['STATUS']
+                    
+                    if current_status in ['PENDING', 'FAILED']:
+                        delete_query = f"""
+                            DELETE FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+                            WHERE queue_id = {queue_id}
+                        """
+                        sf_service.execute_query(delete_query)
+                    else:
+                        update_query = f"""
+                            UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+                            SET status = 'DELETED',
+                                error_message = 'File manually deleted from stage (bulk delete)',
+                                processed_timestamp = CURRENT_TIMESTAMP()
+                            WHERE queue_id = {queue_id}
+                        """
+                        sf_service.execute_query(update_query)
+                
+                results["success"].append(file_path)
+                
+            except Exception as e:
+                logger.error(f"Failed to delete file {file_path}: {str(e)}")
+                results["failed"].append({"file": file_path, "error": str(e)})
+        
+        return {
+            "message": f"Bulk delete completed: {len(results['success'])} succeeded, {len(results['failed'])} failed",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Bulk delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/discover")
 async def discover_files():
     """Manually trigger file discovery"""

@@ -9,6 +9,7 @@ const { Search } = Input
 
 interface BronzeDataProps {
   selectedTpa: string
+  selectedTpaName?: string
 }
 
 interface DataStats {
@@ -18,7 +19,7 @@ interface DataStats {
   dateRange: { earliest: string; latest: string } | null
 }
 
-const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa }) => {
+const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<RawDataRecord[]>([])
   const [stats, setStats] = useState<DataStats>({
@@ -168,7 +169,7 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa }) => {
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
-        View raw data records loaded from files. TPA: <strong>{selectedTpa}</strong>
+        View raw data records loaded from files. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
 
       {/* Statistics Cards */}
