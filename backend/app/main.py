@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from typing import List, Optional
 import logging
 
-from app.api import bronze, silver, tpa
+from app.api import bronze, silver, gold, tpa, user
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
 
@@ -43,6 +43,8 @@ app.add_middleware(
 app.include_router(tpa.router, prefix="/api/tpas", tags=["TPA"])
 app.include_router(bronze.router, prefix="/api/bronze", tags=["Bronze"])
 app.include_router(silver.router, prefix="/api/silver", tags=["Silver"])
+app.include_router(gold.router, prefix="/api/gold", tags=["Gold"])
+app.include_router(user.router, prefix="/api/user", tags=["User"])
 
 @app.get("/")
 async def root():

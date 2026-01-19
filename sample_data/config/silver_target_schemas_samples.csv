@@ -1,0 +1,16 @@
+table_name,tpa,description,data_owner,refresh_frequency,retention_days
+CLAIMS_PROVIDER_A,PROVIDER_A,Standardized claims data for Provider A,Provider A Data Team,DAILY,2555
+CLAIMS_PROVIDER_B,PROVIDER_B,Standardized claims data for Provider B,Provider B Data Team,DAILY,2555
+CLAIMS_PROVIDER_C,PROVIDER_C,Standardized claims data for Provider C,Provider C Data Team,DAILY,2555
+CLAIMS_PROVIDER_D,PROVIDER_D,Standardized claims data for Provider D,Provider D Data Team,DAILY,2555
+CLAIMS_PROVIDER_E,PROVIDER_E,Standardized claims data for Provider E,Provider E Data Team,DAILY,2555
+MEMBERS_PROVIDER_A,PROVIDER_A,Member demographics and enrollment for Provider A,Provider A Data Team,DAILY,2555
+MEMBERS_PROVIDER_B,PROVIDER_B,Member demographics and enrollment for Provider B,Provider B Data Team,DAILY,2555
+MEMBERS_PROVIDER_C,PROVIDER_C,Member demographics and enrollment for Provider C,Provider C Data Team,DAILY,2555
+MEMBERS_PROVIDER_D,PROVIDER_D,Member demographics and enrollment for Provider D,Provider D Data Team,DAILY,2555
+MEMBERS_PROVIDER_E,PROVIDER_E,Member demographics and enrollment for Provider E,Provider E Data Team,DAILY,2555
+PROVIDERS_PROVIDER_A,PROVIDER_A,Provider directory for Provider A network,Provider A Data Team,WEEKLY,2555
+PROVIDERS_PROVIDER_B,PROVIDER_B,Provider directory for Provider B network,Provider B Data Team,WEEKLY,2555
+PROVIDERS_PROVIDER_C,PROVIDER_C,Provider directory for Provider C network,Provider C Data Team,WEEKLY,2555
+PROVIDERS_PROVIDER_D,PROVIDER_D,Provider directory for Provider D network,Provider D Data Team,WEEKLY,2555
+PROVIDERS_PROVIDER_E,PROVIDER_E,Provider directory for Provider E network,Provider E Data Team,WEEKLY,2555

@@ -12,6 +12,11 @@ import {
   ApiOutlined,
   DeleteOutlined,
   ExclamationCircleOutlined,
+  TeamOutlined,
+  ToolOutlined,
+  UserOutlined,
+  SafetyOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons'
 import BronzeUpload from './pages/BronzeUpload'
 import BronzeStatus from './pages/BronzeStatus'
@@ -22,11 +27,16 @@ import SilverSchemas from './pages/SilverSchemas'
 import SilverMappings from './pages/SilverMappings'
 import SilverTransform from './pages/SilverTransform'
 import SilverData from './pages/SilverData'
-import { apiService } from './services/api'
+import GoldAnalytics from './pages/GoldAnalytics'
+import GoldMetrics from './pages/GoldMetrics'
+import GoldQuality from './pages/GoldQuality'
+import GoldRules from './pages/GoldRules'
+import TPAManagement from './pages/TPAManagement'
+import { apiService, UserInfo } from './services/api'
 import type { TPA } from './types'
 import './App.css'
 
-const { Header, Sider, Content } = Layout
+const { Header, Sider, Content, Footer } = Layout
 
 function App() {
   const navigate = useNavigate()
@@ -34,9 +44,11 @@ function App() {
   const [selectedTpa, setSelectedTpa] = useState<string>('')
   const [tpas, setTpas] = useState<TPA[]>([])
   const [loading, setLoading] = useState(true)
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
 
   useEffect(() => {
     loadTpas()
+    loadUserInfo()
   }, [])
 
   const loadTpas = async () => {
@@ -50,6 +62,16 @@ function App() {
       message.error('Failed to load TPAs')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadUserInfo = async () => {
+    try {
+      const data = await apiService.getCurrentUser()
+      setUserInfo(data)
+    } catch (error) {
+      console.error('Failed to load user info:', error)
+      // Don't show error message as this is not critical
     }
   }
 
@@ -171,6 +193,45 @@ function App() {
         },
       ],
     },
+    {
+      key: 'gold',
+      icon: <DatabaseOutlined />,
+      label: '🏆 Gold Layer',
+      children: [
+        {
+          key: '/gold/analytics',
+          icon: <BarChartOutlined />,
+          label: 'Analytics',
+        },
+        {
+          key: '/gold/metrics',
+          icon: <BarChartOutlined />,
+          label: 'Business Metrics',
+        },
+        {
+          key: '/gold/quality',
+          icon: <SettingOutlined />,
+          label: 'Quality Checks',
+        },
+        {
+          key: '/gold/rules',
+          icon: <ThunderboltOutlined />,
+          label: 'Rules',
+        },
+      ],
+    },
+    {
+      key: 'admin',
+      icon: <ToolOutlined />,
+      label: '⚙️ Administration',
+      children: [
+        {
+          key: '/admin/tpas',
+          icon: <TeamOutlined />,
+          label: 'TPA Management',
+        },
+      ],
+    },
   ]
 
   if (loading) {
@@ -219,7 +280,7 @@ function App() {
             mode="inline"
             items={menuItems}
             selectedKeys={[location.pathname]}
-            defaultOpenKeys={['bronze', 'silver']}
+            defaultOpenKeys={['bronze', 'silver', 'gold', 'admin']}
             onClick={({ key }) => navigate(key)}
             style={{ height: '100%', borderRight: 0 }}
           />
@@ -245,8 +306,52 @@ function App() {
               <Route path="/silver/mappings" element={<SilverMappings selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/silver/transform" element={<SilverTransform selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/silver/data" element={<SilverData selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/analytics" element={<GoldAnalytics selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/metrics" element={<GoldMetrics selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/quality" element={<GoldQuality selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/rules" element={<GoldRules selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/admin/tpas" element={<TPAManagement onTpaChange={loadTpas} />} />
             </Routes>
           </Content>
+          <Footer
+            style={{
+              textAlign: 'center',
+              background: '#f0f2f5',
+              padding: '12px 24px',
+              marginTop: '24px',
+              borderRadius: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                {userInfo && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <UserOutlined style={{ color: '#1890ff' }} />
+                      <span style={{ fontWeight: 500 }}>User:</span>
+                      <span>{userInfo.username}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <SafetyOutlined style={{ color: '#52c41a' }} />
+                      <span style={{ fontWeight: 500 }}>Role:</span>
+                      <span>{userInfo.role}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CloudServerOutlined style={{ color: '#722ed1' }} />
+                      <span style={{ fontWeight: 500 }}>Warehouse:</span>
+                      <span>{userInfo.warehouse}</span>
+                    </div>
+                  </>
+                )}
+                {!userInfo && (
+                  <span style={{ color: '#999' }}>Loading user information...</span>
+                )}
+              </div>
+              <div style={{ color: '#999', fontSize: '12px' }}>
+                Bordereau Processing Pipeline © 2026
+              </div>
+            </div>
+          </Footer>
         </Layout>
       </Layout>
     </Layout>

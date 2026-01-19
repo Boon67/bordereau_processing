@@ -518,6 +518,29 @@ else
     exit 1
 fi
 
+# Load Sample Silver Schemas (Optional - skip for now due to schema mismatch)
+echo ""
+echo -e "${CYAN}📋 Skipping Sample Silver Schemas (optional)...${NC}"
+log_message INFO "Sample Silver schemas can be loaded manually if needed"
+
+# Uncomment below to load sample schemas:
+# sed "s|__PROJECT_ROOT__|${PROJECT_ROOT}|g" "${PROJECT_ROOT}/silver/7_Load_Sample_Schemas.sql" | \
+# snow sql --stdin \
+#     --connection "$CONNECTION_NAME" \
+#     -D "DATABASE_NAME=$DATABASE" \
+#     -D "SILVER_SCHEMA_NAME=$SILVER_SCHEMA"
+
+# Deploy Gold Layer
+echo ""
+echo -e "${CYAN}🥇 Deploying Gold Layer...${NC}"
+
+if bash "${SCRIPT_DIR}/deploy_gold.sh" "$CONNECTION_NAME"; then
+    log_message SUCCESS "Gold layer deployed successfully"
+else
+    log_message ERROR "Gold layer deployment failed"
+    exit 1
+fi
+
 # Calculate duration
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
@@ -533,8 +556,10 @@ echo "║  Connection: $CONNECTION_NAME"
 echo "║  Database: $DATABASE"
 echo "║  Bronze Schema: $BRONZE_SCHEMA"
 echo "║  Silver Schema: $SILVER_SCHEMA"
+echo "║  Gold Schema: GOLD"
 echo "║  Bronze Layer: ✓ Deployed"
 echo "║  Silver Layer: ✓ Deployed"
+echo "║  Gold Layer: ✓ Deployed"
 echo "║  Duration: ${MINUTES}m ${SECONDS}s"
 echo "║  Log: $LOG_FILE"
 echo "╚═══════════════════════════════════════════════════════════╝"

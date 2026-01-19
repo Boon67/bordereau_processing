@@ -165,3 +165,5 @@ sample_data/claims_data/*/
 !sample_data/claims_data/provider_b/
 !sample_data/claims_data/provider_e/
 !sample_data/claims_data/*/*.csv
+.backend.pid
+.frontend.pid

@@ -74,10 +74,10 @@ execute_sql() {
 }
 
 # Execute Bronze SQL scripts in order
-execute_sql "${SCRIPT_DIR}/bronze/1_Setup_Database_Roles.sql"
-execute_sql "${SCRIPT_DIR}/bronze/2_Bronze_Schema_Tables.sql"
-execute_sql "${SCRIPT_DIR}/bronze/3_Bronze_Setup_Logic.sql"
-execute_sql "${SCRIPT_DIR}/bronze/4_Bronze_Tasks.sql"
-execute_sql "${SCRIPT_DIR}/bronze/TPA_Management.sql"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+execute_sql "${PROJECT_ROOT}/bronze/1_Setup_Database_Roles.sql"
+execute_sql "${PROJECT_ROOT}/bronze/2_Bronze_Schema_Tables.sql"
+execute_sql "${PROJECT_ROOT}/bronze/3_Bronze_Setup_Logic.sql"
+execute_sql "${PROJECT_ROOT}/bronze/4_Bronze_Tasks.sql"
 
 echo -e "${GREEN}✓ Bronze layer deployed successfully${NC}"

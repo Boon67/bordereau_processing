@@ -56,11 +56,12 @@ execute_sql() {
 }
 
 # Execute Silver SQL scripts in order
-execute_sql "${SCRIPT_DIR}/silver/1_Silver_Schema_Setup.sql"
-execute_sql "${SCRIPT_DIR}/silver/2_Silver_Target_Schemas.sql"
-execute_sql "${SCRIPT_DIR}/silver/3_Silver_Mapping_Procedures.sql"
-execute_sql "${SCRIPT_DIR}/silver/4_Silver_Rules_Engine.sql"
-execute_sql "${SCRIPT_DIR}/silver/5_Silver_Transformation_Logic.sql"
-execute_sql "${SCRIPT_DIR}/silver/6_Silver_Tasks.sql"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+execute_sql "${PROJECT_ROOT}/silver/1_Silver_Schema_Setup.sql"
+execute_sql "${PROJECT_ROOT}/silver/2_Silver_Target_Schemas.sql"
+execute_sql "${PROJECT_ROOT}/silver/3_Silver_Mapping_Procedures.sql"
+execute_sql "${PROJECT_ROOT}/silver/4_Silver_Rules_Engine.sql"
+execute_sql "${PROJECT_ROOT}/silver/5_Silver_Transformation_Logic.sql"
+execute_sql "${PROJECT_ROOT}/silver/6_Silver_Tasks.sql"
 
 echo -e "${GREEN}✓ Silver layer deployed successfully${NC}"

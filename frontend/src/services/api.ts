@@ -60,10 +60,46 @@ export interface FieldMapping {
   TRANSFORMATION_LOGIC?: string
 }
 
+export interface UserInfo {
+  username: string
+  role: string
+  warehouse: string
+  database: string
+  schema: string
+  account: string
+  region: string
+}
+
 export const apiService = {
+  // User endpoints
+  getCurrentUser: async (): Promise<UserInfo> => {
+    const response = await api.get('/user/current')
+    return response.data
+  },
+
   // TPA endpoints
   getTpas: async (): Promise<TPA[]> => {
     const response = await api.get('/tpas')
+    return response.data
+  },
+
+  createTpa: async (tpa: { tpa_code: string; tpa_name: string; tpa_description?: string; active?: boolean }): Promise<any> => {
+    const response = await api.post('/tpas', tpa)
+    return response.data
+  },
+
+  updateTpa: async (tpaCode: string, tpa: { tpa_name?: string; tpa_description?: string; active?: boolean }): Promise<any> => {
+    const response = await api.put(`/tpas/${tpaCode}`, tpa)
+    return response.data
+  },
+
+  deleteTpa: async (tpaCode: string): Promise<any> => {
+    const response = await api.delete(`/tpas/${tpaCode}`)
+    return response.data
+  },
+
+  updateTpaStatus: async (tpaCode: string, active: boolean): Promise<any> => {
+    const response = await api.patch(`/tpas/${tpaCode}/status`, { active })
     return response.data
   },
 
@@ -242,6 +278,64 @@ export const apiService = {
       tpa,
       ...options,
     })
+    return response.data
+  },
+
+  // Gold endpoints
+  getGoldTableData: async (tableName: string, tpa: string, limit = 100): Promise<any[]> => {
+    const response = await api.get(`/gold/analytics/${tableName}`, {
+      params: { tpa, limit },
+    })
+    return response.data
+  },
+
+  getGoldStats: async (tableName: string, tpa: string): Promise<any> => {
+    const response = await api.get(`/gold/analytics/${tableName}/stats`, {
+      params: { tpa },
+    })
+    return response.data
+  },
+
+  getBusinessMetrics: async (tpa: string): Promise<any[]> => {
+    const response = await api.get('/gold/metrics', {
+      params: { tpa },
+    })
+    return response.data
+  },
+
+  getQualityCheckResults: async (tpa: string, limit = 100): Promise<any[]> => {
+    const response = await api.get('/gold/quality/results', {
+      params: { tpa, limit },
+    })
+    return response.data
+  },
+
+  getQualityStats: async (tpa: string): Promise<any> => {
+    const response = await api.get('/gold/quality/stats', {
+      params: { tpa },
+    })
+    return response.data
+  },
+
+  getTransformationRules: async (tpa: string): Promise<any[]> => {
+    const response = await api.get('/gold/rules/transformation', {
+      params: { tpa },
+    })
+    return response.data
+  },
+
+  getQualityRules: async (tpa: string): Promise<any[]> => {
+    const response = await api.get('/gold/rules/quality', {
+      params: { tpa },
+    })
+    return response.data
+  },
+
+  updateRuleStatus: async (ruleId: number, isActive: boolean, ruleType: 'transformation' | 'quality'): Promise<any> => {
+    const endpoint = ruleType === 'transformation'
+      ? `/gold/rules/transformation/${ruleId}/status`
+      : `/gold/rules/quality/${ruleId}/status`
+    const response = await api.patch(endpoint, { is_active: isActive })
     return response.data
   },
 }

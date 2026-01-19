@@ -28,6 +28,10 @@ class SnowflakeService:
             connection_params['network_timeout'] = 60  # 60 seconds for network operations
             connection_params['login_timeout'] = 30    # 30 seconds for login
             
+            # Disable SSL certificate validation for stage operations
+            # This is needed when uploading to Snowflake stages backed by S3
+            connection_params['insecure_mode'] = True
+            
             conn = snowflake.connector.connect(**connection_params)
             return conn
         except Exception as e:

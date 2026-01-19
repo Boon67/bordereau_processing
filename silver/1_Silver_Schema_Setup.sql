@@ -42,10 +42,11 @@ CREATE OR REPLACE STAGE SILVER_CONFIG
 
 
 -- ============================================
--- METADATA TABLE 1: target_schemas
+-- METADATA TABLE 1: target_schemas (HYBRID TABLE)
 -- ============================================
+-- Using HYBRID TABLE for fast schema lookups during transformations
 
-CREATE TABLE IF NOT EXISTS target_schemas (
+CREATE HYBRID TABLE IF NOT EXISTS target_schemas (
     schema_id NUMBER(38,0) AUTOINCREMENT PRIMARY KEY,
     table_name VARCHAR(500) NOT NULL,
     column_name VARCHAR(500) NOT NULL,
@@ -58,15 +59,18 @@ CREATE TABLE IF NOT EXISTS target_schemas (
     updated_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     created_by VARCHAR(500) DEFAULT CURRENT_USER(),
     active BOOLEAN DEFAULT TRUE,
-    CONSTRAINT uk_target_schemas UNIQUE (table_name, column_name, tpa)
+    CONSTRAINT uk_target_schemas UNIQUE (table_name, column_name, tpa),
+    INDEX idx_target_schemas_tpa (tpa),
+    INDEX idx_target_schemas_table (table_name)
 )
 COMMENT = 'Dynamic target table definitions per TPA. Defines schema for Silver tables that will be created from Bronze data.';
 
 -- ============================================
--- METADATA TABLE 2: field_mappings
+-- METADATA TABLE 2: field_mappings (HYBRID TABLE)
 -- ============================================
+-- Using HYBRID TABLE for fast mapping lookups during transformations
 
-CREATE TABLE IF NOT EXISTS field_mappings (
+CREATE HYBRID TABLE IF NOT EXISTS field_mappings (
     mapping_id NUMBER(38,0) AUTOINCREMENT PRIMARY KEY,
     source_field VARCHAR(500) NOT NULL,
     source_table VARCHAR(500) DEFAULT 'RAW_DATA_TABLE',
@@ -84,15 +88,18 @@ CREATE TABLE IF NOT EXISTS field_mappings (
     updated_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     created_by VARCHAR(500) DEFAULT CURRENT_USER(),
     active BOOLEAN DEFAULT TRUE,
-    CONSTRAINT uk_field_mappings UNIQUE (source_field, source_table, target_table, target_column, tpa)
+    CONSTRAINT uk_field_mappings UNIQUE (source_field, source_table, target_table, target_column, tpa),
+    INDEX idx_field_mappings_tpa (tpa),
+    INDEX idx_field_mappings_target (target_table)
 )
 COMMENT = 'Bronze → Silver field mappings per TPA. Supports multiple mapping methods: MANUAL (CSV), ML_AUTO (pattern matching), LLM_CORTEX (AI-powered).';
 
 -- ============================================
--- METADATA TABLE 3: transformation_rules
+-- METADATA TABLE 3: transformation_rules (HYBRID TABLE)
 -- ============================================
+-- Using HYBRID TABLE for fast rule lookups during transformations
 
-CREATE TABLE IF NOT EXISTS transformation_rules (
+CREATE HYBRID TABLE IF NOT EXISTS transformation_rules (
     rule_id VARCHAR(100) NOT NULL,
     tpa VARCHAR(500) NOT NULL,  -- REQUIRED
     rule_name VARCHAR(500) NOT NULL,
@@ -107,7 +114,10 @@ CREATE TABLE IF NOT EXISTS transformation_rules (
     created_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     updated_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     created_by VARCHAR(500) DEFAULT CURRENT_USER(),
-    CONSTRAINT pk_transformation_rules PRIMARY KEY (rule_id, tpa)
+    CONSTRAINT pk_transformation_rules PRIMARY KEY (rule_id, tpa),
+    INDEX idx_transformation_rules_tpa (tpa),
+    INDEX idx_transformation_rules_type (rule_type),
+    INDEX idx_transformation_rules_active (active)
 )
 COMMENT = 'Data quality and business rules per TPA. Five rule types: DATA_QUALITY, BUSINESS_LOGIC, STANDARDIZATION, DEDUPLICATION, REFERENTIAL_INTEGRITY.';
 
@@ -192,7 +202,8 @@ COMMENT = 'Incremental processing state per TPA. Tracks last processed record fo
 -- METADATA TABLE 8: llm_prompt_templates
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS llm_prompt_templates (
+-- Using HYBRID TABLE for fast template lookups
+CREATE HYBRID TABLE IF NOT EXISTS llm_prompt_templates (
     template_id VARCHAR(100) PRIMARY KEY,
     template_name VARCHAR(500) NOT NULL,
     template_text VARCHAR(10000) NOT NULL,
@@ -201,7 +212,8 @@ CREATE TABLE IF NOT EXISTS llm_prompt_templates (
     active BOOLEAN DEFAULT TRUE,
     created_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     updated_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
-    created_by VARCHAR(500) DEFAULT CURRENT_USER()
+    created_by VARCHAR(500) DEFAULT CURRENT_USER(),
+    INDEX idx_llm_templates_active (active)
 )
 COMMENT = 'LLM prompt templates for field mapping. Stores prompts used by Cortex AI for semantic field mapping.';
 
