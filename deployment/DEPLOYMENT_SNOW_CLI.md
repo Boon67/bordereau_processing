@@ -482,7 +482,7 @@ snow connection remove --connection old_connection
 
 ## Related Documentation
 
-- [README_REACT.md](README_REACT.md) - React + FastAPI architecture
+- [Documentation Hub](../docs/README.md) - Complete documentation index
 - [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) - Streamlit to React migration
 - [Snowflake CLI Docs](https://docs.snowflake.com/en/developer-guide/snowflake-cli)
 

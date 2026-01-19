@@ -22,8 +22,9 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Get script directory
+# Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Function to show help
 show_help() {
@@ -163,10 +164,10 @@ if [[ -n "$CONFIG_FILE" ]]; then
 fi
 
 # Create logs directory
-mkdir -p "${SCRIPT_DIR}/logs"
+mkdir -p "${PROJECT_ROOT}/logs"
 
 # Log file
-LOG_FILE="${SCRIPT_DIR}/logs/deployment_$(date +%Y%m%d_%H%M%S).log"
+LOG_FILE="${PROJECT_ROOT}/logs/deployment_$(date +%Y%m%d_%H%M%S).log"
 
 # Function to print header
 print_header() {

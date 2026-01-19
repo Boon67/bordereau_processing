@@ -237,15 +237,16 @@ SELECT * FROM quarantine_records ORDER BY quarantine_timestamp DESC LIMIT 10;
 ## Next Steps
 
 - 📖 Read the [User Guide](docs/USER_GUIDE.md) for detailed usage instructions
-- 🏗️ Review the [Architecture](docs/design/ARCHITECTURE.md) to understand the system design
+- 🏗️ Review the [Documentation Hub](docs/README.md) for complete documentation
 - 🎓 Learn about [TPA Architecture](docs/guides/TPA_COMPLETE_GUIDE.md) for multi-tenant patterns
-- 🧪 Review [Test Plans](docs/testing/TEST_PLAN_BRONZE.md) for comprehensive testing
+- 🚀 Review [Deployment Guide](deployment/README.md) for production deployment
 
 ## Cleanup
 
 To completely remove the application:
 
 ```bash
+cd deployment
 ./undeploy.sh
 ```
 
@@ -253,9 +254,9 @@ To completely remove the application:
 
 ## Support
 
-- **Documentation**: See [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)
-- **Troubleshooting**: Check [DEPLOYMENT_AND_OPERATIONS.md](docs/DEPLOYMENT_AND_OPERATIONS.md)
-- **Architecture**: Review [ARCHITECTURE.md](docs/design/ARCHITECTURE.md)
+- **Documentation Hub**: [docs/README.md](docs/README.md)
+- **Troubleshooting**: [docs/DEPLOYMENT_AND_OPERATIONS.md](docs/DEPLOYMENT_AND_OPERATIONS.md)
+- **Deployment Guide**: [deployment/README.md](deployment/README.md)
 
 ---
 

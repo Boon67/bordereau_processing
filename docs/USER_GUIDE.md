@@ -228,11 +228,12 @@ SELECT * FROM silver_processing_log ORDER BY start_timestamp DESC LIMIT 20;
 
 ## Related Documentation
 
-- [Quick Start Guide](../QUICK_START.md)
-- [TPA Complete Guide](guides/TPA_COMPLETE_GUIDE.md)
-- [Bronze README](../bronze/README.md)
-- [Silver README](../silver/README.md)
-- [Architecture](design/ARCHITECTURE.md)
+- [Documentation Hub](README.md) - Complete documentation index
+- [Quick Start Guide](../QUICK_START.md) - Get running in 10 minutes
+- [TPA Complete Guide](guides/TPA_COMPLETE_GUIDE.md) - Multi-tenant architecture
+- [Bronze README](../bronze/README.md) - Bronze layer details
+- [Silver README](../silver/README.md) - Silver layer details
+- [Deployment Guide](../deployment/README.md) - Deployment documentation
 
 ---
 

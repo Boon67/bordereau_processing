@@ -1,9 +1,10 @@
 """
 Configuration management using Pydantic Settings
 Supports:
-1. Snowflake session token (from snow CLI) - highest priority
-2. Configuration file with PAT or Keypair authentication
-3. Direct credentials from environment variables
+1. Snowpark Container Services OAuth token (/snowflake/session/token) - highest priority
+2. Snowflake session token (from snow CLI)
+3. Configuration file with PAT or Keypair authentication
+4. Direct credentials from environment variables
 """
 
 from pydantic_settings import BaseSettings
@@ -68,24 +69,31 @@ class Settings(BaseSettings):
         """
         Get Snowflake connection configuration.
         Priority:
-        1. Snowflake session token from filesystem (snow CLI)
-        2. Configuration file (PAT or Keypair authentication)
-        3. Direct credentials from environment variables
+        1. Snowpark Container Services OAuth token (/snowflake/session/token)
+        2. Snowflake session token from filesystem (snow CLI)
+        3. Configuration file (PAT or Keypair authentication)
+        4. Direct credentials from environment variables
         """
-        # 1. Try to use Snowflake session token first
+        # 1. Try to use Snowpark Container Services OAuth token first
+        spcs_config = self._load_spcs_token()
+        if spcs_config:
+            logger.info("Using Snowpark Container Services OAuth token")
+            return spcs_config
+        
+        # 2. Try to use Snowflake session token
         session_config = self._load_session_token()
         if session_config:
             logger.info("Using Snowflake session token from filesystem")
             return session_config
         
-        # 2. Try to load from configuration file
+        # 3. Try to load from configuration file
         if self.CONFIG_FILE:
             config = self._load_config_file(self.CONFIG_FILE)
             if config:
                 logger.info(f"Using configuration from file: {self.CONFIG_FILE}")
                 return config
         
-        # 3. Try to use snow CLI connection
+        # 4. Try to use snow CLI connection
         if self.SNOW_CONNECTION_NAME:
             try:
                 config = self._load_snow_connection(self.SNOW_CONNECTION_NAME)
@@ -95,8 +103,62 @@ class Settings(BaseSettings):
             except Exception as e:
                 logger.warning(f"Could not load snow CLI connection: {e}")
         
-        # 4. Fallback to direct credentials from environment
+        # 5. Fallback to direct credentials from environment
         return self._load_env_credentials()
+    
+    def _load_spcs_token(self) -> Optional[dict]:
+        """
+        Load Snowpark Container Services OAuth token.
+        When running inside SPCS, Snowflake provides credentials at /snowflake/session/token
+        and sets environment variables: SNOWFLAKE_HOST, SNOWFLAKE_ACCOUNT, 
+        SNOWFLAKE_DATABASE, SNOWFLAKE_SCHEMA
+        
+        Reference: https://docs.snowflake.com/en/developer-guide/snowpark-container-services/spcs-execute-sql
+        """
+        try:
+            # Check if we're running in Snowpark Container Services
+            token_file = Path('/snowflake/session/token')
+            
+            if not token_file.exists():
+                return None
+            
+            # Read the OAuth token
+            with open(token_file, 'r') as f:
+                token = f.read().strip()
+            
+            if not token:
+                return None
+            
+            # Get environment variables set by SPCS
+            snowflake_host = os.getenv('SNOWFLAKE_HOST')
+            snowflake_account = os.getenv('SNOWFLAKE_ACCOUNT')
+            snowflake_database = os.getenv('SNOWFLAKE_DATABASE')
+            snowflake_schema = os.getenv('SNOWFLAKE_SCHEMA')
+            
+            if not snowflake_host or not snowflake_account:
+                logger.warning("SPCS token found but required environment variables not set")
+                return None
+            
+            config = {
+                'host': snowflake_host,
+                'account': snowflake_account,
+                'token': token,
+                'authenticator': 'oauth',
+                'database': snowflake_database or self.DATABASE_NAME,
+                'schema': snowflake_schema,
+            }
+            
+            # Add warehouse if specified (SPCS doesn't set this by default)
+            # The service should use QUERY_WAREHOUSE parameter or specify in code
+            if self.SNOWFLAKE_WAREHOUSE:
+                config['warehouse'] = self.SNOWFLAKE_WAREHOUSE
+            
+            logger.info(f"SPCS OAuth token loaded for account: {snowflake_account}")
+            return config
+            
+        except Exception as e:
+            logger.debug(f"Could not load SPCS token: {e}")
+            return None
     
     def _load_session_token(self) -> Optional[dict]:
         """

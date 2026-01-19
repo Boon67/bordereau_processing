@@ -400,7 +400,7 @@ REMOVE @SRC/provider_a/;
 
 - [TPA Upload Guide](TPA_UPLOAD_GUIDE.md) - Detailed file upload instructions
 - [User Guide](../docs/USER_GUIDE.md) - Complete usage guide
-- [Architecture](../docs/design/ARCHITECTURE.md) - System architecture
+- [Documentation Hub](../docs/README.md) - Complete documentation
 
 ## Support
 

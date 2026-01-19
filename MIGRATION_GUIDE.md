@@ -2,7 +2,7 @@
 
 **Guide for migrating from Streamlit-based architecture to React + FastAPI architecture.**
 
-For the consolidated docs hub, see `docs/README.md`.
+> **📖 For complete documentation, see [docs/README.md](docs/README.md)**
 
 ## Overview
 
@@ -268,10 +268,10 @@ After migration:
 ## Support
 
 For migration assistance:
-- Review `README_REACT.md` for detailed setup
-- Check API docs at `/api/docs`
-- Test endpoints via Swagger UI
-- Review Docker configurations
+- Review [Documentation Hub](docs/README.md) for complete documentation
+- Check [Backend README](backend/README.md) for API details
+- Test endpoints via Swagger UI at `/api/docs`
+- Review [Deployment Guide](deployment/README.md) for deployment options
 
 ---
 

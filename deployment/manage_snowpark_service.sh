@@ -32,12 +32,11 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 execute_sql() {
-    snow sql -q "$1" \
-        --account "$SNOWFLAKE_ACCOUNT" \
-        --user "$SNOWFLAKE_USER" \
-        --role "$SNOWFLAKE_ROLE" \
-        --warehouse "$SNOWFLAKE_WAREHOUSE" \
-        --database "$DATABASE_NAME"
+    snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        $1
+    " --connection DEPLOYMENT
 }
 
 # ============================================
@@ -47,6 +46,26 @@ execute_sql() {
 show_status() {
     log_info "Getting service status..."
     execute_sql "SELECT SYSTEM\$GET_SERVICE_STATUS('${SERVICE_NAME}')"
+    
+    # Also show endpoint
+    echo ""
+    log_info "Service endpoint:"
+    local endpoint_output=$(snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        SHOW ENDPOINTS IN SERVICE ${SERVICE_NAME};
+    " --connection DEPLOYMENT --format json 2>/dev/null)
+    
+    # Extract ingress_url from the JSON output (it's in the third array [2][0])
+    local endpoint=$(echo "$endpoint_output" | jq -r '.[2][0].ingress_url // empty' 2>/dev/null | tr -d '\n' | sed 's/ //g')
+    
+    if [ -n "$endpoint" ] && [ "$endpoint" != "null" ] && [[ ! "$endpoint" =~ "provisioning" ]]; then
+        echo -e "${GREEN}https://${endpoint}${NC}"
+        echo -e "${BLUE}Test:${NC} curl https://${endpoint}/api/health"
+    else
+        echo -e "${YELLOW}Endpoint provisioning in progress...${NC}"
+        echo -e "${BLUE}Check again in a few minutes:${NC} ./manage_snowpark_service.sh endpoint"
+    fi
 }
 
 show_logs() {
@@ -57,7 +76,7 @@ show_logs() {
 
 get_endpoint() {
     log_info "Getting service endpoint..."
-    execute_sql "SELECT SYSTEM\$GET_SERVICE_ENDPOINT('${SERVICE_NAME}', 'backend')"
+    execute_sql "SHOW ENDPOINTS IN SERVICE ${SERVICE_NAME}"
 }
 
 suspend_service() {
@@ -77,6 +96,34 @@ restart_service() {
     suspend_service
     sleep 5
     resume_service
+}
+
+restart_with_new_image() {
+    log_info "Restarting service with new image: $SERVICE_NAME"
+    log_info "This will pull the latest image from the repository"
+    echo ""
+    
+    # Suspend service
+    log_info "Suspending service..."
+    execute_sql "ALTER SERVICE ${SERVICE_NAME} SUSPEND"
+    
+    # Wait for service to suspend
+    log_info "Waiting for service to suspend..."
+    sleep 5
+    
+    # Update service specification (forces image pull)
+    log_info "Updating service specification (pulling new image)..."
+    execute_sql "ALTER SERVICE ${SERVICE_NAME} FROM @SERVICE_SPECS SPECIFICATION_FILE = 'service_spec.yaml'"
+    
+    # Resume service
+    log_info "Resuming service..."
+    execute_sql "ALTER SERVICE ${SERVICE_NAME} RESUME"
+    
+    echo ""
+    log_success "Service restarted with new image"
+    log_info "The service will pull the latest image and restart"
+    log_info "Check status in 30-60 seconds:"
+    echo -e "  ${BLUE}./manage_snowpark_service.sh status${NC}"
 }
 
 drop_service() {
@@ -147,12 +194,13 @@ show_help() {
 Usage: $0 [COMMAND] [OPTIONS]
 
 Commands:
-  status              Show service status
+  status              Show service status and endpoint URL
   logs [N]            Show service logs (default: 100 lines)
   endpoint            Get service endpoint URL
   suspend             Suspend the service
   resume              Resume the service
   restart             Restart the service (suspend + resume)
+  restart-image       Restart and pull new image (use after pushing new image)
   drop                Drop the service (with confirmation)
   
   pool-status         Show compute pool status
@@ -173,10 +221,21 @@ Environment Variables:
   COMPUTE_POOL_NAME   Compute pool name (default: BORDEREAU_COMPUTE_POOL)
 
 Examples:
-  $0 status                    # Show service status
+  $0 status                    # Show service status and endpoint
   $0 logs 50                   # Show last 50 log lines
   $0 restart                   # Restart the service
+  $0 restart-image             # Restart and pull new image
   $0 all                       # Show all information
+
+Workflow for deploying new image:
+  1. Build and push new image:
+     cd deployment
+     ./deploy_snowpark_container.sh
+  
+  2. Or manually:
+     docker build --platform linux/amd64 -f docker/Dockerfile.backend -t <repo>/<image>:latest .
+     docker push <repo>/<image>:latest
+     ./manage_snowpark_service.sh restart-image
 
 EOF
 }
@@ -203,6 +262,9 @@ case "${1:-help}" in
         ;;
     restart)
         restart_service
+        ;;
+    restart-image)
+        restart_with_new_image
         ;;
     drop)
         drop_service

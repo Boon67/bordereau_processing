@@ -1,261 +1,143 @@
 # Bordereau Processing Pipeline
 
-A modern, full-stack data processing pipeline built with FastAPI, React, and Snowflake for healthcare claims data processing.
+A modern healthcare claims data processing pipeline built with **FastAPI**, **React**, and **Snowflake**.
 
-## 🌟 Features
+## 🌟 Key Features
 
-### Bronze Layer (Raw Data Ingestion)
-- **File Upload**: Drag-and-drop interface for CSV and Excel files
-- **Automatic Processing**: Task-based pipeline for file discovery and processing
-- **Stage Management**: View and manage files across SRC, COMPLETED, ERROR, and ARCHIVE stages
-- **Raw Data Viewer**: Browse and search raw data with statistics
-- **Task Management**: Monitor and control Snowflake tasks
-
-### Silver Layer (Data Transformation)
-- **Target Schemas**: Define and manage target table structures
-- **Field Mappings**: 
-  - Manual mapping creation
-  - ML-based auto-mapping
-  - LLM-powered mapping (Snowflake Cortex)
-  - Confidence scoring and approval workflow
-- **Data Transformation**: Step-by-step wizard for Bronze → Silver transformation
-- **Data Viewer**: Browse transformed data with quality metrics
+- **Bronze Layer**: Automated file ingestion with TPA-based multi-tenant isolation
+- **Silver Layer**: Intelligent data transformation with ML/LLM-powered field mapping
+- **Modern UI**: React + TypeScript with Ant Design components
+- **Flexible Deployment**: Local, Docker, or Snowpark Container Services
+- **Multi-Auth**: Snow CLI, PAT, or Keypair authentication
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Frontend (React)                      │
-│  - Vite + TypeScript + Ant Design                      │
-│  - Upload, Status, Stages, Data Viewer                 │
-└─────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────┐
-│                   Backend (FastAPI)                      │
-│  - REST API with Pydantic validation                    │
-│  - Snowflake connector integration                      │
-└─────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────┐
-│                  Snowflake Database                      │
-│  - Bronze Layer: Raw data storage                       │
-│  - Silver Layer: Transformed data                       │
-│  - Tasks: Automated processing                          │
-└─────────────────────────────────────────────────────────┘
+React Frontend (TypeScript + Ant Design)
+         ↓ REST API
+FastAPI Backend (Python 3.10+)
+         ↓ Snowflake Connector
+Snowflake (Bronze + Silver Layers)
 ```
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- Snowflake account
-- Snow CLI (recommended) or Snowflake credentials
+### 1. Prerequisites
+- Python 3.10+, Node.js 18+
+- Snowflake account with admin privileges
+- Snow CLI installed (recommended)
 
-### Installation
-
-1. **Clone the repository**
+### 2. Deploy to Snowflake
 ```bash
-git clone https://github.com/Boon67/bordereau_processing.git
-cd bordereau_processing
+cd deployment
+./deploy.sh  # Deploys Bronze + Silver layers
 ```
 
-2. **Start the application**
+### 3. Start the Application
 ```bash
-./start.sh
+./start.sh  # Starts backend + frontend
 ```
 
-This will:
-- Set up Python virtual environment
-- Install backend dependencies
-- Install frontend dependencies
-- Start both servers
+### 4. Access the Application
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000/api/docs
 
-3. **Access the application**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/api/docs
+### 5. Upload Sample Data
+1. Open frontend at http://localhost:3000
+2. Select a TPA (e.g., `provider_a`)
+3. Upload files from `sample_data/claims_data/`
+4. Monitor processing in Bronze Status page
 
-## 🔐 Authentication
+**For detailed setup instructions, see [Quick Start Guide](QUICK_START.md)**
 
-The backend supports multiple authentication methods (in priority order):
+## 📦 Deployment Options
 
-1. **Snow CLI** (Recommended)
-   ```bash
-   export SNOW_CONNECTION_NAME=DEPLOYMENT
-   ```
+### Local Development
+```bash
+./start.sh  # Starts both backend and frontend
+```
 
-2. **Configuration File** (`backend/config.toml`)
-   ```toml
-   [snowflake]
-   account = "your-account"
-   user = "your-user"
-   # PAT Authentication
-   token = "your-pat-token"
-   # OR Keypair Authentication
-   private_key_path = "/path/to/key.p8"
-   ```
+### Snowflake (Bronze + Silver Layers)
+```bash
+cd deployment
+./deploy.sh
+```
 
-3. **Environment Variables**
-   ```bash
-   export SNOWFLAKE_ACCOUNT=your-account
-   export SNOWFLAKE_USER=your-user
-   export SNOWFLAKE_PASSWORD=your-password
-   ```
+### Snowpark Container Services
+```bash
+cd deployment
+./deploy_snowpark_container.sh
+```
 
-See [backend/README.md](backend/README.md) for detailed authentication setup.
+**Features**: Smart updates, zero downtime, endpoint preservation
+
+**See [deployment/README.md](deployment/README.md) for complete deployment guide**
 
 ## 📁 Project Structure
 
 ```
-bordereau_processing/
-├── backend/                 # FastAPI backend
-│   ├── app/
-│   │   ├── api/            # API endpoints
-│   │   │   ├── bronze.py   # Bronze layer endpoints
-│   │   │   ├── silver.py   # Silver layer endpoints
-│   │   │   └── tpa.py      # TPA management
-│   │   ├── services/       # Business logic
-│   │   │   └── snowflake_service.py
-│   │   ├── config.py       # Configuration management
-│   │   └── main.py         # FastAPI application
-│   ├── requirements.txt
-│   └── README.md
-├── frontend/               # React frontend
-│   ├── src/
-│   │   ├── pages/         # Page components
-│   │   │   ├── Bronze*.tsx
-│   │   │   └── Silver*.tsx
-│   │   ├── services/      # API client
-│   │   │   └── api.ts
-│   │   ├── types/         # TypeScript types
-│   │   └── App.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── start.sh               # Unified startup script
-└── README.md
+bordereau/
+├── backend/           # FastAPI backend
+├── frontend/          # React frontend
+├── bronze/            # Bronze layer SQL
+├── silver/            # Silver layer SQL
+├── deployment/        # Deployment scripts
+├── docker/            # Docker configs
+├── docs/              # Documentation hub
+└── sample_data/       # Sample files
 ```
+
+## 📖 Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[Documentation Hub](docs/README.md)** | Complete documentation index |
+| [Quick Start Guide](QUICK_START.md) | Get running in 10 minutes |
+| [User Guide](docs/USER_GUIDE.md) | Complete usage instructions |
+| [Deployment Guide](deployment/README.md) | Deployment documentation |
+| [Backend README](backend/README.md) | Backend API documentation |
+| [Migration Guide](MIGRATION_GUIDE.md) | Streamlit to React migration |
 
 ## 🛠️ Development
 
-### Backend Development
+### Backend
 ```bash
 cd backend
 source venv/bin/activate
 uvicorn app.main:app --reload
 ```
+**API Docs**: http://localhost:8000/api/docs
 
-### Frontend Development
+### Frontend
 ```bash
 cd frontend
-npm run dev
+npm install && npm run dev
 ```
+**Access**: http://localhost:3000
 
-### Running Tests
-```bash
-# Backend tests
-cd backend
-pytest
+## 🔐 Authentication
 
-# Frontend tests
-cd frontend
-npm test
-```
+The backend supports multiple authentication methods:
 
-## 📊 Data Flow
+1. **Snow CLI** (Recommended for dev)
+2. **PAT Token** (Recommended for prod)
+3. **Keypair** (Most secure)
+4. **Environment Variables**
 
-1. **Upload**: Files uploaded to Bronze `@SRC` stage
-2. **Discovery**: Task discovers new files and adds to queue
-3. **Processing**: Files processed and raw data extracted
-4. **Mapping**: Fields mapped from Bronze to Silver schemas
-5. **Transformation**: Data transformed and loaded to Silver layer
-6. **Validation**: Data quality checks applied
-
-## 🔧 Configuration
-
-### Backend Configuration
-- `backend/config.py`: Application settings
-- `backend/config.toml`: Snowflake credentials (optional)
-- Environment variables for runtime configuration
-
-### Frontend Configuration
-- `frontend/vite.config.ts`: Vite and proxy settings
-- `frontend/src/services/api.ts`: API client configuration
-
-## 📖 API Documentation
-
-Interactive API documentation available at:
-- Swagger UI: http://localhost:8000/api/docs
-- ReDoc: http://localhost:8000/api/redoc
-
-### Key Endpoints
-
-**Bronze Layer:**
-- `POST /api/bronze/upload` - Upload files
-- `GET /api/bronze/queue` - View processing queue
-- `POST /api/bronze/discover` - Discover new files
-- `POST /api/bronze/process` - Process queued files
-- `GET /api/bronze/stages/{stage}` - List stage files
-- `DELETE /api/bronze/stages/{stage}/files` - Delete stage file
-
-**Silver Layer:**
-- `GET /api/silver/schemas` - List target schemas
-- `POST /api/silver/schemas` - Create schema column
-- `GET /api/silver/mappings` - List field mappings
-- `POST /api/silver/mappings` - Create manual mapping
-- `POST /api/silver/mappings/auto-ml` - ML auto-mapping
-- `POST /api/silver/mappings/auto-llm` - LLM auto-mapping
-- `POST /api/silver/transform` - Execute transformation
-
-## 🎨 UI Features
-
-- **Modern Design**: Built with Ant Design components
-- **Responsive Layout**: Works on desktop and tablet
-- **Real-time Updates**: Live status monitoring
-- **Drag & Drop**: Intuitive file upload
-- **Data Visualization**: Statistics and charts
-- **Search & Filter**: Powerful data exploration
-
-## 🔒 Security
-
-- Snowflake session token support
-- Encrypted credential storage
-- CORS configuration for API security
-- Input validation with Pydantic
-- SQL injection prevention
+See [backend/README.md](backend/README.md) for setup details.
 
 ## 🐛 Troubleshooting
 
-### Backend won't start
-- Check Snowflake credentials
-- Verify Python version (3.10+)
-- Check `logs/backend.log`
+**Backend issues**: Check Snowflake credentials, verify Python 3.10+  
+**Frontend issues**: Clear cache, reinstall node_modules  
+**Connection issues**: Verify Snow CLI connection with `snow connection test`
 
-### Frontend won't start
-- Clear npm cache: `npm cache clean --force`
-- Delete `node_modules` and reinstall
-- Check `logs/frontend.log`
-
-### TPAs not loading
-- Verify backend is running: `curl http://localhost:8000/api/tpas`
-- Check Snowflake connection
-- Clear browser cache (Cmd+Shift+R)
+**For detailed troubleshooting, see [docs/README.md](docs/README.md)**
 
 ## 📝 License
 
-This project is proprietary software. All rights reserved.
-
-## 👥 Contributing
-
-This is a private project. For questions or issues, please contact the development team.
-
-## 🙏 Acknowledgments
-
-- **Snowflake** for the data platform
-- **FastAPI** for the backend framework
-- **React** and **Ant Design** for the frontend
-- **Vite** for the build tool
+Proprietary software. All rights reserved.
 
 ---
 
-**Built with ❤️ for healthcare data processing**
+**Version**: 1.0 | **Last Updated**: January 19, 2026 | **Status**: ✅ Production Ready

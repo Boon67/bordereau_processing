@@ -16,9 +16,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Script directory
+# Script directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cd "$PROJECT_ROOT"
 
 # ============================================
 # Configuration
@@ -74,11 +75,7 @@ execute_sql() {
     local sql="$1"
     log_info "Executing SQL..."
     snow sql -q "$sql" \
-        --account "$SNOWFLAKE_ACCOUNT" \
-        --user "$SNOWFLAKE_USER" \
-        --role "$SNOWFLAKE_ROLE" \
-        --warehouse "$SNOWFLAKE_WAREHOUSE" \
-        --database "$DATABASE_NAME"
+        --connection DEPLOYMENT
 }
 
 # Execute SQL from file
@@ -86,11 +83,7 @@ execute_sql_file() {
     local file="$1"
     log_info "Executing SQL from file: $file"
     snow sql -f "$file" \
-        --account "$SNOWFLAKE_ACCOUNT" \
-        --user "$SNOWFLAKE_USER" \
-        --role "$SNOWFLAKE_ROLE" \
-        --warehouse "$SNOWFLAKE_WAREHOUSE" \
-        --database "$DATABASE_NAME"
+        --connection DEPLOYMENT
 }
 
 # ============================================
@@ -190,11 +183,6 @@ CREATE IMAGE REPOSITORY IF NOT EXISTS ${REPOSITORY_NAME}
 
 -- Show repository details
 SHOW IMAGE REPOSITORIES LIKE '${REPOSITORY_NAME}';
-
--- Get repository URL
-SELECT REPOSITORY_URL 
-FROM INFORMATION_SCHEMA.IMAGE_REPOSITORIES 
-WHERE REPOSITORY_NAME = '${REPOSITORY_NAME}';
 EOF
 
     execute_sql_file /tmp/create_repository.sql
@@ -208,25 +196,21 @@ EOF
 get_repository_url() {
     log_info "Getting repository URL..."
     
-    # Get repository URL from Snowflake
-    REPOSITORY_URL=$(snow sql -q "SELECT REPOSITORY_URL FROM INFORMATION_SCHEMA.IMAGE_REPOSITORIES WHERE REPOSITORY_NAME = '${REPOSITORY_NAME}'" \
-        --account "$SNOWFLAKE_ACCOUNT" \
-        --user "$SNOWFLAKE_USER" \
-        --role "$SNOWFLAKE_ROLE" \
-        --warehouse "$SNOWFLAKE_WAREHOUSE" \
+    # Use Snow CLI to get repository URL
+    REPOSITORY_URL=$(snow spcs image-repository url "$REPOSITORY_NAME" \
+        --connection DEPLOYMENT \
         --database "$DATABASE_NAME" \
-        --format json | jq -r '.[0].REPOSITORY_URL' 2>/dev/null || echo "")
+        --schema "$SCHEMA_NAME" 2>/dev/null || echo "")
     
     if [ -z "$REPOSITORY_URL" ]; then
         log_error "Failed to get repository URL"
-        log_info "Attempting alternative method..."
-        
-        # Alternative: construct URL manually
-        REPOSITORY_URL="${SNOWFLAKE_ACCOUNT}.registry.snowflakecomputing.com/${DATABASE_NAME}/${SCHEMA_NAME}/${REPOSITORY_NAME}"
-        log_warning "Using constructed URL: $REPOSITORY_URL"
-    else
-        log_success "Repository URL: $REPOSITORY_URL"
+        exit 1
     fi
+    
+    # Convert to lowercase for Docker compatibility
+    REPOSITORY_URL=$(echo "$REPOSITORY_URL" | tr '[:upper:]' '[:lower:]')
+    
+    log_success "Repository URL: $REPOSITORY_URL"
 }
 
 # ============================================
@@ -236,29 +220,12 @@ get_repository_url() {
 docker_login() {
     log_info "Logging into Snowflake Docker registry..."
     
-    # Get token for Docker login
-    log_info "Getting authentication token..."
-    
-    # Use Snow CLI to get token
-    TOKEN=$(snow sql -q "SELECT SYSTEM\$GET_SNOWSIGHT_HOST()" \
-        --account "$SNOWFLAKE_ACCOUNT" \
-        --user "$SNOWFLAKE_USER" \
-        --format json 2>/dev/null | jq -r '.[0]."SYSTEM$GET_SNOWSIGHT_HOST()"' || echo "")
-    
-    # Docker login using Snowflake credentials
-    log_info "Authenticating with Docker registry..."
-    echo "$SNOWFLAKE_PASSWORD" | docker login "${SNOWFLAKE_ACCOUNT}.registry.snowflakecomputing.com" \
-        -u "$SNOWFLAKE_USER" \
-        --password-stdin 2>/dev/null || {
-        log_warning "Standard Docker login failed, trying with Snow CLI..."
-        
-        # Alternative: use snow CLI for authentication
-        snow connection test --connection DEPLOYMENT || {
-            log_error "Failed to authenticate with Snowflake"
-            log_info "Please ensure your Snow CLI connection is configured:"
-            log_info "  snow connection add"
-            exit 1
-        }
+    # Use Snow CLI's built-in image registry login
+    snow spcs image-registry login --connection DEPLOYMENT || {
+        log_error "Failed to login to Snowflake registry"
+        log_info "Please ensure your Snow CLI connection is configured:"
+        log_info "  snow connection test --connection DEPLOYMENT"
+        exit 1
     }
     
     log_success "Docker login successful"
@@ -271,49 +238,22 @@ docker_login() {
 build_docker_image() {
     log_info "Building Docker image..."
     
-    # Create optimized Dockerfile for Snowpark
-    cat > /tmp/Dockerfile.snowpark << 'EOF'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements
-COPY backend/requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-COPY backend/app ./app
-
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
-
-# Expose port
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
-
-# Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-EOF
-
     # Build image
     local full_image_name="${REPOSITORY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
     
+    # Check if Dockerfile exists
+    if [ ! -f "docker/Dockerfile.backend" ]; then
+        log_error "docker/Dockerfile.backend not found"
+        exit 1
+    fi
+    
     log_info "Building image: $full_image_name"
+    log_info "Using docker/Dockerfile.backend"
+    log_info "Building for linux/amd64 platform (required by Snowflake)"
+    
     docker build \
-        -f /tmp/Dockerfile.snowpark \
+        --platform linux/amd64 \
+        -f docker/Dockerfile.backend \
         -t "$full_image_name" \
         -t "${IMAGE_NAME}:${IMAGE_TAG}" \
         . || {
@@ -330,20 +270,13 @@ EOF
 
 push_docker_image() {
     log_info "Pushing Docker image to Snowflake registry..."
+    log_info "This may take several minutes..."
     
     local full_image_name="${REPOSITORY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
     
     docker push "$full_image_name" || {
         log_error "Docker push failed"
-        log_info "Trying alternative push method..."
-        
-        # Alternative: use snow CLI
-        snow spcs image-repository push \
-            --image "$full_image_name" \
-            --connection DEPLOYMENT || {
-            log_error "Failed to push image"
-            exit 1
-        }
+        exit 1
     }
     
     log_success "Docker image pushed: $full_image_name"
@@ -380,21 +313,8 @@ spec:
         cpu: "2"
         memory: 4Gi
     readinessProbe:
-      httpGet:
-        path: /api/health
-        port: 8000
-      initialDelaySeconds: 10
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    livenessProbe:
-      httpGet:
-        path: /api/health
-        port: 8000
-      initialDelaySeconds: 30
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 3
+      port: 8000
+      path: /api/health
 
   endpoints:
   - name: backend
@@ -412,21 +332,82 @@ EOF
 deploy_service() {
     log_info "Deploying service: $SERVICE_NAME"
     
-    # Upload service spec to stage
-    cat > /tmp/deploy_service.sql << EOF
+    # First, create the stage
+    log_info "Creating stage for service specifications..."
+    snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        CREATE STAGE IF NOT EXISTS SERVICE_SPECS
+            COMMENT = 'Stage for Snowpark Container Service specifications';
+    " --connection DEPLOYMENT || {
+        log_error "Failed to create stage"
+        exit 1
+    }
+    
+    # Upload spec file
+    log_info "Uploading service specification..."
+    snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        PUT file:///tmp/service_spec.yaml @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+    " --connection DEPLOYMENT || {
+        log_error "Failed to upload service specification"
+        exit 1
+    }
+    
+    # Check if service exists
+    log_info "Checking if service exists..."
+    SERVICE_EXISTS=$(snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        SHOW SERVICES LIKE '${SERVICE_NAME}';
+    " --connection DEPLOYMENT --format json 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    
+    if [ "$SERVICE_EXISTS" -gt 0 ]; then
+        log_info "Service exists - updating with new image..."
+        log_info "Suspending service to update specification..."
+        
+        # Suspend, update spec, and resume
+        cat > /tmp/deploy_service.sql << EOF
+-- Update existing Snowpark Container Service
+USE ROLE ${SNOWFLAKE_ROLE};
+USE DATABASE ${DATABASE_NAME};
+USE SCHEMA ${SCHEMA_NAME};
+
+-- Suspend the service
+ALTER SERVICE ${SERVICE_NAME} SUSPEND;
+
+-- Wait for service to suspend
+CALL SYSTEM\$WAIT(5);
+
+-- Update the service with new specification (pulls new image)
+ALTER SERVICE ${SERVICE_NAME} FROM @SERVICE_SPECS
+    SPECIFICATION_FILE = 'service_spec.yaml';
+
+-- Resume the service
+ALTER SERVICE ${SERVICE_NAME} RESUME;
+
+-- Show service status
+SHOW SERVICES LIKE '${SERVICE_NAME}';
+DESCRIBE SERVICE ${SERVICE_NAME};
+EOF
+        
+        log_info "Updating service specification and restarting..."
+        execute_sql_file /tmp/deploy_service.sql
+        log_success "Service updated: $SERVICE_NAME (endpoint preserved)"
+        
+    else
+        log_info "Service does not exist - creating new service..."
+        
+        # Create new service
+        cat > /tmp/deploy_service.sql << EOF
 -- Deploy Snowpark Container Service
 USE ROLE ${SNOWFLAKE_ROLE};
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
 
--- Create stage for service specs if not exists
-CREATE STAGE IF NOT EXISTS SERVICE_SPECS
-    COMMENT = 'Stage for Snowpark Container Service specifications';
-
--- Upload service spec (this will be done via PUT command)
-
--- Create or replace service
-CREATE SERVICE IF NOT EXISTS ${SERVICE_NAME}
+-- Create service
+CREATE SERVICE ${SERVICE_NAME}
     IN COMPUTE POOL ${COMPUTE_POOL_NAME}
     FROM @SERVICE_SPECS
     SPECIFICATION_FILE = 'service_spec.yaml'
@@ -437,30 +418,19 @@ CREATE SERVICE IF NOT EXISTS ${SERVICE_NAME}
 -- Show service status
 SHOW SERVICES LIKE '${SERVICE_NAME}';
 DESCRIBE SERVICE ${SERVICE_NAME};
-
--- Get service endpoints
-CALL SYSTEM\$GET_SERVICE_STATUS('${SERVICE_NAME}');
 EOF
 
-    # Upload spec file
-    log_info "Uploading service specification..."
-    snow object stage copy /tmp/service_spec.yaml "@${DATABASE_NAME}.${SCHEMA_NAME}.SERVICE_SPECS/service_spec.yaml" \
-        --connection DEPLOYMENT \
-        --overwrite || {
-        log_warning "Snow CLI upload failed, trying SQL PUT..."
-        
-        snow sql -q "PUT file:///tmp/service_spec.yaml @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE" \
-            --account "$SNOWFLAKE_ACCOUNT" \
-            --user "$SNOWFLAKE_USER" \
-            --role "$SNOWFLAKE_ROLE" \
-            --warehouse "$SNOWFLAKE_WAREHOUSE" \
-            --database "$DATABASE_NAME"
-    }
+        execute_sql_file /tmp/deploy_service.sql
+        log_success "Service created: $SERVICE_NAME"
+    fi
     
-    # Deploy service
-    execute_sql_file /tmp/deploy_service.sql
-    
-    log_success "Service deployed: $SERVICE_NAME"
+    # Get service status
+    log_info "Checking service status..."
+    snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        SELECT SYSTEM\$GET_SERVICE_STATUS('${SERVICE_NAME}');
+    " --connection DEPLOYMENT
 }
 
 # ============================================
@@ -498,15 +468,15 @@ EOF
 get_service_endpoint() {
     log_info "Getting service endpoint..."
     
-    ENDPOINT=$(snow sql -q "SELECT SYSTEM\$GET_SERVICE_ENDPOINT('${SERVICE_NAME}', 'backend')" \
-        --account "$SNOWFLAKE_ACCOUNT" \
-        --user "$SNOWFLAKE_USER" \
-        --role "$SNOWFLAKE_ROLE" \
-        --warehouse "$SNOWFLAKE_WAREHOUSE" \
-        --database "$DATABASE_NAME" \
-        --format json | jq -r '.[0]."SYSTEM$GET_SERVICE_ENDPOINT('"'"'${SERVICE_NAME}'"'"', '"'"'BACKEND'"'"')"' 2>/dev/null || echo "")
+    ENDPOINT=$(snow sql -q "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        SHOW ENDPOINTS IN SERVICE ${SERVICE_NAME};
+    " --connection DEPLOYMENT --format json 2>/dev/null | jq -r '.[2].ingress_url' 2>/dev/null || echo "")
     
-    if [ -n "$ENDPOINT" ]; then
+    if [ -n "$ENDPOINT" ] && [ "$ENDPOINT" != "null" ]; then
+        # Add https:// prefix
+        ENDPOINT="https://${ENDPOINT}"
         log_success "Service endpoint: $ENDPOINT"
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -525,7 +495,8 @@ get_service_endpoint() {
     else
         log_warning "Service endpoint not yet available"
         log_info "Service may still be starting. Check status with:"
-        log_info "  snow sql -q \"SELECT SYSTEM\$GET_SERVICE_STATUS('${SERVICE_NAME}')\""
+        log_info "  ./manage_snowpark_service.sh status"
+        log_info "  ./manage_snowpark_service.sh endpoint"
     fi
 }
 
@@ -539,7 +510,6 @@ cleanup() {
     rm -f /tmp/create_repository.sql
     rm -f /tmp/deploy_service.sql
     rm -f /tmp/monitor_service.sql
-    rm -f /tmp/Dockerfile.snowpark
     # Keep service_spec.yaml for reference
 }
 

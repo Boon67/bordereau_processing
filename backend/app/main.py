@@ -75,10 +75,30 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Startup event handler"""
+    import os
+    from pathlib import Path
+    
     logger.info("Starting Snowflake Pipeline API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Snowflake Account: {settings.SNOWFLAKE_ACCOUNT}")
     logger.info(f"Database: {settings.DATABASE_NAME}")
+    
+    # Debug: Check for SPCS token
+    spcs_token_file = Path('/snowflake/session/token')
+    logger.info(f"SPCS token file exists: {spcs_token_file.exists()}")
+    logger.info(f"SNOWFLAKE_HOST env: {os.getenv('SNOWFLAKE_HOST', 'NOT SET')}")
+    logger.info(f"SNOWFLAKE_ACCOUNT env: {os.getenv('SNOWFLAKE_ACCOUNT', 'NOT SET')}")
+    logger.info(f"SNOWFLAKE_DATABASE env: {os.getenv('SNOWFLAKE_DATABASE', 'NOT SET')}")
+    logger.info(f"SNOWFLAKE_SCHEMA env: {os.getenv('SNOWFLAKE_SCHEMA', 'NOT SET')}")
+    
+    # Try to get Snowflake config to see which auth method is used
+    try:
+        config = settings.get_snowflake_config()
+        logger.info(f"Auth method detected - has 'host' key: {'host' in config}")
+        logger.info(f"Auth method detected - has 'token' key: {'token' in config}")
+        logger.info(f"Auth method detected - authenticator: {config.get('authenticator', 'NOT SET')}")
+    except Exception as e:
+        logger.error(f"Failed to get Snowflake config: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():

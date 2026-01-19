@@ -61,6 +61,38 @@ Test the connection:
 snow connection test --connection DEPLOYMENT
 ```
 
+## Authentication
+
+The backend service supports multiple authentication methods with automatic fallback:
+
+### 1. Snowpark Container Services OAuth Token (Recommended for Production)
+
+When running inside Snowpark Container Services, the application automatically uses the Snowflake-provided OAuth token at `/snowflake/session/token`. This is the most secure method and requires no configuration.
+
+**How it works:**
+- Snowflake automatically provides an OAuth token in the container at `/snowflake/session/token`
+- Snowflake sets environment variables: `SNOWFLAKE_HOST`, `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`
+- The token is automatically refreshed every few minutes and valid for up to one hour
+- No credentials need to be stored in the container
+
+Reference: [Snowflake SPCS SQL Execution Documentation](https://docs.snowflake.com/en/developer-guide/snowpark-container-services/spcs-execute-sql)
+
+### 2. Snow CLI Connection (For Local Development)
+
+For local development and deployment scripts, use the Snow CLI connection as configured above.
+
+### 3. Other Methods
+
+The application also supports:
+- Configuration file with PAT or Keypair authentication
+- Direct credentials from environment variables
+
+**Authentication Priority:**
+1. SPCS OAuth token (`/snowflake/session/token`) - Highest priority
+2. Snow CLI session token
+3. Configuration file (PAT or Keypair)
+4. Environment variables - Lowest priority
+
 ## Deployment Steps
 
 ### Option 1: Automated Deployment (Recommended)
