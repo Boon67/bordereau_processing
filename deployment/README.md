@@ -9,22 +9,41 @@ Complete deployment documentation for the Bordereau Processing Pipeline.
 ```
 deployment/
 ├── README.md                              # This file
-├── deploy.sh                              # Main deployment script (Bronze + Silver)
-├── deploy_bronze.sh                       # Bronze layer deployment
-├── deploy_silver.sh                       # Silver layer deployment
-├── deploy_snowpark_container.sh           # Snowpark Container Services deployment
-├── manage_snowpark_service.sh             # Service management utilities
-├── setup_keypair_auth.sh                  # Keypair authentication setup
+│
+├── Core Deployment Scripts
+├── deploy.sh                              # Main deployment (Bronze + Silver layers)
+├── deploy_bronze.sh                       # Bronze layer only
+├── deploy_silver.sh                       # Silver layer only
+├── deploy_container.sh                    # Container Services (Recommended)
+│
+├── Management & Utilities
+├── manage_services.sh                     # Service management (Recommended)
+├── test_deploy_container.sh               # Test container deployment
 ├── check_snow_connection.sh               # Connection verification
 ├── undeploy.sh                            # Remove all resources
+│
+├── Configuration Files
 ├── default.config                         # Default configuration
 ├── custom.config.example                  # Custom config template
 ├── configure_keypair_auth.sql             # SQL for keypair setup
+│
+├── Documentation
 ├── DEPLOYMENT_SNOW_CLI.md                 # Snow CLI deployment guide
 ├── DEPLOYMENT_SUMMARY.md                  # Deployment summary
+├── DEPLOYMENT_SUCCESS.md                  # Latest deployment results
+├── TEST_RESULTS.md                        # Container deployment tests
 ├── SNOWPARK_CONTAINER_DEPLOYMENT.md       # Container deployment guide
 ├── SNOWPARK_QUICK_START.md                # Quick start guide
-└── AUTHENTICATION_SETUP.md                # Authentication setup guide
+├── AUTHENTICATION_SETUP.md                # Authentication setup guide
+│
+└── legacy/                                # Legacy separate services (not recommended)
+    ├── README.md                          # Legacy deployment guide
+    ├── deploy_full_stack.sh               # Separate services deployment
+    ├── deploy_snowpark_container.sh       # Backend only (legacy)
+    ├── deploy_frontend_spcs.sh            # Frontend only (legacy)
+    ├── manage_snowpark_service.sh         # Backend management (legacy)
+    ├── manage_frontend_service.sh         # Frontend management (legacy)
+    └── FULL_STACK_SPCS_DEPLOYMENT.md      # Old architecture docs
 ```
 
 ## Quick Start
@@ -36,39 +55,133 @@ cd deployment
 ./deploy.sh
 ```
 
-### 2. Deploy to Snowpark Container Services
+### 2. Deploy Container Services to SPCS (Recommended)
+
+Deploy both backend and frontend services:
 
 ```bash
 cd deployment
-./deploy_snowpark_container.sh
+./deploy_container.sh
 ```
 
-**Important:** When redeploying, the script will automatically:
-- Detect if the service already exists
-- Update the service with the new image
-- Preserve the existing endpoint (no endpoint change!)
-- Suspend → Update → Resume the service
+**This is the recommended approach** - unified deployment, backend internal-only, more secure.
 
-### 3. Manage the Service
+This single command will:
+1. ✅ Deploy backend service (FastAPI)
+2. ✅ Verify backend health
+3. ✅ Deploy frontend service (React + Nginx)
+4. ✅ Verify frontend accessibility
+5. ✅ Test frontend-backend communication
+6. ✅ Provide both endpoints
+
+**Complete Stack in SPCS:**
+- ✅ Frontend (React + Nginx)
+- ✅ Backend (FastAPI)
+- ✅ Both with public HTTPS endpoints
+- ✅ Internal API proxying (no CORS)
+- ✅ Automated health checks
+- ✅ Communication verification
+
+### Alternative: Deploy Services Separately
+
+### 3. Manage the Unified Service
 
 ```bash
 cd deployment
 
-# Check status
-./manage_snowpark_service.sh status
+# View status
+./manage_services.sh status
 
 # View logs
-./manage_snowpark_service.sh logs 100
+./manage_services.sh logs backend 100
+./manage_services.sh logs frontend 50
 
-# Get endpoint
-./manage_snowpark_service.sh endpoint
+# Run health checks
+./manage_services.sh health
 
 # Restart service
-./manage_snowpark_service.sh restart
+./manage_services.sh restart all
+```
 
-# Suspend/Resume
-./manage_snowpark_service.sh suspend
-./manage_snowpark_service.sh resume
+## Legacy: Separate Services
+
+For backward compatibility, legacy scripts for separate service deployment are in `legacy/`:
+
+```bash
+cd deployment/legacy
+
+# Deploy as separate services (not recommended)
+./deploy_full_stack.sh
+./deploy_snowpark_container.sh  # Backend only
+./deploy_frontend_spcs.sh       # Frontend only
+```
+
+**See [`legacy/README.md`](legacy/README.md) for details and migration guide.**
+
+### 4. Manage the Services
+
+**Unified Management (Recommended):**
+
+The `manage_services.sh` script provides comprehensive management for all Snowpark services:
+
+```bash
+cd deployment
+
+# Status and Information
+./manage_services.sh status              # Both services status
+./manage_services.sh status backend      # Backend only
+./manage_services.sh status frontend     # Frontend only
+./manage_services.sh endpoints           # Show all HTTPS endpoints
+./manage_services.sh health              # Run health checks on all services
+./manage_services.sh all                 # Complete overview (status + endpoints + health)
+
+# View Logs
+./manage_services.sh logs backend 50     # Backend logs (last 50 lines)
+./manage_services.sh logs frontend 100   # Frontend logs (last 100 lines)
+./manage_services.sh logs all 20         # Both services (20 lines each)
+
+# Service Control
+./manage_services.sh restart backend     # Restart backend service
+./manage_services.sh restart frontend    # Restart frontend service
+./manage_services.sh restart all         # Restart both services
+./manage_services.sh suspend backend     # Suspend backend
+./manage_services.sh suspend frontend    # Suspend frontend
+./manage_services.sh resume backend      # Resume backend
+./manage_services.sh resume all          # Resume both services
+
+# Update with New Images
+./manage_services.sh restart-image backend   # Update backend with new image
+./manage_services.sh restart-image frontend  # Update frontend with new image
+./manage_services.sh restart-image all       # Update both services
+
+# Troubleshooting
+./manage_services.sh describe backend    # Detailed service info
+./manage_services.sh describe frontend   # Detailed service info
+```
+
+**Quick Reference:**
+- `status` - Check if services are running
+- `endpoints` - Get HTTPS URLs
+- `health` - Test all endpoints
+- `logs` - View recent logs
+- `restart` - Restart service
+- `restart-image` - Update and restart with new image
+- `all` - Show everything at once
+
+**Individual Service Management (Legacy):**
+
+Backend:
+```bash
+./manage_snowpark_service.sh status      # Show status
+./manage_snowpark_service.sh logs 100    # Show logs
+./manage_snowpark_service.sh restart     # Restart
+```
+
+Frontend:
+```bash
+./manage_frontend_service.sh status      # Show status
+./manage_frontend_service.sh logs 100    # Show logs
+./manage_frontend_service.sh restart     # Restart
 ```
 
 ## Configuration
@@ -95,11 +208,83 @@ cp deployment/custom.config.example deployment/custom.config
 # Edit custom.config with your values
 ```
 
+## Full Stack Deployment Details
+
+### Architecture
+
+When you deploy the full stack to Snowpark Container Services, you get:
+
+```
+User's Browser
+     ↓ HTTPS
+┌─────────────────────────────────────────┐
+│  Frontend Service (SPCS)                │
+│  - React App (Static Files)             │
+│  - Nginx Proxy                          │
+│  - Routes /api/* → Backend              │
+│  Public: https://frontend-xxx.app       │
+└─────────────────────────────────────────┘
+     ↓ Internal HTTPS
+┌─────────────────────────────────────────┐
+│  Backend Service (SPCS)                 │
+│  - FastAPI REST API                     │
+│  - Snowflake Connector                  │
+│  - SPCS OAuth Authentication            │
+│  Internal: https://backend-xxx.app      │
+└─────────────────────────────────────────┘
+     ↓
+┌─────────────────────────────────────────┐
+│  Snowflake Database                     │
+│  - Bronze Layer                         │
+│  - Silver Layer                         │
+└─────────────────────────────────────────┘
+```
+
+**Key Benefits:**
+- ✅ Single public endpoint for users (frontend)
+- ✅ Internal API communication (no CORS issues)
+- ✅ Automatic HTTPS for both services
+- ✅ Snowflake-native authentication
+- ✅ No external infrastructure needed
+
+### Deployment Process
+
+The `deploy_full_stack.sh` script performs these steps:
+
+1. **Backend Deployment**
+   - Builds FastAPI Docker image
+   - Pushes to Snowflake image repository
+   - Creates/updates backend service
+   - Waits for service to be ready
+
+2. **Backend Health Check**
+   - Tests `/api/health` endpoint
+   - Verifies Snowflake connection
+   - Ensures API is responding
+
+3. **Frontend Deployment**
+   - Builds React + Nginx Docker image
+   - Configures Nginx to proxy to backend
+   - Pushes to Snowflake image repository
+   - Creates/updates frontend service
+
+4. **Frontend Verification**
+   - Tests frontend accessibility
+   - Verifies static assets load
+   - Checks Nginx configuration
+
+5. **Communication Test**
+   - Tests frontend → backend API calls
+   - Verifies end-to-end connectivity
+   - Confirms full stack is operational
+
+**Typical Deployment Time:** 5-8 minutes
+
 ## Deployment Features
 
 ### Smart Service Updates
 
-The `deploy_snowpark_container.sh` script now includes smart update logic:
+The deployment scripts include smart update logic:
 
 **First Deployment:**
 - Creates compute pool
@@ -117,10 +302,62 @@ The `deploy_snowpark_container.sh` script now includes smart update logic:
 
 ### Benefits
 
-✅ **Endpoint Preservation** - Your endpoint URL never changes  
+✅ **Endpoint Preservation** - Your endpoint URLs never change  
 ✅ **Zero Configuration** - Automatically detects existing services  
 ✅ **Fast Updates** - Only rebuilds and updates what changed  
 ✅ **Safe Rollback** - Previous image versions remain in repository  
+✅ **Health Verification** - Automated health checks after deployment  
+✅ **Communication Testing** - Verifies frontend-backend connectivity
+
+## Individual Service Deployment
+
+### Backend Only Deployment
+
+Deploy just the FastAPI backend:
+
+```bash
+cd deployment
+./deploy_snowpark_container.sh
+```
+
+**What it does:**
+- Creates compute pool (if needed)
+- Creates image repository (if needed)
+- Builds backend Docker image
+- Pushes to Snowflake registry
+- Creates/updates backend service
+- Returns backend HTTPS endpoint
+
+**Use when:**
+- Testing backend changes
+- Backend-only updates
+- Initial backend setup
+
+### Frontend Only Deployment
+
+Deploy just the React frontend:
+
+```bash
+cd deployment
+./deploy_frontend_spcs.sh
+```
+
+**Prerequisites:**
+- Backend must be deployed first
+- Backend endpoint must be accessible
+
+**What it does:**
+- Builds React application
+- Configures Nginx proxy to backend
+- Builds frontend Docker image
+- Pushes to Snowflake registry
+- Creates/updates frontend service
+- Returns frontend HTTPS endpoint
+
+**Use when:**
+- UI changes only
+- Frontend configuration updates
+- Testing frontend independently  
 
 ## Scripts Overview
 
@@ -153,13 +390,17 @@ The `deploy_snowpark_container.sh` script now includes smart update logic:
 
 ## Additional Documentation
 
+For more detailed information on specific topics:
+
 | Document | Description |
 |----------|-------------|
-| [DEPLOYMENT_SNOW_CLI.md](DEPLOYMENT_SNOW_CLI.md) | Detailed Snow CLI deployment guide |
-| [SNOWPARK_CONTAINER_DEPLOYMENT.md](SNOWPARK_CONTAINER_DEPLOYMENT.md) | Container deployment documentation |
-| [SNOWPARK_QUICK_START.md](SNOWPARK_QUICK_START.md) | Quick reference for container services |
-| [AUTHENTICATION_SETUP.md](AUTHENTICATION_SETUP.md) | Authentication configuration guide |
-| [DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md) | Deployment summary and checklist |
+| [DEPLOYMENT_SNOW_CLI.md](DEPLOYMENT_SNOW_CLI.md) | Detailed Snow CLI setup and usage |
+| [SNOWPARK_CONTAINER_DEPLOYMENT.md](SNOWPARK_CONTAINER_DEPLOYMENT.md) | In-depth container deployment guide |
+| [SNOWPARK_QUICK_START.md](SNOWPARK_QUICK_START.md) | Quick reference for Snowpark services |
+| [AUTHENTICATION_SETUP.md](AUTHENTICATION_SETUP.md) | Authentication methods and configuration |
+| [DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md) | Deployment checklist and verification |
+
+**Note:** The main deployment guide (this file) contains all essential information. The additional documents provide deeper technical details for specific scenarios.
 
 ## Path References
 

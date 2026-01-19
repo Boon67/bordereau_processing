@@ -149,6 +149,10 @@ Thumbs.db
 
 # Docker
 .dockerignore
+Dockerfile.frontend.spcs
+Dockerfile.frontend.unified
+nginx-spcs.conf
+nginx-unified.conf
 
 # Backup files
 *.bak

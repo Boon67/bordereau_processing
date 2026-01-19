@@ -63,13 +63,25 @@ cd deployment
 ./deploy.sh
 ```
 
-### Snowpark Container Services
+### Snowpark Container Services (Full Stack)
 ```bash
 cd deployment
-./deploy_snowpark_container.sh
+./deploy_container.sh  # Deploys backend + frontend with health checks
 ```
 
-**Features**: Smart updates, zero downtime, endpoint preservation
+**Features**: 
+- ✅ Single command deployment
+- ✅ Automated health checks
+- ✅ Frontend-backend communication verification
+- ✅ Smart updates with zero downtime
+- ✅ Endpoint preservation on redeploy
+
+**Alternative**: Deploy services separately (legacy):
+```bash
+cd deployment/legacy
+./deploy_snowpark_container.sh  # Backend only
+./deploy_frontend_spcs.sh       # Frontend only
+```
 
 **See [deployment/README.md](deployment/README.md) for complete deployment guide**
 

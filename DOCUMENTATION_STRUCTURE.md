@@ -11,7 +11,7 @@ This document describes the consolidated documentation structure for the Bordere
 ├── README.md                    # Main project overview (streamlined)
 ├── QUICK_START.md              # 10-minute quick start guide
 ├── MIGRATION_GUIDE.md          # Streamlit to React migration
-└── APPLICATION_GENERATION_PROMPT.md  # AI generation context
+└── DOCUMENTATION_STRUCTURE.md  # This file - documentation map
 ```
 
 ### Documentation Hub
@@ -82,20 +82,35 @@ sample_data/
 ## 🧹 Cleanup Summary
 
 ### Files Removed (Redundant)
+
+**Root Level:**
 - ❌ `DOCUMENTATION_INDEX.md` → Replaced by `docs/README.md`
 - ❌ `PROJECT_SUMMARY.md` → Consolidated into `README.md`
 - ❌ `BACKEND_SETUP.md` → Merged into `backend/README.md`
 - ❌ `README_REACT.md` → Content distributed to relevant docs
+- ❌ `APPLICATION_GENERATION_PROMPT.md` → Empty file removed
+- ❌ `DEPLOYMENT_REORGANIZATION_SUMMARY.md` → Temporary file removed
+- ❌ `UNIFIED_DEPLOYMENT_SUMMARY.md` → Merged into `deployment/README.md`
+- ❌ `FULL_STACK_SPCS_DEPLOYMENT.md` → Merged into `deployment/README.md`
+- ❌ `SNOWPARK_CONTAINER_DEPLOYMENT.md` → Duplicate removed (kept in deployment/)
+
+**Deployment Directory:**
+- ❌ `deployment/MANAGE_SERVICES_QUICK_REF.md` → Merged into `deployment/README.md`
+- ❌ `deployment/FRONTEND_DEPLOYMENT_GUIDE.md` → Merged into `deployment/README.md`
 
 ### Files Streamlined
 - ✅ `README.md` - Now concise with clear navigation
 - ✅ `docs/README.md` - New comprehensive documentation hub
-- ✅ `deployment/README.md` - Consolidated deployment guide
+- ✅ `deployment/README.md` - Consolidated deployment guide with full stack info
+- ✅ `QUICK_START.md` - Updated references to new structure
+- ✅ `MIGRATION_GUIDE.md` - Updated cross-references
 
 ### Cross-References Updated
 - ✅ All references to removed files updated
 - ✅ Consistent linking to `docs/README.md` as hub
 - ✅ Broken links fixed
+- ✅ Deployment docs now point to consolidated `deployment/README.md`
+- ✅ All markdown files verified for correct links
 
 ## 📊 Documentation Matrix
 
