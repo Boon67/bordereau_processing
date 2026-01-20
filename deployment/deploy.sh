@@ -64,13 +64,17 @@ show_help() {
     echo "    Configuration files should define the following variables:"
     echo "        SNOWFLAKE_CONNECTION       - Connection name (empty = prompt user)"
     echo "        USE_DEFAULT_CONNECTION     - Set to 'true' to use default connection"
-    echo "        AUTO_APPROVE               - Set to 'true' to skip confirmation prompt"
+    echo "        AUTO_APPROVE               - Set to 'true' to skip confirmation prompts"
     echo "        DATABASE_NAME              - Target database name"
     echo "        SNOWFLAKE_WAREHOUSE        - Warehouse to use for deployment"
     echo "        SNOWFLAKE_ROLE             - Role to use (default: SYSADMIN)"
     echo "        BRONZE_SCHEMA_NAME         - Bronze layer schema name"
     echo "        SILVER_SCHEMA_NAME         - Silver layer schema name"
     echo "        BRONZE_DISCOVERY_SCHEDULE  - Task schedule for file discovery"
+    echo ""
+    echo "    Note: Container deployment to SPCS is optional and will be prompted"
+    echo "          after database layers are deployed. Set AUTO_APPROVE=true to"
+    echo "          skip container deployment automatically."
     echo ""
     echo -e "${YELLOW}EXAMPLES:${NC}"
     echo -e "    ${CYAN}# Deploy using default connection and default.config${NC}"
@@ -102,6 +106,8 @@ show_help() {
     echo "    5. Displays configuration and prompts for confirmation"
     echo "    6. Deploys Bronze layer (schemas, tables, procedures, tasks)"
     echo "    7. Deploys Silver layer (schemas, tables, procedures, tasks)"
+    echo "    8. Deploys Gold layer (schemas, tables, procedures, tasks)"
+    echo "    9. Optionally deploys to Snowpark Container Services (SPCS)"
     echo ""
     echo -e "${YELLOW}OUTPUT:${NC}"
     echo "    Deployment logs are saved to: logs/deployment_YYYYMMDD_HHMMSS.log"
@@ -541,6 +547,44 @@ else
     exit 1
 fi
 
+# Optional: Deploy to Snowpark Container Services
+echo ""
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}OPTIONAL: SNOWPARK CONTAINER SERVICES DEPLOYMENT${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "Would you like to deploy the application to Snowpark Container Services?"
+echo "This will:"
+echo "  • Build Docker images for backend and frontend"
+echo "  • Push images to Snowflake image repository"
+echo "  • Create compute pool (if needed)"
+echo "  • Deploy unified service with health checks"
+echo ""
+
+# Default to 'no' if AUTO_APPROVE is enabled (containers are optional)
+DEPLOY_CONTAINERS="n"
+if [[ "${AUTO_APPROVE}" != "true" ]]; then
+    read -p "Deploy to Snowpark Container Services? (y/n) [n]: " -n 1 -r
+    echo ""
+    DEPLOY_CONTAINERS=$REPLY
+fi
+
+if [[ $DEPLOY_CONTAINERS =~ ^[Yy]$ ]]; then
+    echo ""
+    echo -e "${CYAN}🐳 Deploying to Snowpark Container Services...${NC}"
+    
+    if bash "${SCRIPT_DIR}/deploy_container.sh"; then
+        log_message SUCCESS "Container deployment completed successfully"
+        CONTAINERS_DEPLOYED=true
+    else
+        log_message WARNING "Container deployment failed or was skipped"
+        CONTAINERS_DEPLOYED=false
+    fi
+else
+    log_message INFO "Skipping Snowpark Container Services deployment"
+    CONTAINERS_DEPLOYED=false
+fi
+
 # Calculate duration
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
@@ -560,6 +604,11 @@ echo "║  Gold Schema: GOLD"
 echo "║  Bronze Layer: ✓ Deployed"
 echo "║  Silver Layer: ✓ Deployed"
 echo "║  Gold Layer: ✓ Deployed"
+if [[ "$CONTAINERS_DEPLOYED" == "true" ]]; then
+echo "║  Containers: ✓ Deployed to SPCS"
+else
+echo "║  Containers: ⊘ Not deployed"
+fi
 echo "║  Duration: ${MINUTES}m ${SECONDS}s"
 echo "║  Log: $LOG_FILE"
 echo "╚═══════════════════════════════════════════════════════════╝"
@@ -569,13 +618,30 @@ log_message SUCCESS "Deployment completed successfully in ${MINUTES}m ${SECONDS}
 
 echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
 echo ""
-echo "Next steps:"
-echo "1. Start containerized apps (React + FastAPI):"
-echo "   docker-compose up -d"
-echo ""
-echo "2. Upload sample data:"
-echo "   snow stage put sample_data/claims_data/provider_a/*.csv @BRONZE.SRC/provider_a/ --connection $CONNECTION_NAME"
-echo ""
-echo "3. Resume tasks (optional - tasks are created in SUSPENDED state):"
-echo "   snow sql --connection $CONNECTION_NAME -q \"USE DATABASE $DATABASE; USE SCHEMA $BRONZE_SCHEMA; ALTER TASK discover_files_task RESUME;\""
-echo ""
+
+if [[ "$CONTAINERS_DEPLOYED" == "true" ]]; then
+    echo "Next steps:"
+    echo "1. Check service status:"
+    echo "   snow spcs service status BORDEREAU_APP --connection $CONNECTION_NAME"
+    echo ""
+    echo "2. Get service endpoint:"
+    echo "   snow spcs service list-endpoints BORDEREAU_APP --connection $CONNECTION_NAME"
+    echo ""
+    echo "3. Upload sample data:"
+    echo "   snow stage put sample_data/claims_data/provider_a/*.csv @BRONZE.SRC/provider_a/ --connection $CONNECTION_NAME"
+    echo ""
+else
+    echo "Next steps:"
+    echo "1. Start containerized apps locally (React + FastAPI):"
+    echo "   docker-compose up -d"
+    echo ""
+    echo "   OR deploy to Snowpark Container Services:"
+    echo "   cd deployment && ./deploy_container.sh"
+    echo ""
+    echo "2. Upload sample data:"
+    echo "   snow stage put sample_data/claims_data/provider_a/*.csv @BRONZE.SRC/provider_a/ --connection $CONNECTION_NAME"
+    echo ""
+    echo "3. Resume tasks (optional - tasks are created in SUSPENDED state):"
+    echo "   snow sql --connection $CONNECTION_NAME -q \"USE DATABASE $DATABASE; USE SCHEMA $BRONZE_SCHEMA; ALTER TASK discover_files_task RESUME;\""
+    echo ""
+fi

@@ -18,9 +18,11 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 |----------|-------------|
 | [Main README](../README.md) | Project overview and quick start |
 | [Quick Start Guide](../QUICK_START.md) | Get running in 10 minutes |
+| [Implementation Log](IMPLEMENTATION_LOG.md) | Complete implementation history |
 | [User Guide](USER_GUIDE.md) | Complete usage instructions |
 | [Deployment Guide](../deployment/README.md) | Deployment to Snowflake and Snowpark |
 | [Migration Guide](../MIGRATION_GUIDE.md) | Streamlit to React migration notes |
+| [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization |
 
 ## 🎯 Getting Started
 
@@ -232,6 +234,15 @@ bordereau/
 
 ## 📋 Reference
 
+### Implementation History
+
+- **[Implementation Log](IMPLEMENTATION_LOG.md)** - Complete implementation history
+  - Initial deployment summary
+  - Hybrid tables implementation
+  - Gold layer implementation
+  - Frontend features added
+  - Documentation consolidation
+
 ### Sample Data
 
 - **[Sample Data README](../sample_data/README.md)** - Sample files and configurations
@@ -251,6 +262,17 @@ bordereau/
   - Mapping procedures
   - Rules engine
   - Transformation logic
+
+- **[Gold Layer](../gold/README.md)**
+  - Analytics tables
+  - Business metrics
+  - Quality rules
+  - Transformation procedures
+
+- **[Hybrid Tables Guide](../gold/HYBRID_TABLES_GUIDE.md)**
+  - Hybrid vs standard tables
+  - Performance optimization
+  - Best practices
 
 ### Configuration
 
