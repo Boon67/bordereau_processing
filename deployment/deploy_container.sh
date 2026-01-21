@@ -499,45 +499,30 @@ deploy_service() {
     " | jq -r 'length' 2>/dev/null || echo "0")
     
     if [ "$SERVICE_EXISTS" -gt 0 ]; then
-        log_info "Service '$SERVICE_NAME' already exists. Updating it..."
+        log_warning "Service '$SERVICE_NAME' already exists. Dropping for clean deployment..."
         
-        # Suspend service
-        log_info "Suspending service..."
-        execute_sql "ALTER SERVICE ${SERVICE_NAME} SUSPEND" || {
-            log_error "Failed to suspend service"
-            exit 1
-        }
-        sleep 5
-        
-        # Update service
-        log_info "Updating service with new specification..."
-        cat > /tmp/update_service.sql << EOF
+        # Drop existing service
+        execute_sql "
 USE ROLE ${SNOWFLAKE_ROLE};
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
 
-ALTER SERVICE ${SERVICE_NAME}
-    FROM @SERVICE_SPECS
-    SPECIFICATION_FILE = 'unified_service_spec.yaml';
-EOF
-        execute_sql_file /tmp/update_service.sql || {
-            log_error "Failed to update service"
+DROP SERVICE IF EXISTS ${SERVICE_NAME};
+" || {
+            log_error "Failed to drop existing service"
             exit 1
         }
-        log_success "Service updated: $SERVICE_NAME"
+        log_success "Existing service dropped"
         
-        # Resume service
-        log_info "Resuming service..."
-        execute_sql "ALTER SERVICE ${SERVICE_NAME} RESUME" || {
-            log_error "Failed to resume service"
-            exit 1
-        }
-        log_success "Service resumed: $SERVICE_NAME"
-        
-    else
-        log_info "Service '$SERVICE_NAME' does not exist. Creating new service..."
-        
-        cat > /tmp/create_service.sql << EOF
+        # Wait for service to be fully dropped
+        log_info "Waiting for service cleanup..."
+        sleep 5
+    fi
+    
+    # Create service (whether it's new or recreated)
+    log_info "Creating service '$SERVICE_NAME'..."
+    
+    cat > /tmp/create_service.sql << EOF
 USE ROLE ${SNOWFLAKE_ROLE};
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
@@ -550,12 +535,14 @@ CREATE SERVICE ${SERVICE_NAME}
     MAX_INSTANCES = 3
     COMMENT = 'Bordereau unified service (Frontend + Backend)';
 EOF
-        execute_sql_file /tmp/create_service.sql || {
-            log_error "Failed to create service"
-            exit 1
-        }
-        log_success "Service created: $SERVICE_NAME"
+    
+    # Execute with error output visible
+    if ! snow sql -f /tmp/create_service.sql --connection DEPLOYMENT 2>&1 | tee /tmp/create_service_error.log; then
+        log_error "Failed to create service. Error details:"
+        cat /tmp/create_service_error.log | grep -i "error\|failed" || cat /tmp/create_service_error.log | tail -20
+        exit 1
     fi
+    log_success "Service created: $SERVICE_NAME"
 }
 
 # ============================================

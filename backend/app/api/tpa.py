@@ -40,7 +40,7 @@ async def get_tpas():
                 ACTIVE,
                 CREATED_TIMESTAMP,
                 UPDATED_TIMESTAMP
-            FROM BRONZE.TPA_CONFIG
+            FROM BRONZE.TPA_MASTER
             ORDER BY CREATED_TIMESTAMP DESC
         """
         return sf_service.execute_query(query)
@@ -55,7 +55,7 @@ async def create_tpa(tpa: TPACreate):
         sf_service = SnowflakeService()
         
         # Check if TPA already exists
-        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_CONFIG WHERE TPA_CODE = '{tpa.tpa_code}'"
+        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa.tpa_code}'"
         result = sf_service.execute_query(check_query)
         if result and result[0]['COUNT'] > 0:
             raise HTTPException(status_code=400, detail=f"TPA with code '{tpa.tpa_code}' already exists")
@@ -71,7 +71,7 @@ async def create_tpa(tpa: TPACreate):
         # Update active status if needed
         if not tpa.active:
             update_query = f"""
-                UPDATE BRONZE.TPA_CONFIG 
+                UPDATE BRONZE.TPA_MASTER 
                 SET ACTIVE = FALSE 
                 WHERE TPA_CODE = '{tpa.tpa_code}'
             """
@@ -91,7 +91,7 @@ async def update_tpa(tpa_code: str, tpa: TPAUpdate):
         sf_service = SnowflakeService()
         
         # Check if TPA exists
-        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_CONFIG WHERE TPA_CODE = '{tpa_code}'"
+        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
         result = sf_service.execute_query(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
@@ -108,7 +108,7 @@ async def update_tpa(tpa_code: str, tpa: TPAUpdate):
         if updates:
             updates.append("UPDATED_TIMESTAMP = CURRENT_TIMESTAMP()")
             update_query = f"""
-                UPDATE BRONZE.TPA_CONFIG 
+                UPDATE BRONZE.TPA_MASTER 
                 SET {', '.join(updates)}
                 WHERE TPA_CODE = '{tpa_code}'
             """
@@ -128,14 +128,14 @@ async def delete_tpa(tpa_code: str):
         sf_service = SnowflakeService()
         
         # Check if TPA exists
-        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_CONFIG WHERE TPA_CODE = '{tpa_code}'"
+        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
         result = sf_service.execute_query(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
         # Soft delete by setting ACTIVE = FALSE
         delete_query = f"""
-            UPDATE BRONZE.TPA_CONFIG 
+            UPDATE BRONZE.TPA_MASTER 
             SET ACTIVE = FALSE, UPDATED_TIMESTAMP = CURRENT_TIMESTAMP()
             WHERE TPA_CODE = '{tpa_code}'
         """
@@ -155,14 +155,14 @@ async def update_tpa_status(tpa_code: str, status: TPAStatusUpdate):
         sf_service = SnowflakeService()
         
         # Check if TPA exists
-        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_CONFIG WHERE TPA_CODE = '{tpa_code}'"
+        check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
         result = sf_service.execute_query(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
         # Update status
         update_query = f"""
-            UPDATE BRONZE.TPA_CONFIG 
+            UPDATE BRONZE.TPA_MASTER 
             SET ACTIVE = {status.active}, UPDATED_TIMESTAMP = CURRENT_TIMESTAMP()
             WHERE TPA_CODE = '{tpa_code}'
         """

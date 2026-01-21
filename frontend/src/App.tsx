@@ -230,6 +230,13 @@ function App() {
           icon: <TeamOutlined />,
           label: 'TPA Management',
         },
+        {
+          key: 'clear-data',
+          icon: <DeleteOutlined />,
+          label: 'Clear All Data',
+          danger: true,
+          onClick: () => handleClearAllData(),
+        },
       ],
     },
   ]
@@ -249,30 +256,16 @@ function App() {
           <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
           <h1 style={{ color: '#fff', margin: 0 }}>Snowflake Pipeline</h1>
         </div>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            onClick={handleClearAllData}
-            style={{ 
-              backgroundColor: '#ff4d4f',
-              borderColor: '#ff4d4f',
-              color: '#fff'
-            }}
-          >
-            Clear All Data
-          </Button>
-          <Select
-            value={selectedTpa}
-            onChange={setSelectedTpa}
-            style={{ width: 250 }}
-            placeholder="Select TPA"
-            options={tpas.map(tpa => ({
-              value: tpa.TPA_CODE,
-              label: tpa.TPA_NAME,
-            }))}
-          />
-        </div>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 250 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
       </Header>
       <Layout>
         <Sider width={250} theme="light">
@@ -280,8 +273,13 @@ function App() {
             mode="inline"
             items={menuItems}
             selectedKeys={[location.pathname]}
-            defaultOpenKeys={['bronze', 'silver', 'gold', 'admin']}
-            onClick={({ key }) => navigate(key)}
+            onClick={({ key }) => {
+              if (key === 'clear-data') {
+                handleClearAllData()
+              } else {
+                navigate(key)
+              }
+            }}
             style={{ height: '100%', borderRight: 0 }}
           />
         </Sider>
