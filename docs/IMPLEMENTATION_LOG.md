@@ -532,6 +532,358 @@ bordereau/
 
 ---
 
-**Last Updated**: January 19, 2026  
-**Version**: 2.0  
+## Container Deployment and TPA Fixes
+
+**Date**: January 20-21, 2026  
+**Status**: ✅ Complete
+
+### Overview
+
+Fixed TPA loading issues and deployed application to Snowpark Container Services with proper authentication and networking configuration.
+
+### Issues Resolved
+
+#### 1. TPA API Table Name Issue
+
+**Problem**: API was querying non-existent table `BRONZE.TPA_CONFIG`
+
+**Solution**: Updated all API endpoints to use correct table `BRONZE.TPA_MASTER`
+
+**Files Modified**:
+- `backend/app/api/tpa.py` - 6 table name corrections
+
+**Verification**:
+```sql
+SELECT * FROM BRONZE.TPA_MASTER;
+-- Returns: 5 TPAs (provider_a through provider_e)
+```
+
+#### 2. Architecture Compatibility
+
+**Problem**: Docker images built for ARM64 (Apple Silicon) rejected by SPCS
+
+**Solution**: Rebuilt all images with `--platform linux/amd64`
+
+**Result**: Both backend and frontend containers running successfully
+
+#### 3. Nginx Proxy Configuration
+
+**Problem**: Frontend couldn't connect to backend (IPv6 connection refused)
+
+**Evolution**:
+- Attempt 1: `proxy_pass http://backend:8000` → Host not found
+- Attempt 2: `proxy_pass http://localhost:8000` → IPv6 connection refused  
+- Solution: `proxy_pass http://127.0.0.1:8000` → Success!
+
+**Files Modified**:
+- `docker/nginx.conf` - Changed to explicit IPv4 address
+
+#### 4. Snowflake OAuth Authentication
+
+**Issue**: Public endpoint requires Snowflake OAuth by default
+
+**Solution**: This is a security feature of SPCS - users authenticate via Snowflake before accessing the application
+
+**Endpoint**: https://bxcmn2pb-sfsenorthamerica-tboon-aws2.snowflakecomputing.app
+
+### UI Improvements
+
+**Date**: January 20, 2026
+
+#### Changes Made
+
+1. **Moved "Clear All Data" Button**
+   - From: Header (always visible)
+   - To: Administration dropdown menu
+   - Benefit: Cleaner UI, better organization
+
+2. **Collapsed All Menus by Default**
+   - Removed: `defaultOpenKeys` from Menu component
+   - Result: All sections (Bronze, Silver, Gold, Admin) start collapsed
+   - Benefit: Cleaner navigation, better UX
+
+**Files Modified**:
+- `frontend/src/App.tsx` - Menu structure and navigation
+
+### Deployment Documentation
+
+**Created**:
+- `deployment/TPA_API_FIX.md` - TPA table name fix
+- `deployment/CONTAINER_DEPLOYMENT_FIX.md` - Container deployment fixes
+- `deployment/TROUBLESHOOT_SERVICE_CREATION.md` - Troubleshooting guide
+- `deployment/diagnose_service.sh` - Diagnostic automation
+- `TPA_LOADING_FIX_COMPLETE.md` - Complete fix history
+- `UI_IMPROVEMENTS.md` - UI changes documentation
+
+### Performance Optimization
+
+**Date**: January 19, 2026
+
+#### Gold Layer Field Loading
+
+**Problem**: 69 individual CALL statements taking 30-60 seconds
+
+**Solution**: Batch INSERT with UNION ALL approach
+
+**Performance**:
+- Before: 30-60 seconds (69 individual CALLs)
+- After: 0.5-1 second (single batch INSERT)
+- **Speedup**: 50-100x faster ⚡
+
+**Files Created**:
+- `gold/2_Gold_Target_Schemas_OPTIMIZED.sql` - Optimized version
+- `gold/PERFORMANCE_OPTIMIZATION_GUIDE.md` - Complete guide
+
+---
+
+## Sample Data Generator
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Overview
+
+Created comprehensive sample data generator supporting all pipeline layers including the new Member Journeys feature.
+
+### Components Created
+
+#### 1. Python Data Generator
+
+**File**: `sample_data/generate_sample_data.py`
+
+**Features**:
+- Zero external dependencies (pure Python)
+- Fast generation (1,000 claims in ~2 seconds)
+- Realistic healthcare data patterns
+- Configurable data volumes
+
+**Data Generated**:
+- Members (~10% of claims count)
+- Providers (~5% of claims count)  
+- Claims (specified count)
+- Member Journeys (1-3 per member)
+- Journey Events (2-10 per journey)
+- TPAs (5 providers)
+
+#### 2. Gold Layer Journey Tables
+
+**File**: `gold/6_Member_Journeys.sql`
+
+**Tables Created**:
+- `member_journeys` - Hybrid table with indexes
+- `journey_events` - Event timeline tracking
+
+**Views Created**:
+- `v_active_journeys` - Currently active journeys
+- `v_journey_summary_by_type` - Aggregated metrics
+- `v_high_cost_journeys` - Case management identification
+- `v_journey_event_timeline` - Detailed event timeline
+
+**Procedures Created**:
+- `update_journey_metrics()` - Recalculate metrics
+- `close_journey()` - Mark journey as completed
+- `create_journey_event()` - Add new event
+- Helper procedures for journey management
+
+#### 3. Journey Types Supported
+
+- Preventive Care
+- Chronic Disease Management
+- Acute Episodes
+- Surgical Procedures
+- Maternity
+- Mental Health
+- Emergency Care
+
+#### 4. Journey Stages
+
+- Initial Visit
+- Diagnosis
+- Treatment Planning
+- Active Treatment
+- Follow-Up
+- Maintenance
+- Completed
+- Discontinued
+
+#### 5. Event Types
+
+- Appointments
+- Procedures
+- Lab Tests
+- Prescriptions
+- Hospital Admissions
+- Hospital Discharges
+- Follow-ups
+
+### Usage
+
+**Quick Start**:
+```bash
+cd sample_data
+./quick_start.sh 5000  # Generate and load 5,000 claims
+```
+
+**Manual**:
+```bash
+# Generate data
+python generate_sample_data.py --num-claims 5000
+
+# Create tables
+cd ../gold
+snow sql -c DEPLOYMENT -f 6_Member_Journeys.sql
+
+# Load data
+cd ../sample_data
+snow sql -c DEPLOYMENT -f load_sample_data.sql
+```
+
+### Data Volumes (for 1,000 claims)
+
+| Data Type | Count | Notes |
+|-----------|-------|-------|
+| Members | ~100 | ~10 claims per member |
+| Providers | ~50 | ~20 claims per provider |
+| Claims | 1,000 | As specified |
+| Journeys | ~200-300 | 1-3 per member |
+| Journey Events | ~1,000-2,000 | 2-10 per journey |
+
+### Sample Queries
+
+```sql
+-- Active journeys
+SELECT * FROM gold.v_active_journeys 
+WHERE tpa = 'provider_a'
+ORDER BY total_cost DESC;
+
+-- Journey summary by type
+SELECT * FROM gold.v_journey_summary_by_type
+ORDER BY avg_cost DESC;
+
+-- High-cost journeys
+SELECT * FROM gold.v_high_cost_journeys LIMIT 20;
+
+-- Journey timeline
+SELECT * FROM gold.v_journey_event_timeline
+WHERE journey_id = 'JRN123456789012'
+ORDER BY event_date;
+```
+
+### Documentation Created
+
+- `sample_data/README.md` - Complete usage guide
+- `sample_data/load_sample_data.sql` - Loading script
+- `sample_data/quick_start.sh` - Automation script
+- `SAMPLE_DATA_GENERATOR_SUMMARY.md` - Implementation summary
+
+---
+
+## Documentation Reorganization
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Changes Made
+
+#### 1. Renamed Diagram Files
+
+**Purpose**: Clearer, more descriptive names
+
+| Old Name | New Name |
+|----------|----------|
+| `MERMAID_DIAGRAMS_GUIDE.md` | `DIAGRAMS_GUIDE.md` |
+| `DATA_FLOW_MERMAID.md` | `DATA_FLOW_DIAGRAMS.md` |
+| `SYSTEM_ARCHITECTURE_MERMAID.md` | `ARCHITECTURE_DIAGRAMS.md` |
+
+**Location**: `docs/` directory
+
+#### 2. Consolidated Root-Level Files
+
+**Consolidated into IMPLEMENTATION_LOG**:
+- `DEPLOYMENT_SESSION_SUMMARY.md` - Session activities
+- `TPA_LOADING_FIX_COMPLETE.md` - TPA fixes
+- `UI_IMPROVEMENTS.md` - UI changes
+- `SAMPLE_DATA_GENERATOR_SUMMARY.md` - Generator implementation
+- `CONSOLIDATION_SUMMARY.md` - Previous consolidation
+
+**Kept**:
+- `README.md` - Project overview
+- `QUICK_START.md` - Getting started guide
+- `DOCUMENTATION_STRUCTURE.md` - Documentation map
+- `PROJECT_GENERATION_PROMPT.md` - Project history
+- `MIGRATION_GUIDE.md` - Migration instructions
+
+#### 3. Feature-Specific Documentation
+
+**Moved to Appropriate Directories**:
+- Performance guides → `gold/`
+- Deployment guides → `deployment/`
+- Sample data docs → `sample_data/`
+- Layer-specific docs → respective layer directories
+
+### Documentation Structure
+
+```
+docs/
+├── IMPLEMENTATION_LOG.md           # Complete history (this file)
+├── DIAGRAMS_GUIDE.md               # How to use diagrams
+├── DATA_FLOW_DIAGRAMS.md           # Data flow visualizations
+├── ARCHITECTURE_DIAGRAMS.md        # System architecture diagrams
+├── README.md                       # Documentation hub
+├── USER_GUIDE.md                   # User documentation
+├── SYSTEM_DESIGN.md                # Technical design
+├── DATA_FLOW.md                    # Data flow details
+├── SYSTEM_ARCHITECTURE.md          # Architecture details
+├── DEPLOYMENT_AND_OPERATIONS.md    # Operations guide
+└── guides/
+    └── TPA_COMPLETE_GUIDE.md       # TPA management
+
+deployment/
+├── README.md                       # Deployment overview
+├── QUICK_REFERENCE.md              # Quick commands
+├── DEPLOY_SCRIPT_UPDATE.md         # Script enhancements
+├── TPA_API_FIX.md                  # TPA fixes
+├── CONTAINER_DEPLOYMENT_FIX.md     # Container fixes
+├── TROUBLESHOOT_SERVICE_CREATION.md # Troubleshooting
+└── diagnose_service.sh             # Diagnostic tool
+
+gold/
+├── README.md                       # Gold layer overview
+├── HYBRID_TABLES_GUIDE.md          # Hybrid tables guide
+├── PERFORMANCE_OPTIMIZATION_GUIDE.md # Performance tips
+└── 6_Member_Journeys.sql           # Journey tables
+
+sample_data/
+├── README.md                       # Generator guide
+├── generate_sample_data.py         # Generator script
+├── quick_start.sh                  # Automation
+└── load_sample_data.sql            # Loading script
+```
+
+### Benefits
+
+1. **Clearer Organization**
+   - Diagrams have descriptive names
+   - Feature docs in appropriate locations
+   - Single source of truth (IMPLEMENTATION_LOG)
+
+2. **Reduced Redundancy**
+   - Eliminated duplicate summaries
+   - Consolidated related content
+   - Maintained essential guides
+
+3. **Better Navigation**
+   - Logical directory structure
+   - Clear file naming
+   - Comprehensive documentation hub
+
+4. **Easier Maintenance**
+   - Single log for all changes
+   - Feature docs with their code
+   - Clear documentation hierarchy
+
+---
+
+**Last Updated**: January 21, 2026  
+**Version**: 3.0  
 **Status**: ✅ Production Ready

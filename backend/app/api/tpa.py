@@ -43,7 +43,7 @@ async def get_tpas():
             FROM BRONZE.TPA_MASTER
             ORDER BY CREATED_TIMESTAMP DESC
         """
-        return sf_service.execute_query(query)
+        return sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get TPAs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -56,7 +56,7 @@ async def create_tpa(tpa: TPACreate):
         
         # Check if TPA already exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa.tpa_code}'"
-        result = sf_service.execute_query(check_query)
+        result = sf_service.execute_query_dict(check_query)
         if result and result[0]['COUNT'] > 0:
             raise HTTPException(status_code=400, detail=f"TPA with code '{tpa.tpa_code}' already exists")
         
@@ -92,7 +92,7 @@ async def update_tpa(tpa_code: str, tpa: TPAUpdate):
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
-        result = sf_service.execute_query(check_query)
+        result = sf_service.execute_query_dict(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
@@ -129,7 +129,7 @@ async def delete_tpa(tpa_code: str):
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
-        result = sf_service.execute_query(check_query)
+        result = sf_service.execute_query_dict(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
@@ -156,7 +156,7 @@ async def update_tpa_status(tpa_code: str, status: TPAStatusUpdate):
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
-        result = sf_service.execute_query(check_query)
+        result = sf_service.execute_query_dict(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         

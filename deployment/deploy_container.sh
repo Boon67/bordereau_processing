@@ -456,6 +456,9 @@ spec:
   - name: app
     port: 80
     public: true
+    # Disable OAuth authentication for public access
+    authenticationPolicy:
+      type: NONE
 EOF
 
     log_success "Service specification created"

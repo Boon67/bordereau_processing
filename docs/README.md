@@ -18,11 +18,19 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 |----------|-------------|
 | [Main README](../README.md) | Project overview and quick start |
 | [Quick Start Guide](../QUICK_START.md) | Get running in 10 minutes |
-| [Implementation Log](IMPLEMENTATION_LOG.md) | Complete implementation history |
+| [Implementation Log](IMPLEMENTATION_LOG.md) | ⭐ Complete implementation history |
 | [User Guide](USER_GUIDE.md) | Complete usage instructions |
 | [Deployment Guide](../deployment/README.md) | Deployment to Snowflake and Snowpark |
 | [Migration Guide](../MIGRATION_GUIDE.md) | Streamlit to React migration notes |
 | [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization |
+
+### Visual Documentation (with Mermaid Diagrams) 📊
+
+| Document | Description |
+|----------|-------------|
+| [Diagrams Guide](DIAGRAMS_GUIDE.md) | How to use Mermaid diagrams |
+| [Data Flow Diagrams](DATA_FLOW_DIAGRAMS.md) | Data flow visualizations |
+| [Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md) | System architecture diagrams |
 
 ## 🎯 Getting Started
 
@@ -208,6 +216,18 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 
 - **Access**: http://localhost:3000
 
+### Sample Data Generator
+
+**NEW**: Generate realistic healthcare data for testing and development!
+
+- **[Sample Data README](../sample_data/README.md)** - Complete guide
+- **Quick Start**: `cd sample_data && ./quick_start.sh 5000`
+- **Features**:
+  - Members, providers, claims
+  - Member journeys and events
+  - Realistic healthcare patterns
+  - Zero external dependencies
+
 ### Project Structure
 
 ```
@@ -227,6 +247,8 @@ bordereau/
 │   └── package.json
 ├── bronze/                # Bronze layer SQL
 ├── silver/                # Silver layer SQL
+├── gold/                  # Gold layer SQL (analytics)
+├── sample_data/           # Sample data generator
 ├── deployment/            # Deployment scripts
 ├── docker/                # Docker configs
 └── docs/                  # Documentation (you are here)
