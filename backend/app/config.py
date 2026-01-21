@@ -148,10 +148,15 @@ class Settings(BaseSettings):
                 'schema': snowflake_schema,
             }
             
-            # Add warehouse if specified (SPCS doesn't set this by default)
-            # The service should use QUERY_WAREHOUSE parameter or specify in code
-            if self.SNOWFLAKE_WAREHOUSE:
-                config['warehouse'] = self.SNOWFLAKE_WAREHOUSE
+            # Add warehouse - CRITICAL for SPCS OAuth
+            # SPCS doesn't set SNOWFLAKE_WAREHOUSE env var by default
+            # Check env var first, then fall back to config default
+            warehouse = os.getenv('SNOWFLAKE_WAREHOUSE') or self.SNOWFLAKE_WAREHOUSE
+            if warehouse:
+                config['warehouse'] = warehouse
+                logger.info(f"Using warehouse for SPCS: {warehouse}")
+            else:
+                logger.warning("No warehouse specified for SPCS connection - queries may fail")
             
             logger.info(f"SPCS OAuth token loaded for account: {snowflake_account}")
             return config

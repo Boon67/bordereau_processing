@@ -71,6 +71,12 @@ detect_service_model() {
     fi
 }
 
+# Check if using unified service
+is_unified_service() {
+    detect_service_model
+    [ "$USE_UNIFIED_SERVICE" = "true" ]
+}
+
 # ============================================
 # Service Status Functions
 # ============================================
@@ -364,6 +370,33 @@ restart_service() {
 restart_with_new_image() {
     local service="${1:-all}"
     
+    # Check if using unified service
+    if is_unified_service; then
+        log_info "Restarting unified service with new image..."
+        log_info "Service: $UNIFIED_SERVICE_NAME"
+        
+        # For unified service, we just restart it - it will pull the latest image
+        log_info "Suspending service..."
+        execute_sql "ALTER SERVICE ${UNIFIED_SERVICE_NAME} SUSPEND"
+        
+        log_info "Waiting for suspension..."
+        sleep 10
+        
+        log_info "Resuming service (will pull latest images)..."
+        execute_sql "ALTER SERVICE ${UNIFIED_SERVICE_NAME} RESUME"
+        
+        log_success "Unified service restarted - new images will be pulled on startup"
+        
+        echo ""
+        log_info "The service will pull the latest images from the registry."
+        log_info "This may take 1-2 minutes. Check status with:"
+        echo -e "  ${BLUE}./manage_services.sh status${NC}"
+        echo -e "  ${BLUE}./manage_services.sh logs backend 50${NC}"
+        
+        return 0
+    fi
+    
+    # Legacy separate services
     case "$service" in
         backend)
             log_info "Restarting backend with new image..."

@@ -382,9 +382,11 @@ async def process_queue():
             
             try:
                 # Update status to PROCESSING
+                logger.info(f"Processing file: {file_name} (queue_id={queue_id}, type={file_type}, tpa={tpa})")
                 update_query = f"""
                     UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                    SET status = 'PROCESSING' 
+                    SET status = 'PROCESSING',
+                        processed_timestamp = CURRENT_TIMESTAMP()
                     WHERE queue_id = {queue_id}
                 """
                 sf_service.execute_query(update_query)
@@ -392,6 +394,7 @@ async def process_queue():
                 # Call appropriate processing procedure
                 # Convert file_name to stage path format: src/provider_a/file.csv -> @SRC/provider_a/file.csv
                 stage_path = f"@{file_name.upper().split('/')[0]}/{'/'.join(file_name.split('/')[1:])}"
+                logger.info(f"Stage path: {stage_path}")
                 
                 if file_type == 'CSV':
                     proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.process_single_csv_file('{stage_path}', '{tpa}')"
@@ -400,40 +403,63 @@ async def process_queue():
                 else:
                     raise Exception(f"Unsupported file type: {file_type}")
                 
+                logger.info(f"Calling procedure: {proc_query}")
+                
                 # Execute procedure and get result with longer timeout (10 minutes for file processing)
                 result = sf_service.execute_query(proc_query, timeout=600)
                 result_msg = result[0][0] if result and len(result) > 0 else "No result returned"
                 
                 logger.info(f"Processing result for {file_name}: {result_msg}")
                 
-                # Check if procedure returned an error
-                if result_msg.startswith("ERROR:"):
+                # Check if procedure returned an error (check for common error patterns)
+                if any(keyword in result_msg.upper() for keyword in ['ERROR:', 'FAILED', 'EXCEPTION']):
                     raise Exception(result_msg)
+                
+                # Sanitize result message for SQL
+                # Replace backslashes first, then single quotes
+                safe_result_msg = result_msg.replace("\\", "\\\\").replace("'", "''")
+                # Truncate safely to 500 chars
+                if len(safe_result_msg) > 500:
+                    safe_result_msg = safe_result_msg[:497] + "..."
                 
                 # Update status to SUCCESS
                 success_query = f"""
                     UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
                     SET status = 'SUCCESS',
-                        process_result = '{result_msg.replace("'", "''")}',
+                        process_result = '{safe_result_msg}',
                         processed_timestamp = CURRENT_TIMESTAMP()
                     WHERE queue_id = {queue_id}
                 """
                 sf_service.execute_query(success_query)
                 files_processed += 1
+                logger.info(f"Successfully processed file: {file_name}")
                 
             except Exception as proc_error:
-                logger.error(f"Error processing file {file_name} (queue_id={queue_id}): {str(proc_error)}")
+                logger.error(f"Error processing file {file_name} (queue_id={queue_id}): {str(proc_error)}", exc_info=True)
+                
+                # Sanitize error message for SQL
+                error_str = str(proc_error)
+                # Replace backslashes first, then single quotes
+                safe_error_msg = error_str.replace("\\", "\\\\").replace("'", "''")
+                # Truncate safely to 500 chars
+                if len(safe_error_msg) > 500:
+                    safe_error_msg = safe_error_msg[:497] + "..."
+                
                 # Update status to FAILED
-                error_msg = str(proc_error).replace("'", "''")  # Escape quotes
-                fail_query = f"""
-                    UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                    SET status = 'FAILED', 
-                        error_message = '{error_msg[:500]}',
-                        processed_timestamp = CURRENT_TIMESTAMP()
-                    WHERE queue_id = {queue_id}
-                """
-                sf_service.execute_query(fail_query)
-                logger.error(f"Failed to process file {file_name}: {proc_error}")
+                try:
+                    fail_query = f"""
+                        UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+                        SET status = 'FAILED', 
+                            error_message = '{safe_error_msg}',
+                            processed_timestamp = CURRENT_TIMESTAMP(),
+                            retry_count = COALESCE(retry_count, 0) + 1
+                        WHERE queue_id = {queue_id}
+                    """
+                    sf_service.execute_query(fail_query)
+                    logger.info(f"Updated queue status to FAILED for {file_name}")
+                except Exception as update_error:
+                    logger.error(f"Failed to update queue status for {file_name}: {update_error}")
+                    # Continue processing other files even if update fails
         
         return {
             "message": f"Queue processing completed. Processed {files_processed} files.",

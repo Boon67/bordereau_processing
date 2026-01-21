@@ -2,7 +2,7 @@
 
 **Project**: Bordereau Processing Pipeline  
 **Last Updated**: January 21, 2026  
-**Version**: 3.0
+**Version**: 3.5
 
 ---
 
@@ -76,8 +76,6 @@ This document provides a complete map of all documentation in the Bordereau Proc
 | Document | Description | Location |
 |----------|-------------|----------|
 | SYSTEM_DESIGN.md | Technical design document | docs/ |
-| SYSTEM_ARCHITECTURE.md | Architecture details | docs/ |
-| DATA_FLOW.md | Data flow documentation | docs/ |
 | DEPLOYMENT_AND_OPERATIONS.md | Operations guide | docs/ |
 
 ### 5. User Documentation
@@ -94,12 +92,31 @@ This document provides a complete map of all documentation in the Bordereau Proc
 | README.md | Deployment overview | deployment/ |
 | QUICK_REFERENCE.md | Quick command reference | deployment/ |
 | DEPLOY_SCRIPT_UPDATE.md | Script enhancements | deployment/ |
-| TPA_API_FIX.md | TPA API fixes | deployment/ |
-| CONTAINER_DEPLOYMENT_FIX.md | Container deployment fixes | deployment/ |
-| TROUBLESHOOT_SERVICE_CREATION.md | Troubleshooting guide | deployment/ |
-| diagnose_service.sh | Diagnostic automation script | deployment/ |
 | SNOWPARK_CONTAINER_DEPLOYMENT.md | SPCS deployment guide | deployment/ |
+| SNOWPARK_QUICK_START.md | SPCS quick start | deployment/ |
+| DEPLOYMENT_SNOW_CLI.md | Snow CLI deployment guide | deployment/ |
 | AUTHENTICATION_SETUP.md | Auth configuration | deployment/ |
+| diagnose_service.sh | Diagnostic automation script | deployment/ |
+
+#### Fix Documentation
+
+All fix documentation is organized in `deployment/fixes/`:
+
+| Document | Description | Date |
+|----------|-------------|------|
+| README.md | Fix documentation index | Jan 21, 2026 |
+| CONTAINER_DEPLOYMENT_FIX.md | Drop and recreate strategy | Jan 19, 2026 |
+| TROUBLESHOOT_SERVICE_CREATION.md | Service creation failures | Jan 19, 2026 |
+| TROUBLESHOOTING_500_ERRORS.md | Resolving 500 errors | Jan 19, 2026 |
+| REDEPLOY_WAREHOUSE_FIX.md | Warehouse redeployment | Jan 19, 2026 |
+| WAREHOUSE_FIX.md | Warehouse OAuth fix | Jan 19, 2026 |
+| TPA_API_FIX.md | TPA API table name fix | Jan 20, 2026 |
+| TPA_API_CRUD_FIX.md | TPA API data format fix | Jan 21, 2026 |
+| FILE_PROCESSING_FIX.md | File processing improvements | Jan 21, 2026 |
+| FILE_PROCESSING_ERROR_INVESTIGATION.md | File processing debugging | Jan 21, 2026 |
+| USE_DEFAULT_CONNECTION_FIX.md | Connection prompt fix | Jan 21, 2026 |
+| MULTIPLE_CONNECTIONS_FIX.md | Multiple connections handling | Jan 21, 2026 |
+| COLOR_OUTPUT_FIX.md | ANSI color rendering | Jan 21, 2026 |
 
 ### 7. Layer-Specific Documentation
 
@@ -151,66 +168,106 @@ This document provides a complete map of all documentation in the Bordereau Proc
 
 ## Documentation Hierarchy
 
+```mermaid
+graph TD
+    ROOT[bordereau/] --> A[README.md<br/>Project overview]
+    ROOT --> B[QUICK_START.md<br/>Getting started]
+    ROOT --> C[DOCUMENTATION_STRUCTURE.md<br/>This file]
+    ROOT --> D[PROJECT_GENERATION_PROMPT.md<br/>Project history]
+    ROOT --> E[MIGRATION_GUIDE.md<br/>Migration guide]
+    
+    ROOT --> DOCS[docs/<br/>Main documentation]
+    DOCS --> DOCS1[README.md<br/>Documentation hub]
+    DOCS --> DOCS2[⭐ IMPLEMENTATION_LOG.md<br/>Complete history]
+    DOCS --> DOCS3[📊 DIAGRAMS_GUIDE.md<br/>Diagram usage]
+    DOCS --> DOCS4[📊 DATA_FLOW_DIAGRAMS.md<br/>Data flow visuals]
+    DOCS --> DOCS5[📊 ARCHITECTURE_DIAGRAMS.md<br/>Architecture visuals]
+    DOCS --> DOCS6[SYSTEM_DESIGN.md<br/>Technical design]
+    DOCS --> DOCS7[DEPLOYMENT_AND_OPERATIONS.md<br/>Operations guide]
+    DOCS --> DOCS8[USER_GUIDE.md<br/>User documentation]
+    DOCS --> DOCS9[DOCUMENTATION_CLEANUP_SUMMARY.md<br/>Cleanup summary v3.4]
+    DOCS --> GUIDES[guides/]
+    GUIDES --> GUIDES1[TPA_COMPLETE_GUIDE.md]
+    
+    ROOT --> DEPLOY[deployment/<br/>Deployment docs]
+    DEPLOY --> DEP1[README.md]
+    DEPLOY --> DEP2[QUICK_REFERENCE.md]
+    DEPLOY --> DEP3[SNOWPARK_CONTAINER_DEPLOYMENT.md]
+    DEPLOY --> DEP4[AUTHENTICATION_SETUP.md]
+    DEPLOY --> FIXES[fixes/<br/>Fix documentation]
+    FIXES --> FIX1[README.md<br/>Fix index]
+    FIXES --> FIX2[12 fix documents]
+    
+    ROOT --> BRONZE[bronze/<br/>Bronze layer docs]
+    BRONZE --> BR1[README.md]
+    BRONZE --> BR2[TPA_UPLOAD_GUIDE.md]
+    
+    ROOT --> SILVER[silver/<br/>Silver layer docs]
+    SILVER --> SV1[README.md]
+    
+    ROOT --> GOLD[gold/<br/>Gold layer docs]
+    GOLD --> G1[README.md]
+    GOLD --> G2[HYBRID_TABLES_GUIDE.md]
+    GOLD --> G3[PERFORMANCE_OPTIMIZATION_GUIDE.md]
+    
+    ROOT --> SAMPLE[sample_data/<br/>Sample data docs]
+    SAMPLE --> SM1[README.md]
+    SAMPLE --> SM2[generate_sample_data.py]
+    
+    ROOT --> BACKEND[backend/<br/>Backend docs]
+    BACKEND --> BE1[README.md]
+    
+    ROOT --> TESTS[tests/<br/>Test docs]
+    TESTS --> TS1[deployment/README.md]
+    
+    style ROOT fill:#f9f,stroke:#333,stroke-width:3px
+    style DOCS fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style DEPLOY fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style BRONZE fill:#cd7f32,stroke:#333,stroke-width:2px,color:#fff
+    style SILVER fill:#c0c0c0,stroke:#333,stroke-width:2px,color:#000
+    style GOLD fill:#ffd700,stroke:#333,stroke-width:2px,color:#000
+    style SAMPLE fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
+    style BACKEND fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    style TESTS fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
 ```
-bordereau/
-├── README.md                           # Project overview
-├── QUICK_START.md                      # Getting started
-├── DOCUMENTATION_STRUCTURE.md          # This file
-├── PROJECT_GENERATION_PROMPT.md        # Project history
-├── MIGRATION_GUIDE.md                  # Migration guide
-│
-├── docs/                               # Main documentation
-│   ├── README.md                       # Documentation hub
-│   ├── IMPLEMENTATION_LOG.md           # ⭐ Complete history
-│   ├── DIAGRAMS_GUIDE.md               # 📊 Diagram usage
-│   ├── DATA_FLOW_DIAGRAMS.md           # 📊 Data flow visuals
-│   ├── ARCHITECTURE_DIAGRAMS.md        # 📊 Architecture visuals
-│   ├── SYSTEM_DESIGN.md                # Technical design
-│   ├── SYSTEM_ARCHITECTURE.md          # Architecture details
-│   ├── DATA_FLOW.md                    # Data flow details
-│   ├── USER_GUIDE.md                   # User documentation
-│   ├── DEPLOYMENT_AND_OPERATIONS.md    # Operations guide
-│   ├── guides/
-│   │   └── TPA_COMPLETE_GUIDE.md       # TPA guide
-│   └── testing/
-│       └── TEST_PLAN_DEPLOYMENT_SCRIPTS.md
-│
-├── deployment/                         # Deployment docs
-│   ├── README.md
-│   ├── QUICK_REFERENCE.md
-│   ├── DEPLOY_SCRIPT_UPDATE.md
-│   ├── TPA_API_FIX.md
-│   ├── CONTAINER_DEPLOYMENT_FIX.md
-│   ├── TROUBLESHOOT_SERVICE_CREATION.md
-│   ├── diagnose_service.sh
-│   └── ... (other deployment guides)
-│
-├── bronze/                             # Bronze layer docs
-│   ├── README.md
-│   └── TPA_UPLOAD_GUIDE.md
-│
-├── silver/                             # Silver layer docs
-│   └── README.md
-│
-├── gold/                               # Gold layer docs
-│   ├── README.md
-│   ├── HYBRID_TABLES_GUIDE.md
-│   ├── PERFORMANCE_OPTIMIZATION_GUIDE.md
-│   └── 6_Member_Journeys.sql
-│
-├── sample_data/                        # Sample data docs
-│   ├── README.md
-│   ├── generate_sample_data.py
-│   ├── quick_start.sh
-│   └── load_sample_data.sql
-│
-├── backend/                            # Backend docs
-│   └── README.md
-│
-└── tests/                              # Test docs
-    └── deployment/
-        └── README.md
-```
+
+---
+
+## Summary Statistics
+
+- **Total Documentation Files**: 42
+- **Root Level**: 5 files
+- **docs/**: 9 files
+- **deployment/**: 8 core files + 13 fix files (in fixes/)
+- **Layer-specific**: 8 files
+- **Backend**: 1 file
+- **Sample Data**: 4 files
+- **Testing**: 2 files
+
+### Recent Changes
+
+#### v3.5 - Final Consolidation (January 21, 2026)
+**Removed Historical Summaries**:
+- ✅ Deleted 3 historical summary documents (23 KB)
+- ✅ All history now in IMPLEMENTATION_LOG.md
+- ✅ Updated all references
+
+#### v3.4 - Major Cleanup (January 21, 2026)
+**Removed Duplicates**:
+- ✅ Deleted `docs/DATA_FLOW.md` (kept Mermaid version)
+- ✅ Deleted `docs/SYSTEM_ARCHITECTURE.md` (kept Mermaid version)
+- ✅ Deleted 5 redundant deployment summaries
+
+**Organized Fixes**:
+- ✅ Created `deployment/fixes/` subdirectory
+- ✅ Moved 12 fix documents to organized location
+- ✅ Created fix documentation index
+
+**Total Impact**:
+- Reduced redundancy by ~225KB
+- Single source of truth for each topic
+- Clear organizational hierarchy
+- Easier to find and maintain documentation
 
 ---
 
@@ -234,7 +291,7 @@ bordereau/
 → [deployment/README.md](deployment/README.md)
 
 #### Troubleshoot Deployment
-→ [deployment/TROUBLESHOOT_SERVICE_CREATION.md](deployment/TROUBLESHOOT_SERVICE_CREATION.md)
+→ [deployment/fixes/README.md](deployment/fixes/README.md) or [deployment/fixes/TROUBLESHOOT_SERVICE_CREATION.md](deployment/fixes/TROUBLESHOOT_SERVICE_CREATION.md)
 
 #### Generate Sample Data
 → [sample_data/README.md](sample_data/README.md)
@@ -309,6 +366,12 @@ All documentation should include:
 
 ## Version History
 
+### v3.1 (January 21, 2026)
+- Added recent fix documentation to deployment/
+- Updated IMPLEMENTATION_LOG with latest changes
+- Moved consolidation doc to docs/
+- Updated documentation structure
+
 ### v3.0 (January 21, 2026)
 - Renamed Mermaid diagram files for clarity
 - Consolidated root-level summaries into IMPLEMENTATION_LOG
@@ -330,12 +393,12 @@ All documentation should include:
 
 ## Statistics
 
-**Total Documentation Files**: 47
+**Total Documentation Files**: 52+
 
 **By Category**:
 - Root-level: 5 files
-- Main docs: 11 files
-- Deployment: 15+ files
+- Main docs: 12 files
+- Deployment: 19+ files
 - Layer-specific: 10 files
 - Sample data: 4 files
 - Testing: 2 files
@@ -358,5 +421,5 @@ For questions about documentation:
 ---
 
 **Last Updated**: January 21, 2026  
-**Version**: 3.0  
+**Version**: 3.1  
 **Status**: ✅ Current

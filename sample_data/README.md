@@ -79,13 +79,21 @@ The generator creates the following CSV files:
 
 ## Data Relationships
 
-```
-TPAs (5)
-  ├── Members (~10% of claims)
-  │     ├── Claims (specified count)
-  │     └── Journeys (1-3 per member)
-  │           └── Events (2-10 per journey)
-  └── Providers (~5% of claims)
+```mermaid
+graph TD
+    A[TPAs 5] --> B[Members<br/>~10% of claims]
+    B --> C[Claims<br/>specified count]
+    B --> D[Journeys<br/>1-3 per member]
+    D --> E[Events<br/>2-10 per journey]
+    
+    A --> F[Providers<br/>~5% of claims]
+    
+    style A fill:#9c27b0,stroke:#333,stroke-width:3px,color:#fff
+    style B fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style C fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
+    style D fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style E fill:#f44336,stroke:#333,stroke-width:2px,color:#fff
+    style F fill:#00bcd4,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ## Sample Data Statistics

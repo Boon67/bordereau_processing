@@ -23,6 +23,7 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 | [Deployment Guide](../deployment/README.md) | Deployment to Snowflake and Snowpark |
 | [Migration Guide](../MIGRATION_GUIDE.md) | Streamlit to React migration notes |
 | [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization |
+| [Documentation Cleanup](DOCUMENTATION_CLEANUP_SUMMARY.md) | Recent cleanup summary (v3.4) |
 
 ### Visual Documentation (with Mermaid Diagrams) 📊
 
@@ -69,25 +70,18 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 
 ### System Overview
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Frontend (React)                      │
-│  - Vite + TypeScript + Ant Design                      │
-│  - Bronze & Silver layer management                     │
-└─────────────────────────────────────────────────────────┘
-                           ↓ REST API
-┌─────────────────────────────────────────────────────────┐
-│                   Backend (FastAPI)                      │
-│  - REST API with Pydantic validation                    │
-│  - Multi-auth support (PAT, Keypair, Snow CLI)         │
-└─────────────────────────────────────────────────────────┘
-                           ↓ Snowflake Connector
-┌─────────────────────────────────────────────────────────┐
-│                  Snowflake Database                      │
-│  - Bronze Layer: Raw data ingestion                     │
-│  - Silver Layer: Transformed data                       │
-│  - Tasks: Automated processing                          │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A[Frontend React<br/>━━━━━━━━━━━━━━━<br/>• Vite + TypeScript + Ant Design<br/>• Bronze & Silver layer management] 
+    B[Backend FastAPI<br/>━━━━━━━━━━━━━━━<br/>• REST API with Pydantic validation<br/>• Multi-auth support PAT, Keypair, Snow CLI]
+    C[Snowflake Database<br/>━━━━━━━━━━━━━━━<br/>• Bronze Layer: Raw data ingestion<br/>• Silver Layer: Transformed data<br/>• Tasks: Automated processing]
+    
+    A -->|REST API| B
+    B -->|Snowflake Connector| C
+    
+    style A fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
+    style B fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    style C fill:#29b5e8,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ### Technology Stack

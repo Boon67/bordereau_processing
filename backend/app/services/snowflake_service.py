@@ -33,6 +33,27 @@ class SnowflakeService:
             connection_params['insecure_mode'] = True
             
             conn = snowflake.connector.connect(**connection_params)
+            
+            # Explicitly set warehouse, database, and schema after connection
+            # This is especially important for SPCS OAuth connections
+            with conn.cursor() as cursor:
+                warehouse = connection_params.get('warehouse', settings.SNOWFLAKE_WAREHOUSE)
+                database = connection_params.get('database', settings.DATABASE_NAME)
+                
+                if warehouse:
+                    logger.info(f"Setting warehouse: {warehouse}")
+                    cursor.execute(f"USE WAREHOUSE {warehouse}")
+                
+                if database:
+                    logger.info(f"Setting database: {database}")
+                    cursor.execute(f"USE DATABASE {database}")
+                    
+                    # Set schema if provided
+                    schema = connection_params.get('schema')
+                    if schema:
+                        logger.info(f"Setting schema: {schema}")
+                        cursor.execute(f"USE SCHEMA {schema}")
+            
             return conn
         except Exception as e:
             logger.error(f"Failed to connect to Snowflake: {str(e)}")

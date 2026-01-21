@@ -884,6 +884,368 @@ sample_data/
 
 ---
 
+## USE_DEFAULT_CONNECTION Fix
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+When `USE_DEFAULT_CONNECTION="true"` was set in `default.config`, the deployment script was still prompting "Use this connection? (y/n):", preventing fully automated deployments.
+
+### Changes Made
+
+**File**: `deployment/check_snow_connection.sh`
+
+Added check for `USE_DEFAULT_CONNECTION` environment variable before prompting:
+
+```bash
+# Check if USE_DEFAULT_CONNECTION is set to true
+if [[ "${USE_DEFAULT_CONNECTION}" == "true" ]]; then
+    echo ""
+    echo -e "${GREEN}✓ Using existing connection (USE_DEFAULT_CONNECTION=true)${NC}"
+    exit 0
+fi
+```
+
+### Result
+
+- ✅ Fully automated deployments now work when `USE_DEFAULT_CONNECTION="true"`
+- ✅ CI/CD pipelines can run without prompts
+- ✅ Interactive mode still available when setting is `false`
+- ✅ Clear messaging shows why connection was auto-selected
+
+### Configuration
+
+```bash
+# default.config
+USE_DEFAULT_CONNECTION="true"   # Use default connection without prompting
+AUTO_APPROVE="true"             # Skip deployment confirmation
+```
+
+**Documentation**: `deployment/USE_DEFAULT_CONNECTION_FIX.md`
+
+---
+
+## TPA API CRUD Fixes
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+The TPA API had multiple issues where it was using `execute_query()` (returns arrays) instead of `execute_query_dict()` (returns objects), causing errors in all CRUD operations:
+
+1. **GET /api/tpas** - Dropdown showing blank (arrays instead of objects)
+2. **POST /api/tpas** - Create TPA failing (TypeError accessing dict keys on tuple)
+3. **PUT /api/tpas/{code}** - Update TPA failing
+4. **DELETE /api/tpas/{code}** - Delete TPA failing
+5. **PATCH /api/tpas/{code}/status** - Status update failing
+
+### Changes Made
+
+**File**: `backend/app/api/tpa.py`
+
+Fixed 5 locations where `execute_query()` needed to be `execute_query_dict()`:
+- Line 46: GET endpoint - return statement
+- Line 59: POST endpoint - existence check
+- Line 95: PUT endpoint - existence check
+- Line 132: DELETE endpoint - existence check
+- Line 159: PATCH endpoint - existence check
+
+### Result
+
+- ✅ GET /api/tpas - Dropdown populated correctly
+- ✅ POST /api/tpas - Create TPA working
+- ✅ PUT /api/tpas/{code} - Update TPA working
+- ✅ DELETE /api/tpas/{code} - Delete TPA working
+- ✅ PATCH /api/tpas/{code}/status - Status toggle working
+
+**Deployments**: 
+- First fix (GET): Image `sha256:61f13c9ddb35...`, endpoint `fzcmn2pb-...`
+- Complete fix (all CRUD): Image `sha256:dc3b2c5dc5dc...`, endpoint `jzcmn2pb-...`
+
+**Documentation**: `TPA_API_CRUD_FIX.md`
+
+---
+
+## File Processing Error Handling Improvements
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+File upload processing had poor error handling, making it difficult to diagnose failures.
+
+### Changes Made
+
+**File**: `backend/app/api/bronze.py`
+
+Enhanced the `/bronze/process` endpoint with:
+
+1. **Enhanced Logging**: Detailed logs at every processing step with full stack traces
+2. **Better Error Detection**: Checks for multiple error patterns (ERROR, FAILED, EXCEPTION)
+3. **Proper String Sanitization**: Escapes backslashes AND quotes, safe truncation
+4. **Retry Counter**: Tracks retry attempts in `file_processing_queue`
+5. **Graceful Error Handling**: Continues processing other files if queue update fails
+6. **Processing Timestamp**: Records when processing starts
+
+### Result
+
+- ✅ Better debugging with detailed logs
+- ✅ More robust error message handling
+- ✅ Retry tracking for problematic files
+- ✅ Prevents SQL injection in error messages
+- ✅ Graceful degradation on failures
+
+**Deployment**: Image `sha256:81b74be27b31...`, endpoint `f2cmn2pb-...`
+
+**Documentation**: `FILE_PROCESSING_FIX.md`, `FILE_PROCESSING_ERROR_INVESTIGATION.md`
+
+---
+
+## Deployment Script Color Output Fix
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+The `deploy_container.sh` script was showing literal ANSI escape codes instead of colored text in the deployment summary.
+
+### Changes Made
+
+**File**: `deployment/deploy_container.sh`
+
+Changed 9 `echo` statements to `echo -e` in the `print_summary()` function to properly interpret ANSI color codes for:
+- Endpoint URLs (green)
+- API endpoints (blue)
+- Commands (cyan)
+- Warning messages (yellow)
+
+### Result
+
+- ✅ Proper color rendering in deployment summary
+- ✅ Improved readability of deployment output
+- ✅ Professional-looking terminal output
+
+**Documentation**: `deployment/fixes/COLOR_OUTPUT_FIX.md`
+
+---
+
+## Multiple Connections Handling Fix
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+When multiple Snow CLI connections were configured (e.g., DEV, STAGING, PROD), the deployment script:
+- Only showed the default connection
+- Didn't display all available connections
+- Didn't let users choose between connections
+- Asked "Use this connection?" without showing alternatives
+
+### Root Cause
+
+**File**: `deployment/check_snow_connection.sh`
+
+The script was:
+1. Only retrieving the default connection
+2. Asking a yes/no question about that one connection
+3. Not showing all available connections
+4. Not delegating to `deploy.sh` for proper connection selection
+
+### Changes Made
+
+**File**: `deployment/check_snow_connection.sh`
+
+Enhanced connection handling:
+
+```bash
+# Get ALL connections
+mapfile -t connections < <(snow connection list --format json | jq -r '.[].connection_name')
+
+# Show ALL connections
+snow connection list
+
+# Handle based on count
+if [[ ${#connections[@]} -eq 1 ]]; then
+    # Single connection - ask to use it
+    read -p "Use this connection? (y/n): " use_connection
+elif [[ ${#connections[@]} -gt 1 ]]; then
+    # Multiple connections - let deploy.sh handle selection
+    echo "Multiple connections found - selection will be prompted during deployment"
+    exit 0
+fi
+```
+
+### Deployment Flow
+
+#### Single Connection
+- Shows connection details
+- If `USE_DEFAULT_CONNECTION="true"`: Auto-accepts
+- If `USE_DEFAULT_CONNECTION="false"`: Prompts "Use this connection?"
+
+#### Multiple Connections + USE_DEFAULT_CONNECTION="true"
+- Shows all connections
+- Auto-selects default connection (no prompt)
+
+#### Multiple Connections + USE_DEFAULT_CONNECTION="false"
+- Shows all connections
+- Passes control to `deploy.sh`
+- `deploy.sh` shows numbered menu
+- User selects connection
+
+### Result
+
+- ✅ Shows ALL available connections
+- ✅ Clear connection selection menu
+- ✅ Respects `USE_DEFAULT_CONNECTION` setting
+- ✅ Proper handling of single vs multiple connections
+- ✅ Safer deployments (prevents wrong-environment issues)
+
+**Documentation**: `deployment/fixes/MULTIPLE_CONNECTIONS_FIX.md`, `deployment/fixes/USE_DEFAULT_CONNECTION_FIX.md`
+
+---
+
+## Documentation Cleanup
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+Documentation had accumulated redundancies and organizational issues:
+- Duplicate content (ASCII vs Mermaid versions)
+- Scattered fix documentation
+- Multiple summary documents with overlapping content
+- Unclear organization
+
+### Changes Made
+
+#### 1. Removed Duplicate Documentation Files
+
+**Deleted ASCII versions (kept Mermaid versions)**:
+- `docs/DATA_FLOW.md` (1256 lines) → Kept `docs/DATA_FLOW_DIAGRAMS.md` (834 lines)
+- `docs/SYSTEM_ARCHITECTURE.md` (1044 lines) → Kept `docs/ARCHITECTURE_DIAGRAMS.md` (757 lines)
+
+**Rationale**: Mermaid diagrams are:
+- Modern and maintainable
+- Render beautifully on GitHub
+- Easier to update
+- Support syntax highlighting
+
+#### 2. Consolidated Deployment Summaries
+
+**Deleted redundant summary documents**:
+- `deployment/CONSOLIDATION_SUMMARY.md` - Script consolidation info (now in IMPLEMENTATION_LOG)
+- `deployment/DEPLOYMENT_SUMMARY.md` - Configuration summary (now in README)
+- `deployment/DEPLOYMENT_SUCCESS.md` - Success message (now in README)
+- `deployment/REDEPLOY_SUMMARY.md` - Redeploy instructions (now in QUICK_REFERENCE)
+- `deployment/TEST_RESULTS.md` - Test results (historical, not needed)
+
+**Total removed**: 5 documents (29,060 bytes)
+
+#### 3. Organized Fix Documentation
+
+**Created**: `deployment/fixes/` subdirectory
+
+**Moved 12 fix documents**:
+- `COLOR_OUTPUT_FIX.md`
+- `CONTAINER_DEPLOYMENT_FIX.md`
+- `FILE_PROCESSING_ERROR_INVESTIGATION.md`
+- `FILE_PROCESSING_FIX.md`
+- `MULTIPLE_CONNECTIONS_FIX.md`
+- `REDEPLOY_WAREHOUSE_FIX.md`
+- `TPA_API_CRUD_FIX.md`
+- `TPA_API_FIX.md`
+- `TROUBLESHOOT_SERVICE_CREATION.md`
+- `TROUBLESHOOTING_500_ERRORS.md`
+- `USE_DEFAULT_CONNECTION_FIX.md`
+- `WAREHOUSE_FIX.md`
+
+**Created**: `deployment/fixes/README.md` - Index of all fixes with quick reference
+
+#### 4. Updated Documentation Structure
+
+**Updated files**:
+- `DOCUMENTATION_STRUCTURE.md` - Updated all file references
+- `docs/README.md` - Updated quick links
+- `deployment/README.md` - Updated fix documentation references
+
+### Result
+
+**Before Cleanup**:
+- 2 duplicate architecture docs (2,088 lines)
+- 5 redundant summary docs
+- 12 fix docs scattered in deployment/
+- Total: 19 files needing organization
+
+**After Cleanup**:
+- Single source of truth for each topic
+- All fixes organized in `deployment/fixes/`
+- Clear documentation hierarchy
+- Reduced redundancy by ~200KB
+
+**Benefits**:
+- ✅ Easier to find documentation
+- ✅ No duplicate content to maintain
+- ✅ Clear organization by category
+- ✅ Better GitHub rendering (Mermaid)
+- ✅ Reduced maintenance burden
+
+**Documentation**: `docs/DOCUMENTATION_CLEANUP_SUMMARY.md`
+
+---
+
+## Final Documentation Consolidation
+
+**Date**: January 21, 2026  
+**Status**: ✅ Complete
+
+### Problem
+
+After the major cleanup (v3.4), there were still 3 historical summary documents that were redundant:
+- `docs/DOCUMENTATION_CONSOLIDATION_COMPLETE.md` - First consolidation (historical)
+- `docs/FINAL_CONSOLIDATION_SUMMARY.md` - Second consolidation (historical)
+- `docs/ASCII_TO_MERMAID_CONVERSION.md` - Diagram conversion log (historical)
+
+These documents contained information already captured in this IMPLEMENTATION_LOG.
+
+### Changes Made
+
+**Deleted historical summary documents (3 files, 23 KB)**:
+1. `docs/DOCUMENTATION_CONSOLIDATION_COMPLETE.md` (8,340 bytes)
+2. `docs/FINAL_CONSOLIDATION_SUMMARY.md` (6,295 bytes)
+3. `docs/ASCII_TO_MERMAID_CONVERSION.md` (8,494 bytes)
+
+**Updated references**:
+- `DOCUMENTATION_STRUCTURE.md` - Removed references to deleted files
+- `docs/DOCUMENTATION_CLEANUP_SUMMARY.md` - Updated related documentation links
+
+**Rationale**: All consolidation and conversion history is already documented in this IMPLEMENTATION_LOG under:
+- "Documentation Consolidation" section
+- "Documentation Reorganization" section
+- "Documentation Cleanup" section
+
+### Result
+
+**Final Documentation Count**:
+- ✅ Total files: 42 (down from 45)
+- ✅ docs/: 9 core files (down from 12)
+- ✅ No redundant historical summaries
+- ✅ Single source of truth: IMPLEMENTATION_LOG.md
+
+**Benefits**:
+- All project history in one place
+- No duplicate historical records
+- Cleaner documentation structure
+- Easier to maintain
+
+---
+
 **Last Updated**: January 21, 2026  
-**Version**: 3.0  
+**Version**: 3.5  
 **Status**: ✅ Production Ready

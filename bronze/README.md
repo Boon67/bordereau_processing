@@ -72,16 +72,23 @@ archive_old_files_task (Daily at 2 AM - independent)
 
 Files must be organized by TPA in the `@SRC` stage:
 
-```
-@SRC/
-├── provider_a/
-│   ├── claims-20240301.csv
-│   └── members-20240301.csv
-├── provider_b/
-│   ├── claims-20240115.csv
-│   └── eligibility-20240115.xlsx
-└── provider_c/
-    └── claims-20240215.xlsx
+```mermaid
+graph TD
+    SRC[@SRC/] --> PA[provider_a/]
+    PA --> PA1[claims-20240301.csv]
+    PA --> PA2[members-20240301.csv]
+    
+    SRC --> PB[provider_b/]
+    PB --> PB1[claims-20240115.csv]
+    PB --> PB2[eligibility-20240115.xlsx]
+    
+    SRC --> PC[provider_c/]
+    PC --> PC1[claims-20240215.xlsx]
+    
+    style SRC fill:#cd7f32,stroke:#333,stroke-width:3px,color:#fff
+    style PA fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style PB fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
+    style PC fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ### TPA Extraction

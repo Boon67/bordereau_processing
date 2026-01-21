@@ -456,9 +456,6 @@ spec:
   - name: app
     port: 80
     public: true
-    # Disable OAuth authentication for public access
-    authenticationPolicy:
-      type: NONE
 EOF
 
     log_success "Service specification created"
@@ -608,15 +605,15 @@ print_summary() {
     echo ""
     if [ -n "$SERVICE_ENDPOINT" ]; then
         echo "  Application (Frontend):"
-        echo "    ${GREEN}${SERVICE_ENDPOINT}${NC}"
+        echo -e "    ${GREEN}${SERVICE_ENDPOINT}${NC}"
         echo ""
         echo "  API (via Frontend proxy):"
-        echo "    ${BLUE}${SERVICE_ENDPOINT}/api/health${NC}"
+        echo -e "    ${BLUE}${SERVICE_ENDPOINT}/api/health${NC}"
         echo ""
         echo "  Test:"
-        echo "    ${CYAN}curl ${SERVICE_ENDPOINT}/api/health${NC}"
+        echo -e "    ${CYAN}curl ${SERVICE_ENDPOINT}/api/health${NC}"
     else
-        echo "  ${YELLOW}Endpoint provisioning in progress...${NC}"
+        echo -e "  ${YELLOW}Endpoint provisioning in progress...${NC}"
         echo "  Check status: ./manage_services.sh status"
     fi
     echo ""
@@ -625,15 +622,15 @@ print_summary() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "  Check status:"
-    echo "    ${CYAN}cd deployment${NC}"
-    echo "    ${CYAN}./manage_services.sh status${NC}"
+    echo -e "    ${CYAN}cd deployment${NC}"
+    echo -e "    ${CYAN}./manage_services.sh status${NC}"
     echo ""
     echo "  View logs:"
-    echo "    ${CYAN}./manage_services.sh logs backend 100${NC}"
-    echo "    ${CYAN}./manage_services.sh logs frontend 100${NC}"
+    echo -e "    ${CYAN}./manage_services.sh logs backend 100${NC}"
+    echo -e "    ${CYAN}./manage_services.sh logs frontend 100${NC}"
     echo ""
     echo "  Run health check:"
-    echo "    ${CYAN}./manage_services.sh health${NC}"
+    echo -e "    ${CYAN}./manage_services.sh health${NC}"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""

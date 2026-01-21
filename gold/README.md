@@ -14,20 +14,28 @@ The Gold layer serves as the **single source of truth** for business analytics a
 
 ## Architecture
 
-```
-Silver Layer (Normalized Data)
-        ↓
-Gold Layer Transformations
-        ↓
-┌─────────────────────────────────────┐
-│  Gold Layer (Analytics-Ready)       │
-│  ├── Claims Analytics               │
-│  ├── Member 360                     │
-│  ├── Provider Performance           │
-│  └── Financial Summary              │
-└─────────────────────────────────────┘
-        ↓
-Business Intelligence & Reporting
+```mermaid
+graph TD
+    A[Silver Layer<br/>Normalized Data] --> B[Gold Layer Transformations]
+    B --> C[Gold Layer Analytics-Ready<br/>━━━━━━━━━━━━━━━]
+    C --> D[Claims Analytics]
+    C --> E[Member 360]
+    C --> F[Provider Performance]
+    C --> G[Financial Summary]
+    
+    D --> H[Business Intelligence & Reporting]
+    E --> H
+    F --> H
+    G --> H
+    
+    style A fill:#c0c0c0,stroke:#333,stroke-width:2px,color:#000
+    style B fill:#ffd700,stroke:#333,stroke-width:2px,color:#000
+    style C fill:#ffd700,stroke:#333,stroke-width:3px,color:#000
+    style D fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style E fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
+    style F fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style G fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
+    style H fill:#f44336,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ## Gold Layer Tables
@@ -102,10 +110,13 @@ Financial summary and analytics.
 ### Execution Order
 
 1. **1_Gold_Schema_Setup.sql** - Creates Gold schema, stages, and metadata tables
-2. **2_Gold_Target_Schemas.sql** - Defines target table structures
+2. **2_Gold_Target_Schemas_BULK.sql** - Defines target table structures (optimized) ⚡
+   - *Alternative: 2_Gold_Target_Schemas.sql (original, slower)*
 3. **3_Gold_Transformation_Rules.sql** - Defines business rules and transformations
 4. **4_Gold_Transformation_Procedures.sql** - Creates transformation stored procedures
 5. **5_Gold_Tasks.sql** - Sets up automated refresh tasks
+
+**⚡ Recommended:** Use `2_Gold_Target_Schemas_BULK.sql` for 88% faster execution!
 
 ### File Descriptions
 
@@ -122,10 +133,19 @@ Financial summary and analytics.
   - `quality_check_results` - Quality check results
   - `business_metrics` - KPI definitions
 
-#### 2_Gold_Target_Schemas.sql
+#### 2_Gold_Target_Schemas_BULK.sql (Recommended ⚡)
 - Defines 4 target table schemas
-- Creates helper procedures for schema management
+- Uses bulk INSERT for 88% faster execution
 - Creates actual target tables
+- **Performance**: 8 operations vs 69 in original
+
+#### 2_Gold_Target_Schemas.sql (Original)
+- Same functionality as bulk version
+- Uses individual procedure calls (slower)
+- Kept for compatibility
+- **Performance**: 69 procedure calls
+
+**See [BULK_LOAD_OPTIMIZATION.md](BULK_LOAD_OPTIMIZATION.md) for details**
 
 #### 3_Gold_Transformation_Rules.sql
 - Defines 11 transformation rules

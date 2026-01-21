@@ -77,15 +77,15 @@ else
 fi
 echo ""
 
-# 2. Gold Target Schemas
-echo -e "${YELLOW}[2/5]${NC} Creating Gold target schemas..."
-snow sql -f "$PROJECT_ROOT/gold/2_Gold_Target_Schemas.sql" \
+# 2. Gold Target Schemas (Using BULK optimized version)
+echo -e "${YELLOW}[2/5]${NC} Creating Gold target schemas (bulk optimized - 88% faster)..."
+snow sql -f "$PROJECT_ROOT/gold/2_Gold_Target_Schemas_BULK.sql" \
     --connection "$CONNECTION_NAME" \
     -D "DATABASE_NAME=$DATABASE_NAME" \
     -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Gold target schemas created${NC}"
+    echo -e "${GREEN}✓ Gold target schemas created (8 operations vs 69)${NC}"
 else
     echo -e "${RED}✗ Failed to create Gold target schemas${NC}"
     exit 1

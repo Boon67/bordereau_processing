@@ -34,27 +34,55 @@ echo -e "${GREEN}✓ Snowflake CLI is installed${NC}"
 if snow connection test &> /dev/null; then
     echo -e "${GREEN}✓ Active Snowflake connection found${NC}"
     
-    # Get connection details
-    CONNECTION_NAME=$(snow connection list --format json | jq -r '.[] | select(.is_default == true) | .connection_name' 2>/dev/null || echo "default")
+    # Get all connections
+    mapfile -t connections < <(snow connection list --format json 2>/dev/null | jq -r '.[].connection_name' 2>/dev/null)
+    
+    if [[ ${#connections[@]} -eq 0 ]]; then
+        echo -e "${RED}✗ No connections found${NC}"
+        exit 1
+    fi
+    
+    # Get default connection
+    DEFAULT_CONNECTION=$(snow connection list --format json | jq -r '.[] | select(.is_default == true) | .connection_name' 2>/dev/null || echo "")
     
     echo ""
-    echo -e "${BLUE}Current connection: ${CONNECTION_NAME}${NC}"
-
-    # Show connection details (without password)
+    echo -e "${BLUE}Available Snowflake Connections:${NC}"
+    echo ""
+    
+    # Show all connections
     snow connection list
+    echo ""
 
     # If non-interactive, default to using the existing connection.
     if [[ ! -t 0 ]]; then
-        echo ""
-        echo -e "${GREEN}✓ Using existing connection (non-interactive)${NC}"
+        echo -e "${GREEN}✓ Using default connection (non-interactive)${NC}"
         exit 0
     fi
 
-    echo ""
-    read -p "Use this connection? (y/n): " use_connection
+    # Check if USE_DEFAULT_CONNECTION is set to true
+    if [[ "${USE_DEFAULT_CONNECTION}" == "true" ]]; then
+        if [[ -n "$DEFAULT_CONNECTION" ]]; then
+            echo -e "${GREEN}✓ Using default connection: ${DEFAULT_CONNECTION} (USE_DEFAULT_CONNECTION=true)${NC}"
+        else
+            echo -e "${GREEN}✓ Using existing connection (USE_DEFAULT_CONNECTION=true)${NC}"
+        fi
+        exit 0
+    fi
 
-    if [[ "$use_connection" =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}✓ Using existing connection${NC}"
+    # If only one connection, ask to use it
+    if [[ ${#connections[@]} -eq 1 ]]; then
+        echo -e "${BLUE}Found 1 connection: ${connections[0]}${NC}"
+        echo ""
+        read -p "Use this connection? (y/n): " use_connection
+        
+        if [[ "$use_connection" =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}✓ Using connection: ${connections[0]}${NC}"
+            exit 0
+        fi
+    else
+        # Multiple connections - let deploy.sh handle the selection
+        echo -e "${YELLOW}Multiple connections found (${#connections[@]} total)${NC}"
+        echo -e "${CYAN}Connection selection will be prompted during deployment${NC}"
         exit 0
     fi
 fi

@@ -6,54 +6,60 @@ Complete deployment documentation for the Bordereau Processing Pipeline.
 
 ## Directory Structure
 
-```
-deployment/
-├── README.md                              # This file
-│
-├── Core Deployment Scripts
-├── deploy.sh                              # Main deployment (Bronze + Silver layers)
-├── deploy_bronze.sh                       # Bronze layer only
-├── deploy_silver.sh                       # Silver layer only
-├── deploy_container.sh                    # Container Services (Recommended)
-│
-├── Management & Utilities
-├── manage_services.sh                     # Service management (Recommended)
-├── test_deploy_container.sh               # Test container deployment
-├── check_snow_connection.sh               # Connection verification
-├── undeploy.sh                            # Remove all resources
-│
-├── Configuration Files
-├── default.config                         # Default configuration
-├── custom.config.example                  # Custom config template
-├── configure_keypair_auth.sql             # SQL for keypair setup
-│
-├── Documentation
-├── DEPLOYMENT_SNOW_CLI.md                 # Snow CLI deployment guide
-├── DEPLOYMENT_SUMMARY.md                  # Deployment summary
-├── DEPLOYMENT_SUCCESS.md                  # Latest deployment results
-├── TEST_RESULTS.md                        # Container deployment tests
-├── SNOWPARK_CONTAINER_DEPLOYMENT.md       # Container deployment guide
-├── SNOWPARK_QUICK_START.md                # Quick start guide
-├── AUTHENTICATION_SETUP.md                # Authentication setup guide
-│
-└── legacy/                                # Legacy separate services (not recommended)
-    ├── README.md                          # Legacy deployment guide
-    ├── deploy_full_stack.sh               # Separate services deployment
-    ├── deploy_snowpark_container.sh       # Backend only (legacy)
-    ├── deploy_frontend_spcs.sh            # Frontend only (legacy)
-    ├── manage_snowpark_service.sh         # Backend management (legacy)
-    ├── manage_frontend_service.sh         # Frontend management (legacy)
-    └── FULL_STACK_SPCS_DEPLOYMENT.md      # Old architecture docs
+```mermaid
+graph TD
+    ROOT[deployment/] --> README[README.md<br/>This file]
+    
+    ROOT --> SCRIPTS[Core Deployment Scripts]
+    SCRIPTS --> S1[deploy.sh<br/>Main deployment Bronze + Silver]
+    SCRIPTS --> S2[deploy_bronze.sh<br/>Bronze layer only]
+    SCRIPTS --> S3[deploy_silver.sh<br/>Silver layer only]
+    SCRIPTS --> S4[deploy_container.sh<br/>Container Services Recommended]
+    
+    ROOT --> MGMT[Management & Utilities]
+    MGMT --> M1[manage_services.sh<br/>Service management Recommended]
+    MGMT --> M2[test_deploy_container.sh<br/>Test container deployment]
+    MGMT --> M3[check_snow_connection.sh<br/>Connection verification]
+    MGMT --> M4[undeploy.sh<br/>Remove all resources]
+    
+    ROOT --> CONFIG[Configuration Files]
+    CONFIG --> C1[default.config<br/>Default configuration]
+    CONFIG --> C2[custom.config.example<br/>Custom config template]
+    CONFIG --> C3[configure_keypair_auth.sql<br/>SQL for keypair setup]
+    
+    ROOT --> DOCS[Documentation]
+    DOCS --> D1[DEPLOYMENT_SNOW_CLI.md]
+    DOCS --> D2[SNOWPARK_CONTAINER_DEPLOYMENT.md]
+    DOCS --> D3[AUTHENTICATION_SETUP.md]
+    DOCS --> D4[... other guides]
+    
+    ROOT --> LEGACY[legacy/<br/>Legacy separate services not recommended]
+    LEGACY --> L1[deploy_full_stack.sh]
+    LEGACY --> L2[deploy_snowpark_container.sh]
+    LEGACY --> L3[deploy_frontend_spcs.sh]
+    
+    style ROOT fill:#ff9800,stroke:#333,stroke-width:3px,color:#fff
+    style SCRIPTS fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style MGMT fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
+    style CONFIG fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
+    style DOCS fill:#f44336,stroke:#333,stroke-width:2px,color:#fff
+    style LEGACY fill:#757575,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ## Quick Start
 
-### 1. Deploy to Snowflake (Bronze + Silver Layers)
+### 1. Deploy to Snowflake (Bronze + Silver + Gold Layers)
 
 ```bash
 cd deployment
 ./deploy.sh
 ```
+
+**What gets deployed:**
+- ✅ Bronze Layer (raw data ingestion)
+- ✅ Silver Layer (transformed data)
+- ✅ Gold Layer (analytics-ready data) ⚡ **with 88% faster bulk load optimization**
+- ❓ Optional: Snowpark Container Services (prompted)
 
 ### 2. Deploy Container Services to SPCS (Recommended)
 
@@ -214,30 +220,16 @@ cp deployment/custom.config.example deployment/custom.config
 
 When you deploy the full stack to Snowpark Container Services, you get:
 
-```
-User's Browser
-     ↓ HTTPS
-┌─────────────────────────────────────────┐
-│  Frontend Service (SPCS)                │
-│  - React App (Static Files)             │
-│  - Nginx Proxy                          │
-│  - Routes /api/* → Backend              │
-│  Public: https://frontend-xxx.app       │
-└─────────────────────────────────────────┘
-     ↓ Internal HTTPS
-┌─────────────────────────────────────────┐
-│  Backend Service (SPCS)                 │
-│  - FastAPI REST API                     │
-│  - Snowflake Connector                  │
-│  - SPCS OAuth Authentication            │
-│  Internal: https://backend-xxx.app      │
-└─────────────────────────────────────────┘
-     ↓
-┌─────────────────────────────────────────┐
-│  Snowflake Database                     │
-│  - Bronze Layer                         │
-│  - Silver Layer                         │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    A[User's Browser] -->|HTTPS| B[Frontend Service SPCS<br/>━━━━━━━━━━━━━━━<br/>• React App Static Files<br/>• Nginx Proxy<br/>• Routes /api/* → Backend<br/>Public: https://frontend-xxx.app]
+    B -->|Internal HTTPS| C[Backend Service SPCS<br/>━━━━━━━━━━━━━━━<br/>• FastAPI REST API<br/>• Snowflake Connector<br/>• SPCS OAuth Authentication<br/>Internal: https://backend-xxx.app]
+    C --> D[Snowflake Database<br/>━━━━━━━━━━━━━━━<br/>• Bronze Layer<br/>• Silver Layer]
+    
+    style A fill:#fff,stroke:#333,stroke-width:2px
+    style B fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
+    style C fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    style D fill:#29b5e8,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 **Key Benefits:**
@@ -491,13 +483,40 @@ The endpoint may take 2-3 minutes to provision after service creation. Check aga
 - ✅ Configuration files are loaded in order: default.config → custom.config → command line args
 - ✅ Service updates preserve endpoints (no URL changes on redeploy)
 
+## Performance Optimizations
+
+### Gold Layer Bulk Load ⚡
+
+The deployment now uses an optimized bulk INSERT approach for Gold layer schema loading:
+
+**Benefits:**
+- ⚡ **88% fewer operations** (69 → 8 database calls)
+- ⚡ **85% faster execution** (~15-20s → ~2-3s)
+- 📊 **90% cleaner output** (200+ → 20 lines)
+- 🔧 **More maintainable** (4 bulk inserts vs 65 procedure calls)
+
+**Implementation:**
+- `deploy_gold.sh` uses `gold/2_Gold_Target_Schemas_BULK.sql`
+- Original version still available: `gold/2_Gold_Target_Schemas.sql`
+- See [gold/BULK_LOAD_OPTIMIZATION.md](../gold/BULK_LOAD_OPTIMIZATION.md) for details
+
+### Container Deployment Integration
+
+The main `deploy.sh` script includes optional container deployment:
+- Prompts after database layers are deployed
+- Can be skipped for database-only deployment
+- Fully automated with `AUTO_APPROVE=true`
+- See [DEPLOY_SCRIPT_IMPROVEMENTS.md](DEPLOY_SCRIPT_IMPROVEMENTS.md) for details
+
 ## Related Documentation
 
 - [Documentation Hub](../docs/README.md) - Complete documentation index
 - [Quick Start Guide](../QUICK_START.md) - Get running in 10 minutes
 - [Backend README](../backend/README.md) - Backend API documentation
 - [User Guide](../docs/USER_GUIDE.md) - Usage instructions
+- [Bulk Load Optimization](../gold/BULK_LOAD_OPTIMIZATION.md) - Gold layer performance
+- [Deploy Script Improvements](DEPLOY_SCRIPT_IMPROVEMENTS.md) - Latest deployment enhancements
 
 ---
 
-**Version**: 1.0 | **Last Updated**: January 19, 2026 | **Status**: ✅ Production Ready
+**Version**: 2.0 | **Last Updated**: January 21, 2026 | **Status**: ✅ Production Ready

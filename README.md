@@ -12,12 +12,14 @@ A modern healthcare claims data processing pipeline built with **FastAPI**, **Re
 
 ## 🏗️ Architecture
 
-```
-React Frontend (TypeScript + Ant Design)
-         ↓ REST API
-FastAPI Backend (Python 3.10+)
-         ↓ Snowflake Connector
-Snowflake (Bronze + Silver Layers)
+```mermaid
+graph TD
+    A[React Frontend<br/>TypeScript + Ant Design] -->|REST API| B[FastAPI Backend<br/>Python 3.10+]
+    B -->|Snowflake Connector| C[Snowflake<br/>Bronze + Silver Layers]
+    
+    style A fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
+    style B fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    style C fill:#29b5e8,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ## 🚀 Quick Start
@@ -87,16 +89,26 @@ cd deployment/legacy
 
 ## 📁 Project Structure
 
-```
-bordereau/
-├── backend/           # FastAPI backend
-├── frontend/          # React frontend
-├── bronze/            # Bronze layer SQL
-├── silver/            # Silver layer SQL
-├── deployment/        # Deployment scripts
-├── docker/            # Docker configs
-├── docs/              # Documentation hub
-└── sample_data/       # Sample files
+```mermaid
+graph LR
+    A[bordereau/] --> B[backend/<br/>FastAPI backend]
+    A --> C[frontend/<br/>React frontend]
+    A --> D[bronze/<br/>Bronze layer SQL]
+    A --> E[silver/<br/>Silver layer SQL]
+    A --> F[deployment/<br/>Deployment scripts]
+    A --> G[docker/<br/>Docker configs]
+    A --> H[docs/<br/>Documentation hub]
+    A --> I[sample_data/<br/>Sample files]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:3px
+    style B fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    style C fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
+    style D fill:#cd7f32,stroke:#333,stroke-width:2px,color:#fff
+    style E fill:#c0c0c0,stroke:#333,stroke-width:2px,color:#000
+    style F fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style G fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
+    style H fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style I fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ## 📖 Documentation
