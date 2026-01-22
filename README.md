@@ -119,10 +119,10 @@ graph LR
 | [Quick Start Guide](QUICK_START.md) | Get running in 10 minutes |
 | [Implementation Log](docs/IMPLEMENTATION_LOG.md) | Complete implementation history |
 | [User Guide](docs/USER_GUIDE.md) | Complete usage instructions |
-| [Deployment Guide](deployment/README.md) | Deployment documentation |
+| [Deployment Guide](deployment/README.md) | Full deployment documentation |
+| [Quick Reference](deployment/QUICK_REFERENCE.md) | Quick deployment commands |
 | [Backend README](backend/README.md) | Backend API documentation |
 | [Migration Guide](MIGRATION_GUIDE.md) | Streamlit to React migration |
-| [Documentation Structure](DOCUMENTATION_STRUCTURE.md) | Documentation organization |
 
 ## 🛠️ Development
 

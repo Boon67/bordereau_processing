@@ -191,6 +191,17 @@ class SnowflakeService:
     
     def get_target_schemas(self, tpa: str, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get target schemas"""
+        logger.info(f"Getting target schemas for TPA: '{tpa}', table_name: '{table_name}'")
+        
+        # Debug: Check what TPAs exist in the database
+        debug_query = f"""
+            SELECT DISTINCT tpa 
+            FROM {settings.SILVER_SCHEMA_NAME}.target_schemas 
+            WHERE active = TRUE
+        """
+        existing_tpas = self.execute_query_dict(debug_query)
+        logger.info(f"Available TPAs in database: {[t['TPA'] for t in existing_tpas]}")
+        
         query = f"""
             SELECT 
                 schema_id,
@@ -211,7 +222,11 @@ class SnowflakeService:
         
         query += " ORDER BY table_name, schema_id"
         
-        return self.execute_query_dict(query)
+        logger.info(f"Executing query: {query}")
+        result = self.execute_query_dict(query)
+        logger.info(f"Found {len(result)} schema records for TPA '{tpa}'")
+        
+        return result
     
     def get_field_mappings(self, tpa: str, target_table: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get field mappings"""

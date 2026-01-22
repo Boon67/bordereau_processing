@@ -7,7 +7,7 @@
 # Backend is internal-only (no public endpoint)
 # Frontend proxies API requests to backend
 # ============================================
-
+clear
 set -e
 
 # Colors
@@ -246,12 +246,15 @@ build_backend_image() {
     
     local full_image_name="${REPOSITORY_URL}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
     
+    cd "$PROJECT_ROOT"
+    
     if [ ! -f "docker/Dockerfile.backend" ]; then
         log_error "docker/Dockerfile.backend not found"
         exit 1
     fi
     
     log_info "Building backend image: $full_image_name"
+    log_info "Build context: $PROJECT_ROOT"
     
     docker build \
         --platform linux/amd64 \
@@ -318,7 +321,7 @@ server {
 EOF
     
     # Create Dockerfile for frontend (in project root to avoid macOS /tmp permission issues)
-    cat > Dockerfile.frontend.unified << 'EOF'
+    cat > "$PROJECT_ROOT/Dockerfile.frontend.unified" << 'EOF'
 # Multi-stage build for React frontend
 FROM node:18-alpine AS builder
 
@@ -355,10 +358,13 @@ HEALTHCHECK --interval=30s --timeout=3s \
 CMD ["nginx", "-g", "daemon off;"]
 EOF
     
-    # Copy nginx config to build context
-    cp /tmp/nginx-unified.conf nginx-unified.conf
+    # Copy nginx config to build context (project root)
+    cp /tmp/nginx-unified.conf "$PROJECT_ROOT/nginx-unified.conf"
     
     log_info "Building frontend image: $full_image_name"
+    log_info "Build context: $PROJECT_ROOT"
+    
+    cd "$PROJECT_ROOT"
     
     docker build \
         --platform linux/amd64 \
@@ -367,12 +373,12 @@ EOF
         -t "${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}" \
         . || {
         log_error "Frontend Docker build failed"
-        rm -f nginx-unified.conf Dockerfile.frontend.unified
+        rm -f "$PROJECT_ROOT/nginx-unified.conf" "$PROJECT_ROOT/Dockerfile.frontend.unified"
         exit 1
     }
     
     # Cleanup
-    rm -f nginx-unified.conf Dockerfile.frontend.unified
+    rm -f "$PROJECT_ROOT/nginx-unified.conf" "$PROJECT_ROOT/Dockerfile.frontend.unified"
     
     log_success "Frontend image built"
 }
@@ -491,38 +497,61 @@ deploy_service() {
         exit 1
     }
     
-    # Check if service exists
-    SERVICE_EXISTS=$(execute_sql "
-        USE DATABASE ${DATABASE_NAME};
-        USE SCHEMA ${SCHEMA_NAME};
-        SHOW SERVICES LIKE '${SERVICE_NAME}';
-    " | jq -r 'length' 2>/dev/null || echo "0")
+    # Check if service exists using snow CLI
+    log_info "Checking if service exists..."
+    SERVICE_EXISTS=$(snow spcs service list \
+        --database "${DATABASE_NAME}" \
+        --schema "${SCHEMA_NAME}" \
+        --format json 2>/dev/null | \
+        jq -r ".[] | select(.name == \"${SERVICE_NAME}\") | .name" || echo "")
     
-    if [ "$SERVICE_EXISTS" -gt 0 ]; then
-        log_warning "Service '$SERVICE_NAME' already exists. Dropping for clean deployment..."
+    if [ -n "$SERVICE_EXISTS" ]; then
+        log_info "Service '$SERVICE_NAME' already exists. Using suspend/upgrade/resume workflow..."
         
-        # Drop existing service
-        execute_sql "
-USE ROLE ${SNOWFLAKE_ROLE};
-USE DATABASE ${DATABASE_NAME};
-USE SCHEMA ${SCHEMA_NAME};
-
-DROP SERVICE IF EXISTS ${SERVICE_NAME};
-" || {
-            log_error "Failed to drop existing service"
+        # Step 1: Suspend the service
+        log_info "Suspending service..."
+        snow spcs service suspend "${SERVICE_NAME}" \
+            --database "${DATABASE_NAME}" \
+            --schema "${SCHEMA_NAME}" || {
+            log_error "Failed to suspend service"
             exit 1
         }
-        log_success "Existing service dropped"
+        log_success "Service suspended"
         
-        # Wait for service to be fully dropped
-        log_info "Waiting for service cleanup..."
+        # Wait for suspension to complete
+        log_info "Waiting for service to suspend..."
         sleep 5
-    fi
-    
-    # Create service (whether it's new or recreated)
-    log_info "Creating service '$SERVICE_NAME'..."
-    
-    cat > /tmp/create_service.sql << EOF
+        
+        # Step 2: Upgrade the service
+        log_info "Upgrading service with new images..."
+        snow spcs service upgrade "${SERVICE_NAME}" \
+            --database "${DATABASE_NAME}" \
+            --schema "${SCHEMA_NAME}" \
+            --spec-path /tmp/unified_service_spec.yaml || {
+            log_error "Failed to upgrade service"
+            exit 1
+        }
+        log_success "Service upgraded"
+        
+        # Step 3: Resume the service
+        log_info "Resuming service..."
+        snow spcs service resume "${SERVICE_NAME}" \
+            --database "${DATABASE_NAME}" \
+            --schema "${SCHEMA_NAME}" || {
+            log_error "Failed to resume service"
+            exit 1
+        }
+        log_success "Service resumed"
+        
+        # Wait for service to be ready
+        log_info "Waiting for service to be ready..."
+        sleep 10
+        
+    else
+        # Create new service
+        log_info "Creating new service '$SERVICE_NAME'..."
+        
+        cat > /tmp/create_service.sql << EOF
 USE ROLE ${SNOWFLAKE_ROLE};
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
@@ -535,14 +564,15 @@ CREATE SERVICE ${SERVICE_NAME}
     MAX_INSTANCES = 3
     COMMENT = 'Bordereau unified service (Frontend + Backend)';
 EOF
-    
-    # Execute with error output visible
-    if ! snow sql -f /tmp/create_service.sql --connection DEPLOYMENT 2>&1 | tee /tmp/create_service_error.log; then
-        log_error "Failed to create service. Error details:"
-        cat /tmp/create_service_error.log | grep -i "error\|failed" || cat /tmp/create_service_error.log | tail -20
-        exit 1
+        
+        # Execute with error output visible
+        if ! snow sql -f /tmp/create_service.sql --connection DEPLOYMENT 2>&1 | tee /tmp/create_service_error.log; then
+            log_error "Failed to create service. Error details:"
+            cat /tmp/create_service_error.log | grep -i "error\|failed" || cat /tmp/create_service_error.log | tail -20
+            exit 1
+        fi
+        log_success "Service created: $SERVICE_NAME"
     fi
-    log_success "Service created: $SERVICE_NAME"
 }
 
 # ============================================
@@ -557,18 +587,22 @@ get_service_endpoint() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        local endpoint_output=$(execute_sql "
-            USE DATABASE ${DATABASE_NAME};
-            USE SCHEMA ${SCHEMA_NAME};
-            SHOW ENDPOINTS IN SERVICE ${SERVICE_NAME};
-        " 2>/dev/null)
+        # Use snow CLI to get service info
+        local service_info=$(snow spcs service list \
+            --database "${DATABASE_NAME}" \
+            --schema "${SCHEMA_NAME}" \
+            --format json 2>/dev/null | \
+            jq -r ".[] | select(.name == \"${SERVICE_NAME}\")" 2>/dev/null)
         
-        local endpoint=$(echo "$endpoint_output" | jq -r '.[2][0].ingress_url // empty' 2>/dev/null | tr -d '\n' | sed 's/ //g')
-        
-        if [ -n "$endpoint" ] && [ "$endpoint" != "null" ] && [[ ! "$endpoint" =~ "provisioning" ]]; then
-            SERVICE_ENDPOINT="https://${endpoint}"
-            log_success "Service endpoint: $SERVICE_ENDPOINT"
-            return 0
+        if [ -n "$service_info" ]; then
+            # Extract DNS name from service info
+            local dns_name=$(echo "$service_info" | jq -r '.dns_name // empty' 2>/dev/null)
+            
+            if [ -n "$dns_name" ] && [ "$dns_name" != "null" ] && [ "$dns_name" != "" ]; then
+                SERVICE_ENDPOINT="https://${dns_name}"
+                log_success "Service endpoint: $SERVICE_ENDPOINT"
+                return 0
+            fi
         fi
         
         if [ $attempt -lt $max_attempts ]; then
@@ -579,9 +613,9 @@ get_service_endpoint() {
         ((attempt++))
     done
     
-    log_warning "Endpoint not available yet. Check status later:"
-    echo "  cd deployment"
-    echo "  ./manage_services.sh status"
+    log_warning "Endpoint not available yet. Service may still be starting."
+    log_info "Check status with: cd deployment && ./manage_services.sh status"
+    log_info "Or use: snow spcs service list --database ${DATABASE_NAME} --schema ${SCHEMA_NAME}"
 }
 
 # ============================================

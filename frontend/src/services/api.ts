@@ -44,6 +44,7 @@ export interface TargetSchema {
   TPA: string
   DATA_TYPE: string
   NULLABLE: boolean
+  DEFAULT_VALUE?: string
   DESCRIPTION?: string
 }
 
@@ -165,6 +166,11 @@ export const apiService = {
     return response.data
   },
 
+  reprocessFile: async (queueId: number): Promise<any> => {
+    const response = await api.post(`/bronze/reprocess/${queueId}`)
+    return response.data
+  },
+
   clearAllData: async (): Promise<any> => {
     const response = await api.post('/bronze/clear-all-data')
     return response.data
@@ -199,12 +205,51 @@ export const apiService = {
   },
 
   createTargetSchema: async (schema: Partial<TargetSchema>): Promise<any> => {
-    const response = await api.post('/silver/schemas', schema)
+    const response = await api.post('/silver/schemas', {
+      table_name: schema.TABLE_NAME,
+      column_name: schema.COLUMN_NAME,
+      tpa: schema.TPA,
+      data_type: schema.DATA_TYPE,
+      nullable: schema.NULLABLE,
+      default_value: schema.DEFAULT_VALUE,
+      description: schema.DESCRIPTION,
+    })
+    return response.data
+  },
+
+  updateTargetSchema: async (schemaId: number, schema: Partial<TargetSchema>): Promise<any> => {
+    const response = await api.put(`/silver/schemas/${schemaId}`, {
+      data_type: schema.DATA_TYPE,
+      nullable: schema.NULLABLE,
+      default_value: schema.DEFAULT_VALUE,
+      description: schema.DESCRIPTION,
+    })
+    return response.data
+  },
+
+  deleteTargetSchema: async (schemaId: number): Promise<any> => {
+    const response = await api.delete(`/silver/schemas/${schemaId}`)
+    return response.data
+  },
+
+  deleteTableSchema: async (tableName: string, tpa: string): Promise<any> => {
+    const response = await api.delete(`/silver/schemas/table/${tableName}`, {
+      params: { tpa }
+    })
+    return response.data
+  },
+
+  checkTableExists: async (tableName: string, tpa: string): Promise<{ exists: boolean; physical_table_name: string }> => {
+    const response = await api.get('/silver/tables/exists', {
+      params: { table_name: tableName, tpa }
+    })
     return response.data
   },
 
   createSilverTable: async (tableName: string, tpa: string): Promise<any> => {
-    const response = await api.post('/silver/tables/create', { table_name: tableName, tpa })
+    const response = await api.post('/silver/tables/create', null, {
+      params: { table_name: tableName, tpa }
+    })
     return response.data
   },
 

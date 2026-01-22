@@ -11,7 +11,7 @@
 #   connection_name: Name of the Snowflake CLI connection (default: uses default connection)
 #   config_file: Path to config file (default: default.config, custom.config if exists)
 # ============================================
-
+clear
 set -e  # Exit on error
 
 # Colors for output
@@ -524,17 +524,42 @@ else
     exit 1
 fi
 
-# Load Sample Silver Schemas (Optional - skip for now due to schema mismatch)
+# Load Sample Silver Schemas (Optional)
 echo ""
-echo -e "${CYAN}📋 Skipping Sample Silver Schemas (optional)...${NC}"
-log_message INFO "Sample Silver schemas can be loaded manually if needed"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}OPTIONAL: LOAD SAMPLE SILVER TARGET SCHEMAS${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "Would you like to load sample Silver target schemas?"
+echo "This will:"
+echo "  • Generate schema definitions for 5 TPAs"
+echo "  • Create 4 table types (Medical, Dental, Pharmacy, Eligibility)"
+echo "  • Load 310 column definitions"
+echo ""
 
-# Uncomment below to load sample schemas:
-# sed "s|__PROJECT_ROOT__|${PROJECT_ROOT}|g" "${PROJECT_ROOT}/silver/7_Load_Sample_Schemas.sql" | \
-# snow sql --stdin \
-#     --connection "$CONNECTION_NAME" \
-#     -D "DATABASE_NAME=$DATABASE" \
-#     -D "SILVER_SCHEMA_NAME=$SILVER_SCHEMA"
+# Default to 'yes' if AUTO_APPROVE is enabled
+LOAD_SCHEMAS="y"
+if [[ "${AUTO_APPROVE}" != "true" ]]; then
+    read -p "Load sample schemas? (y/n) [y]: " -n 1 -r
+    echo ""
+    LOAD_SCHEMAS=$REPLY
+fi
+
+if [[ $LOAD_SCHEMAS =~ ^[Yy]$ ]] || [[ -z $LOAD_SCHEMAS ]]; then
+    echo ""
+    echo -e "${CYAN}📋 Loading sample Silver target schemas...${NC}"
+    
+    if bash "${SCRIPT_DIR}/load_sample_schemas.sh" "$CONNECTION_NAME"; then
+        log_message SUCCESS "Sample schemas loaded successfully"
+        SCHEMAS_LOADED=true
+    else
+        log_message WARNING "Sample schema loading failed or was skipped"
+        SCHEMAS_LOADED=false
+    fi
+else
+    log_message INFO "Skipping sample schema loading"
+    SCHEMAS_LOADED=false
+fi
 
 # Deploy Gold Layer
 echo ""
@@ -603,6 +628,11 @@ echo "║  Silver Schema: $SILVER_SCHEMA"
 echo "║  Gold Schema: GOLD"
 echo "║  Bronze Layer: ✓ Deployed"
 echo "║  Silver Layer: ✓ Deployed"
+if [[ "$SCHEMAS_LOADED" == "true" ]]; then
+echo "║  Sample Schemas: ✓ Loaded (310 definitions)"
+else
+echo "║  Sample Schemas: ⊘ Not loaded"
+fi
 echo "║  Gold Layer: ✓ Deployed"
 if [[ "$CONTAINERS_DEPLOYED" == "true" ]]; then
 echo "║  Containers: ✓ Deployed to SPCS"

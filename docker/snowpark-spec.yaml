@@ -1,66 +1,51 @@
-# Snowpark Container Services Specification
-# Deploy the application in Snowflake Snowpark Container Services
+# Snowpark Container Services Specification Template
+# This file is a template - actual deployment uses deploy_container.sh
+# which generates the spec with correct values from default.config/custom.config
+#
+# Image paths will be: /${DATABASE_NAME}/${SCHEMA_NAME}/${REPOSITORY_NAME}/${IMAGE_NAME}:${TAG}
+# Example: /BORDEREAU_PROCESSING_PIPELINE/PUBLIC/BORDEREAU_REPOSITORY/BORDEREAU_BACKEND:latest
 
 spec:
   containers:
+  # Backend container (internal only, no public endpoint)
   - name: backend
-    image: /snowflake_pipeline/backend:latest
+    image: /<DATABASE_NAME>/<SCHEMA_NAME>/<REPOSITORY_NAME>/<BACKEND_IMAGE_NAME>:latest
     env:
       ENVIRONMENT: production
-      SNOWFLAKE_ACCOUNT: <SNOWFLAKE_ACCOUNT>
-      SNOWFLAKE_USER: <SNOWFLAKE_USER>
-      SNOWFLAKE_PASSWORD: <SNOWFLAKE_PASSWORD>
       SNOWFLAKE_ROLE: SYSADMIN
       SNOWFLAKE_WAREHOUSE: COMPUTE_WH
-      DATABASE_NAME: FILE_PROCESSING_PIPELINE
+      DATABASE_NAME: <DATABASE_NAME>
       BRONZE_SCHEMA_NAME: BRONZE
       SILVER_SCHEMA_NAME: SILVER
     resources:
       requests:
-        cpu: 1
+        cpu: 0.6
         memory: 2Gi
       limits:
-        cpu: 2
+        cpu: "2"
         memory: 4Gi
     readinessProbe:
-      httpGet:
-        path: /api/health
-        port: 8000
-      initialDelaySeconds: 10
-      periodSeconds: 10
-    livenessProbe:
-      httpGet:
-        path: /api/health
-        port: 8000
-      initialDelaySeconds: 30
-      periodSeconds: 30
+      port: 8000
+      path: /api/health
   
+  # Frontend container (public endpoint, proxies to backend)
   - name: frontend
-    image: /snowflake_pipeline/frontend:latest
+    image: /<DATABASE_NAME>/<SCHEMA_NAME>/<REPOSITORY_NAME>/<FRONTEND_IMAGE_NAME>:latest
+    env:
+      NGINX_WORKER_PROCESSES: "2"
     resources:
       requests:
-        cpu: 0.5
-        memory: 512Mi
+        cpu: 0.4
+        memory: 1Gi
       limits:
         cpu: 1
-        memory: 1Gi
+        memory: 2Gi
     readinessProbe:
-      httpGet:
-        path: /
-        port: 80
-      initialDelaySeconds: 5
-      periodSeconds: 10
-    livenessProbe:
-      httpGet:
-        path: /
-        port: 80
-      initialDelaySeconds: 15
-      periodSeconds: 30
+      port: 80
+      path: /
 
+  # Only frontend is publicly accessible
   endpoints:
-  - name: frontend
+  - name: app
     port: 80
     public: true
-  - name: backend
-    port: 8000
-    public: false

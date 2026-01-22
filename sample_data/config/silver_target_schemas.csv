@@ -1,23 +1,311 @@
-table_name,column_name,tpa,data_type,nullable,default_value,description
-CLAIMS,CLAIM_ID,provider_a,VARCHAR(100),FALSE,,Unique claim identifier
-CLAIMS,PATIENT_FIRST_NAME,provider_a,VARCHAR(100),TRUE,,Patient first name
-CLAIMS,PATIENT_LAST_NAME,provider_a,VARCHAR(100),TRUE,,Patient last name
-CLAIMS,DATE_OF_BIRTH,provider_a,DATE,TRUE,,Patient date of birth
-CLAIMS,PROVIDER_NAME,provider_a,VARCHAR(500),TRUE,,Healthcare provider name
-CLAIMS,PROVIDER_NPI,provider_a,VARCHAR(20),TRUE,,National Provider Identifier
-CLAIMS,SERVICE_DATE,provider_a,DATE,TRUE,,Date of service
-CLAIMS,DIAGNOSIS_CODE,provider_a,VARCHAR(20),TRUE,,Diagnosis code (ICD-10)
-CLAIMS,PROCEDURE_CODE,provider_a,VARCHAR(20),TRUE,,Procedure code (CPT/HCPCS)
-CLAIMS,BILLED_AMOUNT,provider_a,NUMBER(18,2),TRUE,,Amount billed
-CLAIMS,PAID_AMOUNT,provider_a,NUMBER(18,2),TRUE,,Amount paid
-CLAIMS,CLAIM_ID,provider_b,VARCHAR(100),FALSE,,Unique claim identifier
-CLAIMS,PATIENT_FIRST_NAME,provider_b,VARCHAR(100),TRUE,,Patient first name
-CLAIMS,PATIENT_LAST_NAME,provider_b,VARCHAR(100),TRUE,,Patient last name
-CLAIMS,DATE_OF_BIRTH,provider_b,DATE,TRUE,,Patient date of birth
-CLAIMS,PROVIDER_NAME,provider_b,VARCHAR(500),TRUE,,Healthcare provider name
-CLAIMS,PROVIDER_NPI,provider_b,VARCHAR(20),TRUE,,National Provider Identifier
-CLAIMS,SERVICE_DATE,provider_b,DATE,TRUE,,Date of service
-CLAIMS,DIAGNOSIS_CODE,provider_b,VARCHAR(20),TRUE,,Diagnosis code (ICD-10)
-CLAIMS,PROCEDURE_CODE,provider_b,VARCHAR(20),TRUE,,Procedure code (CPT/HCPCS)
-CLAIMS,BILLED_AMOUNT,provider_b,NUMBER(18,2),TRUE,,Amount billed
-CLAIMS,PAID_AMOUNT,provider_b,NUMBER(18,2),TRUE,,Amount paid
+TABLE_NAME,TPA,COLUMN_NAME,DATA_TYPE,NULLABLE,DEFAULT_VALUE,DESCRIPTION
+MEDICAL_CLAIMS,provider_a,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+MEDICAL_CLAIMS,provider_a,MEMBER_ID,VARCHAR(100),N,,Member identifier
+MEDICAL_CLAIMS,provider_a,PROVIDER_ID,VARCHAR(100),Y,,Provider identifier
+MEDICAL_CLAIMS,provider_a,PROVIDER_NAME,VARCHAR(500),Y,,Provider name
+MEDICAL_CLAIMS,provider_a,SERVICE_DATE,DATE,N,,Date of service
+MEDICAL_CLAIMS,provider_a,DIAGNOSIS_CODE,VARCHAR(50),Y,,Primary diagnosis code
+MEDICAL_CLAIMS,provider_a,PROCEDURE_CODE,VARCHAR(50),Y,,Procedure code
+MEDICAL_CLAIMS,provider_a,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+MEDICAL_CLAIMS,provider_a,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+MEDICAL_CLAIMS,provider_a,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+MEDICAL_CLAIMS,provider_a,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+MEDICAL_CLAIMS,provider_a,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+MEDICAL_CLAIMS,provider_a,PROCESSED_DATE,TIMESTAMP_NTZ,Y,,Date processed
+MEDICAL_CLAIMS,provider_a,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+DENTAL_CLAIMS,provider_a,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+DENTAL_CLAIMS,provider_a,MEMBER_ID,VARCHAR(100),N,,Member identifier
+DENTAL_CLAIMS,provider_a,DENTIST_ID,VARCHAR(100),Y,,Dentist identifier
+DENTAL_CLAIMS,provider_a,DENTIST_NAME,VARCHAR(500),Y,,Dentist name
+DENTAL_CLAIMS,provider_a,SERVICE_DATE,DATE,N,,Date of service
+DENTAL_CLAIMS,provider_a,TOOTH_NUMBER,VARCHAR(10),Y,,Tooth number
+DENTAL_CLAIMS,provider_a,PROCEDURE_CODE,VARCHAR(50),Y,,Dental procedure code
+DENTAL_CLAIMS,provider_a,SURFACE,VARCHAR(20),Y,,Tooth surface
+DENTAL_CLAIMS,provider_a,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+DENTAL_CLAIMS,provider_a,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+DENTAL_CLAIMS,provider_a,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+DENTAL_CLAIMS,provider_a,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+DENTAL_CLAIMS,provider_a,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+DENTAL_CLAIMS,provider_a,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+PHARMACY_CLAIMS,provider_a,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+PHARMACY_CLAIMS,provider_a,MEMBER_ID,VARCHAR(100),N,,Member identifier
+PHARMACY_CLAIMS,provider_a,PHARMACY_ID,VARCHAR(100),Y,,Pharmacy identifier
+PHARMACY_CLAIMS,provider_a,PHARMACY_NAME,VARCHAR(500),Y,,Pharmacy name
+PHARMACY_CLAIMS,provider_a,FILL_DATE,DATE,N,,Prescription fill date
+PHARMACY_CLAIMS,provider_a,NDC_CODE,VARCHAR(50),N,,National Drug Code
+PHARMACY_CLAIMS,provider_a,DRUG_NAME,VARCHAR(500),Y,,Drug name
+PHARMACY_CLAIMS,provider_a,QUANTITY,"NUMBER(18,2)",N,,Quantity dispensed
+PHARMACY_CLAIMS,provider_a,DAYS_SUPPLY,"NUMBER(10,0)",Y,,Days supply
+PHARMACY_CLAIMS,provider_a,PRESCRIBER_ID,VARCHAR(100),Y,,Prescriber identifier
+PHARMACY_CLAIMS,provider_a,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+PHARMACY_CLAIMS,provider_a,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+PHARMACY_CLAIMS,provider_a,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+PHARMACY_CLAIMS,provider_a,MEMBER_COPAY,"NUMBER(18,2)",Y,0.00,Member copay
+PHARMACY_CLAIMS,provider_a,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+PHARMACY_CLAIMS,provider_a,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEMBER_ELIGIBILITY,provider_a,MEMBER_ID,VARCHAR(100),N,,Unique member identifier
+MEMBER_ELIGIBILITY,provider_a,FIRST_NAME,VARCHAR(200),N,,Member first name
+MEMBER_ELIGIBILITY,provider_a,LAST_NAME,VARCHAR(200),N,,Member last name
+MEMBER_ELIGIBILITY,provider_a,DATE_OF_BIRTH,DATE,N,,Date of birth
+MEMBER_ELIGIBILITY,provider_a,GENDER,VARCHAR(10),Y,,Gender
+MEMBER_ELIGIBILITY,provider_a,ADDRESS_LINE1,VARCHAR(500),Y,,Address line 1
+MEMBER_ELIGIBILITY,provider_a,ADDRESS_LINE2,VARCHAR(500),Y,,Address line 2
+MEMBER_ELIGIBILITY,provider_a,CITY,VARCHAR(200),Y,,City
+MEMBER_ELIGIBILITY,provider_a,STATE,VARCHAR(50),Y,,State
+MEMBER_ELIGIBILITY,provider_a,ZIP_CODE,VARCHAR(20),Y,,ZIP code
+MEMBER_ELIGIBILITY,provider_a,PHONE,VARCHAR(50),Y,,Phone number
+MEMBER_ELIGIBILITY,provider_a,EMAIL,VARCHAR(200),Y,,Email address
+MEMBER_ELIGIBILITY,provider_a,PLAN_ID,VARCHAR(100),Y,,Plan identifier
+MEMBER_ELIGIBILITY,provider_a,PLAN_NAME,VARCHAR(500),Y,,Plan name
+MEMBER_ELIGIBILITY,provider_a,EFFECTIVE_DATE,DATE,N,,Coverage effective date
+MEMBER_ELIGIBILITY,provider_a,TERMINATION_DATE,DATE,Y,,Coverage termination date
+MEMBER_ELIGIBILITY,provider_a,STATUS,VARCHAR(50),N,ACTIVE,Eligibility status
+MEMBER_ELIGIBILITY,provider_a,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEDICAL_CLAIMS,provider_b,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+MEDICAL_CLAIMS,provider_b,MEMBER_ID,VARCHAR(100),N,,Member identifier
+MEDICAL_CLAIMS,provider_b,PROVIDER_ID,VARCHAR(100),Y,,Provider identifier
+MEDICAL_CLAIMS,provider_b,PROVIDER_NAME,VARCHAR(500),Y,,Provider name
+MEDICAL_CLAIMS,provider_b,SERVICE_DATE,DATE,N,,Date of service
+MEDICAL_CLAIMS,provider_b,DIAGNOSIS_CODE,VARCHAR(50),Y,,Primary diagnosis code
+MEDICAL_CLAIMS,provider_b,PROCEDURE_CODE,VARCHAR(50),Y,,Procedure code
+MEDICAL_CLAIMS,provider_b,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+MEDICAL_CLAIMS,provider_b,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+MEDICAL_CLAIMS,provider_b,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+MEDICAL_CLAIMS,provider_b,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+MEDICAL_CLAIMS,provider_b,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+MEDICAL_CLAIMS,provider_b,PROCESSED_DATE,TIMESTAMP_NTZ,Y,,Date processed
+MEDICAL_CLAIMS,provider_b,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+DENTAL_CLAIMS,provider_b,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+DENTAL_CLAIMS,provider_b,MEMBER_ID,VARCHAR(100),N,,Member identifier
+DENTAL_CLAIMS,provider_b,DENTIST_ID,VARCHAR(100),Y,,Dentist identifier
+DENTAL_CLAIMS,provider_b,DENTIST_NAME,VARCHAR(500),Y,,Dentist name
+DENTAL_CLAIMS,provider_b,SERVICE_DATE,DATE,N,,Date of service
+DENTAL_CLAIMS,provider_b,TOOTH_NUMBER,VARCHAR(10),Y,,Tooth number
+DENTAL_CLAIMS,provider_b,PROCEDURE_CODE,VARCHAR(50),Y,,Dental procedure code
+DENTAL_CLAIMS,provider_b,SURFACE,VARCHAR(20),Y,,Tooth surface
+DENTAL_CLAIMS,provider_b,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+DENTAL_CLAIMS,provider_b,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+DENTAL_CLAIMS,provider_b,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+DENTAL_CLAIMS,provider_b,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+DENTAL_CLAIMS,provider_b,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+DENTAL_CLAIMS,provider_b,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+PHARMACY_CLAIMS,provider_b,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+PHARMACY_CLAIMS,provider_b,MEMBER_ID,VARCHAR(100),N,,Member identifier
+PHARMACY_CLAIMS,provider_b,PHARMACY_ID,VARCHAR(100),Y,,Pharmacy identifier
+PHARMACY_CLAIMS,provider_b,PHARMACY_NAME,VARCHAR(500),Y,,Pharmacy name
+PHARMACY_CLAIMS,provider_b,FILL_DATE,DATE,N,,Prescription fill date
+PHARMACY_CLAIMS,provider_b,NDC_CODE,VARCHAR(50),N,,National Drug Code
+PHARMACY_CLAIMS,provider_b,DRUG_NAME,VARCHAR(500),Y,,Drug name
+PHARMACY_CLAIMS,provider_b,QUANTITY,"NUMBER(18,2)",N,,Quantity dispensed
+PHARMACY_CLAIMS,provider_b,DAYS_SUPPLY,"NUMBER(10,0)",Y,,Days supply
+PHARMACY_CLAIMS,provider_b,PRESCRIBER_ID,VARCHAR(100),Y,,Prescriber identifier
+PHARMACY_CLAIMS,provider_b,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+PHARMACY_CLAIMS,provider_b,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+PHARMACY_CLAIMS,provider_b,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+PHARMACY_CLAIMS,provider_b,MEMBER_COPAY,"NUMBER(18,2)",Y,0.00,Member copay
+PHARMACY_CLAIMS,provider_b,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+PHARMACY_CLAIMS,provider_b,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEMBER_ELIGIBILITY,provider_b,MEMBER_ID,VARCHAR(100),N,,Unique member identifier
+MEMBER_ELIGIBILITY,provider_b,FIRST_NAME,VARCHAR(200),N,,Member first name
+MEMBER_ELIGIBILITY,provider_b,LAST_NAME,VARCHAR(200),N,,Member last name
+MEMBER_ELIGIBILITY,provider_b,DATE_OF_BIRTH,DATE,N,,Date of birth
+MEMBER_ELIGIBILITY,provider_b,GENDER,VARCHAR(10),Y,,Gender
+MEMBER_ELIGIBILITY,provider_b,ADDRESS_LINE1,VARCHAR(500),Y,,Address line 1
+MEMBER_ELIGIBILITY,provider_b,ADDRESS_LINE2,VARCHAR(500),Y,,Address line 2
+MEMBER_ELIGIBILITY,provider_b,CITY,VARCHAR(200),Y,,City
+MEMBER_ELIGIBILITY,provider_b,STATE,VARCHAR(50),Y,,State
+MEMBER_ELIGIBILITY,provider_b,ZIP_CODE,VARCHAR(20),Y,,ZIP code
+MEMBER_ELIGIBILITY,provider_b,PHONE,VARCHAR(50),Y,,Phone number
+MEMBER_ELIGIBILITY,provider_b,EMAIL,VARCHAR(200),Y,,Email address
+MEMBER_ELIGIBILITY,provider_b,PLAN_ID,VARCHAR(100),Y,,Plan identifier
+MEMBER_ELIGIBILITY,provider_b,PLAN_NAME,VARCHAR(500),Y,,Plan name
+MEMBER_ELIGIBILITY,provider_b,EFFECTIVE_DATE,DATE,N,,Coverage effective date
+MEMBER_ELIGIBILITY,provider_b,TERMINATION_DATE,DATE,Y,,Coverage termination date
+MEMBER_ELIGIBILITY,provider_b,STATUS,VARCHAR(50),N,ACTIVE,Eligibility status
+MEMBER_ELIGIBILITY,provider_b,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEDICAL_CLAIMS,provider_c,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+MEDICAL_CLAIMS,provider_c,MEMBER_ID,VARCHAR(100),N,,Member identifier
+MEDICAL_CLAIMS,provider_c,PROVIDER_ID,VARCHAR(100),Y,,Provider identifier
+MEDICAL_CLAIMS,provider_c,PROVIDER_NAME,VARCHAR(500),Y,,Provider name
+MEDICAL_CLAIMS,provider_c,SERVICE_DATE,DATE,N,,Date of service
+MEDICAL_CLAIMS,provider_c,DIAGNOSIS_CODE,VARCHAR(50),Y,,Primary diagnosis code
+MEDICAL_CLAIMS,provider_c,PROCEDURE_CODE,VARCHAR(50),Y,,Procedure code
+MEDICAL_CLAIMS,provider_c,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+MEDICAL_CLAIMS,provider_c,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+MEDICAL_CLAIMS,provider_c,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+MEDICAL_CLAIMS,provider_c,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+MEDICAL_CLAIMS,provider_c,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+MEDICAL_CLAIMS,provider_c,PROCESSED_DATE,TIMESTAMP_NTZ,Y,,Date processed
+MEDICAL_CLAIMS,provider_c,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+DENTAL_CLAIMS,provider_c,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+DENTAL_CLAIMS,provider_c,MEMBER_ID,VARCHAR(100),N,,Member identifier
+DENTAL_CLAIMS,provider_c,DENTIST_ID,VARCHAR(100),Y,,Dentist identifier
+DENTAL_CLAIMS,provider_c,DENTIST_NAME,VARCHAR(500),Y,,Dentist name
+DENTAL_CLAIMS,provider_c,SERVICE_DATE,DATE,N,,Date of service
+DENTAL_CLAIMS,provider_c,TOOTH_NUMBER,VARCHAR(10),Y,,Tooth number
+DENTAL_CLAIMS,provider_c,PROCEDURE_CODE,VARCHAR(50),Y,,Dental procedure code
+DENTAL_CLAIMS,provider_c,SURFACE,VARCHAR(20),Y,,Tooth surface
+DENTAL_CLAIMS,provider_c,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+DENTAL_CLAIMS,provider_c,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+DENTAL_CLAIMS,provider_c,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+DENTAL_CLAIMS,provider_c,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+DENTAL_CLAIMS,provider_c,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+DENTAL_CLAIMS,provider_c,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+PHARMACY_CLAIMS,provider_c,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+PHARMACY_CLAIMS,provider_c,MEMBER_ID,VARCHAR(100),N,,Member identifier
+PHARMACY_CLAIMS,provider_c,PHARMACY_ID,VARCHAR(100),Y,,Pharmacy identifier
+PHARMACY_CLAIMS,provider_c,PHARMACY_NAME,VARCHAR(500),Y,,Pharmacy name
+PHARMACY_CLAIMS,provider_c,FILL_DATE,DATE,N,,Prescription fill date
+PHARMACY_CLAIMS,provider_c,NDC_CODE,VARCHAR(50),N,,National Drug Code
+PHARMACY_CLAIMS,provider_c,DRUG_NAME,VARCHAR(500),Y,,Drug name
+PHARMACY_CLAIMS,provider_c,QUANTITY,"NUMBER(18,2)",N,,Quantity dispensed
+PHARMACY_CLAIMS,provider_c,DAYS_SUPPLY,"NUMBER(10,0)",Y,,Days supply
+PHARMACY_CLAIMS,provider_c,PRESCRIBER_ID,VARCHAR(100),Y,,Prescriber identifier
+PHARMACY_CLAIMS,provider_c,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+PHARMACY_CLAIMS,provider_c,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+PHARMACY_CLAIMS,provider_c,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+PHARMACY_CLAIMS,provider_c,MEMBER_COPAY,"NUMBER(18,2)",Y,0.00,Member copay
+PHARMACY_CLAIMS,provider_c,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+PHARMACY_CLAIMS,provider_c,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEMBER_ELIGIBILITY,provider_c,MEMBER_ID,VARCHAR(100),N,,Unique member identifier
+MEMBER_ELIGIBILITY,provider_c,FIRST_NAME,VARCHAR(200),N,,Member first name
+MEMBER_ELIGIBILITY,provider_c,LAST_NAME,VARCHAR(200),N,,Member last name
+MEMBER_ELIGIBILITY,provider_c,DATE_OF_BIRTH,DATE,N,,Date of birth
+MEMBER_ELIGIBILITY,provider_c,GENDER,VARCHAR(10),Y,,Gender
+MEMBER_ELIGIBILITY,provider_c,ADDRESS_LINE1,VARCHAR(500),Y,,Address line 1
+MEMBER_ELIGIBILITY,provider_c,ADDRESS_LINE2,VARCHAR(500),Y,,Address line 2
+MEMBER_ELIGIBILITY,provider_c,CITY,VARCHAR(200),Y,,City
+MEMBER_ELIGIBILITY,provider_c,STATE,VARCHAR(50),Y,,State
+MEMBER_ELIGIBILITY,provider_c,ZIP_CODE,VARCHAR(20),Y,,ZIP code
+MEMBER_ELIGIBILITY,provider_c,PHONE,VARCHAR(50),Y,,Phone number
+MEMBER_ELIGIBILITY,provider_c,EMAIL,VARCHAR(200),Y,,Email address
+MEMBER_ELIGIBILITY,provider_c,PLAN_ID,VARCHAR(100),Y,,Plan identifier
+MEMBER_ELIGIBILITY,provider_c,PLAN_NAME,VARCHAR(500),Y,,Plan name
+MEMBER_ELIGIBILITY,provider_c,EFFECTIVE_DATE,DATE,N,,Coverage effective date
+MEMBER_ELIGIBILITY,provider_c,TERMINATION_DATE,DATE,Y,,Coverage termination date
+MEMBER_ELIGIBILITY,provider_c,STATUS,VARCHAR(50),N,ACTIVE,Eligibility status
+MEMBER_ELIGIBILITY,provider_c,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEDICAL_CLAIMS,provider_d,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+MEDICAL_CLAIMS,provider_d,MEMBER_ID,VARCHAR(100),N,,Member identifier
+MEDICAL_CLAIMS,provider_d,PROVIDER_ID,VARCHAR(100),Y,,Provider identifier
+MEDICAL_CLAIMS,provider_d,PROVIDER_NAME,VARCHAR(500),Y,,Provider name
+MEDICAL_CLAIMS,provider_d,SERVICE_DATE,DATE,N,,Date of service
+MEDICAL_CLAIMS,provider_d,DIAGNOSIS_CODE,VARCHAR(50),Y,,Primary diagnosis code
+MEDICAL_CLAIMS,provider_d,PROCEDURE_CODE,VARCHAR(50),Y,,Procedure code
+MEDICAL_CLAIMS,provider_d,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+MEDICAL_CLAIMS,provider_d,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+MEDICAL_CLAIMS,provider_d,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+MEDICAL_CLAIMS,provider_d,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+MEDICAL_CLAIMS,provider_d,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+MEDICAL_CLAIMS,provider_d,PROCESSED_DATE,TIMESTAMP_NTZ,Y,,Date processed
+MEDICAL_CLAIMS,provider_d,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+DENTAL_CLAIMS,provider_d,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+DENTAL_CLAIMS,provider_d,MEMBER_ID,VARCHAR(100),N,,Member identifier
+DENTAL_CLAIMS,provider_d,DENTIST_ID,VARCHAR(100),Y,,Dentist identifier
+DENTAL_CLAIMS,provider_d,DENTIST_NAME,VARCHAR(500),Y,,Dentist name
+DENTAL_CLAIMS,provider_d,SERVICE_DATE,DATE,N,,Date of service
+DENTAL_CLAIMS,provider_d,TOOTH_NUMBER,VARCHAR(10),Y,,Tooth number
+DENTAL_CLAIMS,provider_d,PROCEDURE_CODE,VARCHAR(50),Y,,Dental procedure code
+DENTAL_CLAIMS,provider_d,SURFACE,VARCHAR(20),Y,,Tooth surface
+DENTAL_CLAIMS,provider_d,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+DENTAL_CLAIMS,provider_d,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+DENTAL_CLAIMS,provider_d,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+DENTAL_CLAIMS,provider_d,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+DENTAL_CLAIMS,provider_d,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+DENTAL_CLAIMS,provider_d,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+PHARMACY_CLAIMS,provider_d,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+PHARMACY_CLAIMS,provider_d,MEMBER_ID,VARCHAR(100),N,,Member identifier
+PHARMACY_CLAIMS,provider_d,PHARMACY_ID,VARCHAR(100),Y,,Pharmacy identifier
+PHARMACY_CLAIMS,provider_d,PHARMACY_NAME,VARCHAR(500),Y,,Pharmacy name
+PHARMACY_CLAIMS,provider_d,FILL_DATE,DATE,N,,Prescription fill date
+PHARMACY_CLAIMS,provider_d,NDC_CODE,VARCHAR(50),N,,National Drug Code
+PHARMACY_CLAIMS,provider_d,DRUG_NAME,VARCHAR(500),Y,,Drug name
+PHARMACY_CLAIMS,provider_d,QUANTITY,"NUMBER(18,2)",N,,Quantity dispensed
+PHARMACY_CLAIMS,provider_d,DAYS_SUPPLY,"NUMBER(10,0)",Y,,Days supply
+PHARMACY_CLAIMS,provider_d,PRESCRIBER_ID,VARCHAR(100),Y,,Prescriber identifier
+PHARMACY_CLAIMS,provider_d,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+PHARMACY_CLAIMS,provider_d,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+PHARMACY_CLAIMS,provider_d,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+PHARMACY_CLAIMS,provider_d,MEMBER_COPAY,"NUMBER(18,2)",Y,0.00,Member copay
+PHARMACY_CLAIMS,provider_d,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+PHARMACY_CLAIMS,provider_d,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEMBER_ELIGIBILITY,provider_d,MEMBER_ID,VARCHAR(100),N,,Unique member identifier
+MEMBER_ELIGIBILITY,provider_d,FIRST_NAME,VARCHAR(200),N,,Member first name
+MEMBER_ELIGIBILITY,provider_d,LAST_NAME,VARCHAR(200),N,,Member last name
+MEMBER_ELIGIBILITY,provider_d,DATE_OF_BIRTH,DATE,N,,Date of birth
+MEMBER_ELIGIBILITY,provider_d,GENDER,VARCHAR(10),Y,,Gender
+MEMBER_ELIGIBILITY,provider_d,ADDRESS_LINE1,VARCHAR(500),Y,,Address line 1
+MEMBER_ELIGIBILITY,provider_d,ADDRESS_LINE2,VARCHAR(500),Y,,Address line 2
+MEMBER_ELIGIBILITY,provider_d,CITY,VARCHAR(200),Y,,City
+MEMBER_ELIGIBILITY,provider_d,STATE,VARCHAR(50),Y,,State
+MEMBER_ELIGIBILITY,provider_d,ZIP_CODE,VARCHAR(20),Y,,ZIP code
+MEMBER_ELIGIBILITY,provider_d,PHONE,VARCHAR(50),Y,,Phone number
+MEMBER_ELIGIBILITY,provider_d,EMAIL,VARCHAR(200),Y,,Email address
+MEMBER_ELIGIBILITY,provider_d,PLAN_ID,VARCHAR(100),Y,,Plan identifier
+MEMBER_ELIGIBILITY,provider_d,PLAN_NAME,VARCHAR(500),Y,,Plan name
+MEMBER_ELIGIBILITY,provider_d,EFFECTIVE_DATE,DATE,N,,Coverage effective date
+MEMBER_ELIGIBILITY,provider_d,TERMINATION_DATE,DATE,Y,,Coverage termination date
+MEMBER_ELIGIBILITY,provider_d,STATUS,VARCHAR(50),N,ACTIVE,Eligibility status
+MEMBER_ELIGIBILITY,provider_d,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEDICAL_CLAIMS,provider_e,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+MEDICAL_CLAIMS,provider_e,MEMBER_ID,VARCHAR(100),N,,Member identifier
+MEDICAL_CLAIMS,provider_e,PROVIDER_ID,VARCHAR(100),Y,,Provider identifier
+MEDICAL_CLAIMS,provider_e,PROVIDER_NAME,VARCHAR(500),Y,,Provider name
+MEDICAL_CLAIMS,provider_e,SERVICE_DATE,DATE,N,,Date of service
+MEDICAL_CLAIMS,provider_e,DIAGNOSIS_CODE,VARCHAR(50),Y,,Primary diagnosis code
+MEDICAL_CLAIMS,provider_e,PROCEDURE_CODE,VARCHAR(50),Y,,Procedure code
+MEDICAL_CLAIMS,provider_e,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+MEDICAL_CLAIMS,provider_e,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+MEDICAL_CLAIMS,provider_e,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+MEDICAL_CLAIMS,provider_e,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+MEDICAL_CLAIMS,provider_e,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+MEDICAL_CLAIMS,provider_e,PROCESSED_DATE,TIMESTAMP_NTZ,Y,,Date processed
+MEDICAL_CLAIMS,provider_e,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+DENTAL_CLAIMS,provider_e,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+DENTAL_CLAIMS,provider_e,MEMBER_ID,VARCHAR(100),N,,Member identifier
+DENTAL_CLAIMS,provider_e,DENTIST_ID,VARCHAR(100),Y,,Dentist identifier
+DENTAL_CLAIMS,provider_e,DENTIST_NAME,VARCHAR(500),Y,,Dentist name
+DENTAL_CLAIMS,provider_e,SERVICE_DATE,DATE,N,,Date of service
+DENTAL_CLAIMS,provider_e,TOOTH_NUMBER,VARCHAR(10),Y,,Tooth number
+DENTAL_CLAIMS,provider_e,PROCEDURE_CODE,VARCHAR(50),Y,,Dental procedure code
+DENTAL_CLAIMS,provider_e,SURFACE,VARCHAR(20),Y,,Tooth surface
+DENTAL_CLAIMS,provider_e,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+DENTAL_CLAIMS,provider_e,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+DENTAL_CLAIMS,provider_e,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+DENTAL_CLAIMS,provider_e,MEMBER_RESPONSIBILITY,"NUMBER(18,2)",Y,0.00,Member cost share
+DENTAL_CLAIMS,provider_e,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+DENTAL_CLAIMS,provider_e,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+PHARMACY_CLAIMS,provider_e,CLAIM_ID,VARCHAR(100),N,,Unique claim identifier
+PHARMACY_CLAIMS,provider_e,MEMBER_ID,VARCHAR(100),N,,Member identifier
+PHARMACY_CLAIMS,provider_e,PHARMACY_ID,VARCHAR(100),Y,,Pharmacy identifier
+PHARMACY_CLAIMS,provider_e,PHARMACY_NAME,VARCHAR(500),Y,,Pharmacy name
+PHARMACY_CLAIMS,provider_e,FILL_DATE,DATE,N,,Prescription fill date
+PHARMACY_CLAIMS,provider_e,NDC_CODE,VARCHAR(50),N,,National Drug Code
+PHARMACY_CLAIMS,provider_e,DRUG_NAME,VARCHAR(500),Y,,Drug name
+PHARMACY_CLAIMS,provider_e,QUANTITY,"NUMBER(18,2)",N,,Quantity dispensed
+PHARMACY_CLAIMS,provider_e,DAYS_SUPPLY,"NUMBER(10,0)",Y,,Days supply
+PHARMACY_CLAIMS,provider_e,PRESCRIBER_ID,VARCHAR(100),Y,,Prescriber identifier
+PHARMACY_CLAIMS,provider_e,BILLED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount billed
+PHARMACY_CLAIMS,provider_e,ALLOWED_AMOUNT,"NUMBER(18,2)",N,0.00,Amount allowed
+PHARMACY_CLAIMS,provider_e,PAID_AMOUNT,"NUMBER(18,2)",N,0.00,Amount paid
+PHARMACY_CLAIMS,provider_e,MEMBER_COPAY,"NUMBER(18,2)",Y,0.00,Member copay
+PHARMACY_CLAIMS,provider_e,CLAIM_STATUS,VARCHAR(50),Y,PENDING,Claim status
+PHARMACY_CLAIMS,provider_e,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp
+MEMBER_ELIGIBILITY,provider_e,MEMBER_ID,VARCHAR(100),N,,Unique member identifier
+MEMBER_ELIGIBILITY,provider_e,FIRST_NAME,VARCHAR(200),N,,Member first name
+MEMBER_ELIGIBILITY,provider_e,LAST_NAME,VARCHAR(200),N,,Member last name
+MEMBER_ELIGIBILITY,provider_e,DATE_OF_BIRTH,DATE,N,,Date of birth
+MEMBER_ELIGIBILITY,provider_e,GENDER,VARCHAR(10),Y,,Gender
+MEMBER_ELIGIBILITY,provider_e,ADDRESS_LINE1,VARCHAR(500),Y,,Address line 1
+MEMBER_ELIGIBILITY,provider_e,ADDRESS_LINE2,VARCHAR(500),Y,,Address line 2
+MEMBER_ELIGIBILITY,provider_e,CITY,VARCHAR(200),Y,,City
+MEMBER_ELIGIBILITY,provider_e,STATE,VARCHAR(50),Y,,State
+MEMBER_ELIGIBILITY,provider_e,ZIP_CODE,VARCHAR(20),Y,,ZIP code
+MEMBER_ELIGIBILITY,provider_e,PHONE,VARCHAR(50),Y,,Phone number
+MEMBER_ELIGIBILITY,provider_e,EMAIL,VARCHAR(200),Y,,Email address
+MEMBER_ELIGIBILITY,provider_e,PLAN_ID,VARCHAR(100),Y,,Plan identifier
+MEMBER_ELIGIBILITY,provider_e,PLAN_NAME,VARCHAR(500),Y,,Plan name
+MEMBER_ELIGIBILITY,provider_e,EFFECTIVE_DATE,DATE,N,,Coverage effective date
+MEMBER_ELIGIBILITY,provider_e,TERMINATION_DATE,DATE,Y,,Coverage termination date
+MEMBER_ELIGIBILITY,provider_e,STATUS,VARCHAR(50),N,ACTIVE,Eligibility status
+MEMBER_ELIGIBILITY,provider_e,CREATED_AT,TIMESTAMP_NTZ,N,CURRENT_TIMESTAMP(),Record creation timestamp

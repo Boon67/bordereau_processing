@@ -21,37 +21,43 @@ CALL create_gold_target_schema(
     2555
 );
 
+-- Delete existing fields for CLAIMS_ANALYTICS if any (for idempotent re-runs)
+DELETE FROM target_fields 
+WHERE schema_id IN (
+    SELECT schema_id FROM target_schemas 
+    WHERE table_name = 'CLAIMS_ANALYTICS' AND tpa = 'ALL'
+);
+
 -- Bulk insert fields for CLAIMS_ANALYTICS
-INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, display_name, description, is_primary_key, is_metric, is_dimension)
+INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, description, is_key, is_measure, is_dimension)
 SELECT 
     ts.schema_id,
     f.field_name,
     f.data_type,
     f.field_order,
     f.is_nullable,
-    f.display_name,
     f.description,
-    f.is_primary_key,
-    f.is_metric,
+    f.is_key,
+    f.is_measure,
     f.is_dimension
 FROM target_schemas ts
 CROSS JOIN (
-    SELECT 'claim_analytics_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Unique identifier' AS display_name, 'Primary key' AS description, TRUE AS is_primary_key, FALSE AS is_metric, FALSE AS is_dimension
-    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'TPA identifier', 'Third Party Administrator', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'claim_year', 'NUMBER(4,0)', 3, FALSE, 'Claim year', 'Year of claim', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'claim_month', 'NUMBER(2,0)', 4, FALSE, 'Claim month', 'Month of claim', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'claim_type', 'VARCHAR(50)', 5, FALSE, 'Claim type', 'Medical, Dental, Pharmacy', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'provider_specialty', 'VARCHAR(200)', 6, TRUE, 'Provider specialty', 'Specialty of provider', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'diagnosis_category', 'VARCHAR(200)', 7, TRUE, 'Diagnosis category', 'High-level diagnosis grouping', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'claim_count', 'NUMBER(18,0)', 8, FALSE, 'Claim count', 'Total number of claims', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'unique_members', 'NUMBER(18,0)', 9, FALSE, 'Unique members', 'Count of unique members', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_billed', 'NUMBER(18,2)', 10, FALSE, 'Total billed', 'Sum of billed amounts', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_allowed', 'NUMBER(18,2)', 11, FALSE, 'Total allowed', 'Sum of allowed amounts', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_paid', 'NUMBER(18,2)', 12, FALSE, 'Total paid', 'Sum of paid amounts', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'avg_paid_per_claim', 'NUMBER(18,2)', 13, FALSE, 'Avg paid per claim', 'Average paid amount per claim', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'avg_paid_per_member', 'NUMBER(18,2)', 14, FALSE, 'Avg paid per member', 'Average paid amount per member', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 15, FALSE, 'Record created', 'Creation timestamp', FALSE, FALSE, FALSE
-    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 16, FALSE, 'Record updated', 'Last update timestamp', FALSE, FALSE, FALSE
+    SELECT 'claim_analytics_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Primary key' AS description, TRUE AS is_key, FALSE AS is_measure, FALSE AS is_dimension
+    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'Third Party Administrator', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'claim_year', 'NUMBER(4,0)', 3, FALSE, 'Year of claim', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'claim_month', 'NUMBER(2,0)', 4, FALSE, 'Month of claim', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'claim_type', 'VARCHAR(50)', 5, FALSE, 'Medical, Dental, Pharmacy', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'provider_specialty', 'VARCHAR(200)', 6, TRUE, 'Specialty of provider', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'diagnosis_category', 'VARCHAR(200)', 7, TRUE, 'High-level diagnosis grouping', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'claim_count', 'NUMBER(18,0)', 8, FALSE, 'Total number of claims', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'unique_members', 'NUMBER(18,0)', 9, FALSE, 'Count of unique members', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_billed', 'NUMBER(18,2)', 10, FALSE, 'Sum of billed amounts', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_allowed', 'NUMBER(18,2)', 11, FALSE, 'Sum of allowed amounts', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_paid', 'NUMBER(18,2)', 12, FALSE, 'Sum of paid amounts', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'avg_paid_per_claim', 'NUMBER(18,2)', 13, FALSE, 'Average paid amount per claim', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'avg_paid_per_member', 'NUMBER(18,2)', 14, FALSE, 'Average paid amount per member', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 15, FALSE, 'Creation timestamp', FALSE, FALSE, FALSE
+    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 16, FALSE, 'Last update timestamp', FALSE, FALSE, FALSE
 ) f
 WHERE ts.table_name = 'CLAIMS_ANALYTICS' AND ts.tpa = 'ALL';
 
@@ -68,39 +74,45 @@ CALL create_gold_target_schema(
     2555
 );
 
+-- Delete existing fields for MEMBER_360 if any (for idempotent re-runs)
+DELETE FROM target_fields 
+WHERE schema_id IN (
+    SELECT schema_id FROM target_schemas 
+    WHERE table_name = 'MEMBER_360' AND tpa = 'ALL'
+);
+
 -- Bulk insert fields for MEMBER_360
-INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, display_name, description, is_primary_key, is_metric, is_dimension)
+INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, description, is_key, is_measure, is_dimension)
 SELECT 
     ts.schema_id,
     f.field_name,
     f.data_type,
     f.field_order,
     f.is_nullable,
-    f.display_name,
     f.description,
-    f.is_primary_key,
-    f.is_metric,
+    f.is_key,
+    f.is_measure,
     f.is_dimension
 FROM target_schemas ts
 CROSS JOIN (
-    SELECT 'member_360_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Unique identifier' AS display_name, 'Primary key' AS description, TRUE AS is_primary_key, FALSE AS is_metric, FALSE AS is_dimension
-    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'TPA identifier', 'Third Party Administrator', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'member_id', 'VARCHAR(100)', 3, FALSE, 'Member ID', 'Unique member identifier', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'member_name', 'VARCHAR(500)', 4, TRUE, 'Member name', 'Full name of member', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'date_of_birth', 'DATE', 5, TRUE, 'Date of birth', 'Member date of birth', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'age', 'NUMBER(3,0)', 6, TRUE, 'Age', 'Current age', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'gender', 'VARCHAR(20)', 7, TRUE, 'Gender', 'Member gender', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'enrollment_date', 'DATE', 8, TRUE, 'Enrollment date', 'Date enrolled', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'termination_date', 'DATE', 9, TRUE, 'Termination date', 'Date terminated', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'is_active', 'BOOLEAN', 10, FALSE, 'Active status', 'Currently active member', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'total_claims_ytd', 'NUMBER(18,0)', 11, FALSE, 'Claims YTD', 'Total claims year-to-date', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_paid_ytd', 'NUMBER(18,2)', 12, FALSE, 'Paid YTD', 'Total paid year-to-date', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'chronic_conditions', 'ARRAY', 13, TRUE, 'Chronic conditions', 'List of chronic conditions', FALSE, FALSE, FALSE
-    UNION ALL SELECT 'primary_care_provider', 'VARCHAR(500)', 14, TRUE, 'PCP', 'Primary care provider name', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'last_visit_date', 'DATE', 15, TRUE, 'Last visit', 'Date of last healthcare visit', FALSE, FALSE, FALSE
-    UNION ALL SELECT 'risk_score', 'NUMBER(18,4)', 16, TRUE, 'Risk score', 'Member risk score', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 17, FALSE, 'Record created', 'Creation timestamp', FALSE, FALSE, FALSE
-    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 18, FALSE, 'Record updated', 'Last update timestamp', FALSE, FALSE, FALSE
+    SELECT 'member_360_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Primary key' AS description, TRUE AS is_key, FALSE AS is_measure, FALSE AS is_dimension
+    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'Third Party Administrator', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'member_id', 'VARCHAR(100)', 3, FALSE, 'Unique member identifier', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'member_name', 'VARCHAR(500)', 4, TRUE, 'Full name of member', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'date_of_birth', 'DATE', 5, TRUE, 'Member date of birth', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'age', 'NUMBER(3,0)', 6, TRUE, 'Current age', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'gender', 'VARCHAR(20)', 7, TRUE, 'Member gender', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'enrollment_date', 'DATE', 8, TRUE, 'Date enrolled', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'termination_date', 'DATE', 9, TRUE, 'Date terminated', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'is_active', 'BOOLEAN', 10, FALSE, 'Currently active member', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'total_claims_ytd', 'NUMBER(18,0)', 11, FALSE, 'Total claims year-to-date', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_paid_ytd', 'NUMBER(18,2)', 12, FALSE, 'Total paid year-to-date', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'chronic_conditions', 'ARRAY', 13, TRUE, 'List of chronic conditions', FALSE, FALSE, FALSE
+    UNION ALL SELECT 'primary_care_provider', 'VARCHAR(500)', 14, TRUE, 'Primary care provider name', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'last_visit_date', 'DATE', 15, TRUE, 'Date of last healthcare visit', FALSE, FALSE, FALSE
+    UNION ALL SELECT 'risk_score', 'NUMBER(18,4)', 16, TRUE, 'Member risk score', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 17, FALSE, 'Creation timestamp', FALSE, FALSE, FALSE
+    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 18, FALSE, 'Last update timestamp', FALSE, FALSE, FALSE
 ) f
 WHERE ts.table_name = 'MEMBER_360' AND ts.tpa = 'ALL';
 
@@ -117,38 +129,44 @@ CALL create_gold_target_schema(
     2555
 );
 
+-- Delete existing fields for PROVIDER_PERFORMANCE if any (for idempotent re-runs)
+DELETE FROM target_fields 
+WHERE schema_id IN (
+    SELECT schema_id FROM target_schemas 
+    WHERE table_name = 'PROVIDER_PERFORMANCE' AND tpa = 'ALL'
+);
+
 -- Bulk insert fields for PROVIDER_PERFORMANCE
-INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, display_name, description, is_primary_key, is_metric, is_dimension)
+INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, description, is_key, is_measure, is_dimension)
 SELECT 
     ts.schema_id,
     f.field_name,
     f.data_type,
     f.field_order,
     f.is_nullable,
-    f.display_name,
     f.description,
-    f.is_primary_key,
-    f.is_metric,
+    f.is_key,
+    f.is_measure,
     f.is_dimension
 FROM target_schemas ts
 CROSS JOIN (
-    SELECT 'provider_perf_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Unique identifier' AS display_name, 'Primary key' AS description, TRUE AS is_primary_key, FALSE AS is_metric, FALSE AS is_dimension
-    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'TPA identifier', 'Third Party Administrator', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'provider_id', 'VARCHAR(100)', 3, FALSE, 'Provider ID', 'Unique provider identifier', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'provider_name', 'VARCHAR(500)', 4, TRUE, 'Provider name', 'Name of provider', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'provider_specialty', 'VARCHAR(200)', 5, TRUE, 'Specialty', 'Provider specialty', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'provider_type', 'VARCHAR(100)', 6, TRUE, 'Provider type', 'Individual or Facility', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'measurement_period', 'VARCHAR(50)', 7, FALSE, 'Measurement period', 'Period for metrics (e.g., 2024-Q1)', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'unique_members', 'NUMBER(18,0)', 8, FALSE, 'Unique members', 'Count of unique members served', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_claims', 'NUMBER(18,0)', 9, FALSE, 'Total claims', 'Total claim count', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_paid', 'NUMBER(18,2)', 10, FALSE, 'Total paid', 'Total paid amount', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'avg_cost_per_member', 'NUMBER(18,2)', 11, FALSE, 'Avg cost per member', 'Average cost per member', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'avg_cost_per_claim', 'NUMBER(18,2)', 12, FALSE, 'Avg cost per claim', 'Average cost per claim', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'discount_rate', 'NUMBER(18,4)', 13, FALSE, 'Discount rate', 'Average discount rate', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'readmission_rate', 'NUMBER(18,4)', 14, TRUE, 'Readmission rate', '30-day readmission rate', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'quality_score', 'NUMBER(18,4)', 15, TRUE, 'Quality score', 'Composite quality score', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 16, FALSE, 'Record created', 'Creation timestamp', FALSE, FALSE, FALSE
-    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 17, FALSE, 'Record updated', 'Last update timestamp', FALSE, FALSE, FALSE
+    SELECT 'provider_perf_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Primary key' AS description, TRUE AS is_key, FALSE AS is_measure, FALSE AS is_dimension
+    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'Third Party Administrator', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'provider_id', 'VARCHAR(100)', 3, FALSE, 'Unique provider identifier', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'provider_name', 'VARCHAR(500)', 4, TRUE, 'Name of provider', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'provider_specialty', 'VARCHAR(200)', 5, TRUE, 'Provider specialty', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'provider_type', 'VARCHAR(100)', 6, TRUE, 'Individual or Facility', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'measurement_period', 'VARCHAR(50)', 7, FALSE, 'Period for metrics (e.g., 2024-Q1)', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'unique_members', 'NUMBER(18,0)', 8, FALSE, 'Count of unique members served', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_claims', 'NUMBER(18,0)', 9, FALSE, 'Total claim count', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_paid', 'NUMBER(18,2)', 10, FALSE, 'Total paid amount', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'avg_cost_per_member', 'NUMBER(18,2)', 11, FALSE, 'Average cost per member', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'avg_cost_per_claim', 'NUMBER(18,2)', 12, FALSE, 'Average cost per claim', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'discount_rate', 'NUMBER(18,4)', 13, FALSE, 'Average discount rate', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'readmission_rate', 'NUMBER(18,4)', 14, TRUE, '30-day readmission rate', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'quality_score', 'NUMBER(18,4)', 15, TRUE, 'Composite quality score', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 16, FALSE, 'Creation timestamp', FALSE, FALSE, FALSE
+    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 17, FALSE, 'Last update timestamp', FALSE, FALSE, FALSE
 ) f
 WHERE ts.table_name = 'PROVIDER_PERFORMANCE' AND ts.tpa = 'ALL';
 
@@ -165,37 +183,43 @@ CALL create_gold_target_schema(
     2555
 );
 
+-- Delete existing fields for FINANCIAL_SUMMARY if any (for idempotent re-runs)
+DELETE FROM target_fields 
+WHERE schema_id IN (
+    SELECT schema_id FROM target_schemas 
+    WHERE table_name = 'FINANCIAL_SUMMARY' AND tpa = 'ALL'
+);
+
 -- Bulk insert fields for FINANCIAL_SUMMARY
-INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, display_name, description, is_primary_key, is_metric, is_dimension)
+INSERT INTO target_fields (schema_id, field_name, data_type, field_order, is_nullable, description, is_key, is_measure, is_dimension)
 SELECT 
     ts.schema_id,
     f.field_name,
     f.data_type,
     f.field_order,
     f.is_nullable,
-    f.display_name,
     f.description,
-    f.is_primary_key,
-    f.is_metric,
+    f.is_key,
+    f.is_measure,
     f.is_dimension
 FROM target_schemas ts
 CROSS JOIN (
-    SELECT 'financial_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Unique identifier' AS display_name, 'Primary key' AS description, TRUE AS is_primary_key, FALSE AS is_metric, FALSE AS is_dimension
-    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'TPA identifier', 'Third Party Administrator', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'fiscal_year', 'NUMBER(4,0)', 3, FALSE, 'Fiscal year', 'Fiscal year', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'fiscal_month', 'NUMBER(2,0)', 4, FALSE, 'Fiscal month', 'Fiscal month', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'fiscal_quarter', 'NUMBER(1,0)', 5, FALSE, 'Fiscal quarter', 'Fiscal quarter (1-4)', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'claim_type', 'VARCHAR(50)', 6, TRUE, 'Claim type', 'Medical, Dental, Pharmacy, or ALL', FALSE, FALSE, TRUE
-    UNION ALL SELECT 'total_billed', 'NUMBER(18,2)', 7, FALSE, 'Total billed', 'Sum of billed amounts', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_allowed', 'NUMBER(18,2)', 8, FALSE, 'Total allowed', 'Sum of allowed amounts', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_paid', 'NUMBER(18,2)', 9, FALSE, 'Total paid', 'Sum of paid amounts', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'total_member_responsibility', 'NUMBER(18,2)', 10, FALSE, 'Member responsibility', 'Total member cost share', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'claim_count', 'NUMBER(18,0)', 11, FALSE, 'Claim count', 'Total number of claims', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'member_count', 'NUMBER(18,0)', 12, FALSE, 'Member count', 'Unique member count', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'pmpm', 'NUMBER(18,2)', 13, FALSE, 'PMPM', 'Per Member Per Month cost', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'medical_loss_ratio', 'NUMBER(18,4)', 14, TRUE, 'MLR', 'Medical Loss Ratio', FALSE, TRUE, FALSE
-    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 15, FALSE, 'Record created', 'Creation timestamp', FALSE, FALSE, FALSE
-    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 16, FALSE, 'Record updated', 'Last update timestamp', FALSE, FALSE, FALSE
+    SELECT 'financial_id' AS field_name, 'NUMBER(38,0)' AS data_type, 1 AS field_order, FALSE AS is_nullable, 'Primary key' AS description, TRUE AS is_key, FALSE AS is_measure, FALSE AS is_dimension
+    UNION ALL SELECT 'tpa', 'VARCHAR(100)', 2, FALSE, 'Third Party Administrator', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'fiscal_year', 'NUMBER(4,0)', 3, FALSE, 'Fiscal year', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'fiscal_month', 'NUMBER(2,0)', 4, FALSE, 'Fiscal month', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'fiscal_quarter', 'NUMBER(1,0)', 5, FALSE, 'Fiscal quarter (1-4)', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'claim_type', 'VARCHAR(50)', 6, TRUE, 'Medical, Dental, Pharmacy, or ALL', FALSE, FALSE, TRUE
+    UNION ALL SELECT 'total_billed', 'NUMBER(18,2)', 7, FALSE, 'Sum of billed amounts', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_allowed', 'NUMBER(18,2)', 8, FALSE, 'Sum of allowed amounts', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_paid', 'NUMBER(18,2)', 9, FALSE, 'Sum of paid amounts', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'total_member_responsibility', 'NUMBER(18,2)', 10, FALSE, 'Total member cost share', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'claim_count', 'NUMBER(18,0)', 11, FALSE, 'Total number of claims', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'member_count', 'NUMBER(18,0)', 12, FALSE, 'Unique member count', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'pmpm', 'NUMBER(18,2)', 13, FALSE, 'Per Member Per Month cost', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'medical_loss_ratio', 'NUMBER(18,4)', 14, TRUE, 'Medical Loss Ratio', FALSE, TRUE, FALSE
+    UNION ALL SELECT 'created_at', 'TIMESTAMP_NTZ', 15, FALSE, 'Creation timestamp', FALSE, FALSE, FALSE
+    UNION ALL SELECT 'updated_at', 'TIMESTAMP_NTZ', 16, FALSE, 'Last update timestamp', FALSE, FALSE, FALSE
 ) f
 WHERE ts.table_name = 'FINANCIAL_SUMMARY' AND ts.tpa = 'ALL';
 

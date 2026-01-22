@@ -154,11 +154,14 @@ class Settings(BaseSettings):
             warehouse = os.getenv('SNOWFLAKE_WAREHOUSE') or self.SNOWFLAKE_WAREHOUSE
             if warehouse:
                 config['warehouse'] = warehouse
-                logger.info(f"Using warehouse for SPCS: {warehouse}")
+                logger.info(f"SPCS OAuth: Using warehouse {warehouse}")
             else:
-                logger.warning("No warehouse specified for SPCS connection - queries may fail")
+                logger.error("SPCS OAuth: No warehouse specified - connection will fail!")
+                # Still return config - let connection attempt fail with clear error
+                # This is better than silently returning None
             
             logger.info(f"SPCS OAuth token loaded for account: {snowflake_account}")
+            logger.info(f"SPCS OAuth config: host={snowflake_host}, database={config.get('database')}, warehouse={config.get('warehouse')}")
             return config
             
         except Exception as e:

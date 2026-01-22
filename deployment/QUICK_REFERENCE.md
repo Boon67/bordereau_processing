@@ -1,18 +1,21 @@
 # Deployment Quick Reference
 
-**Last Updated**: January 19, 2026
+**Last Updated**: January 21, 2026  
+**Version**: 2.0
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Deploy database layers
+# Option 1: Deploy everything (database + optional containers)
 cd deployment
 ./deploy.sh
 
-# 2. Deploy container services
-./deploy_container.sh
+# Option 2: Deploy database only, then containers separately
+cd deployment
+./deploy.sh        # Answer 'n' when prompted for containers
+./deploy_container.sh  # Deploy containers later
 
-# 3. Check status
+# Option 3: Check status
 ./manage_services.sh status
 ```
 
@@ -20,7 +23,10 @@ cd deployment
 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
-| `deploy.sh` | Deploy Bronze + Silver layers | First time setup or database updates |
+| `deploy.sh` | Deploy Bronze + Silver + Gold layers (+ optional containers) | First time setup or database updates |
+| `deploy_bronze.sh` | Deploy Bronze layer only | Bronze layer updates |
+| `deploy_silver.sh` | Deploy Silver layer only | Silver layer updates |
+| `deploy_gold.sh` | Deploy Gold layer only (⚡ bulk optimized) | Gold layer updates |
 | `deploy_container.sh` | Deploy unified SPCS service | Deploy/update frontend + backend |
 | `manage_services.sh` | Manage SPCS services | Check status, view logs, restart |
 | `undeploy.sh` | Remove all resources | Cleanup or reset |
@@ -30,20 +36,24 @@ cd deployment
 ### Deployment
 
 ```bash
-# Full deployment (database + containers)
-./deploy.sh && ./deploy_container.sh
+# Full deployment (database + optional containers)
+./deploy.sh  # Prompts for container deployment
+
+# Automated deployment (no prompts)
+echo "AUTO_APPROVE=true" >> custom.config
+echo "USE_DEFAULT_CONNECTION=true" >> custom.config
+./deploy.sh
 
 # Database only
-./deploy.sh
+./deploy.sh  # Answer 'n' when prompted
 
 # Containers only
 ./deploy_container.sh
 
-# Bronze layer only
-./deploy_bronze.sh
-
-# Silver layer only
-./deploy_silver.sh
+# Specific layers
+./deploy_bronze.sh  # Bronze only
+./deploy_silver.sh  # Silver only
+./deploy_gold.sh    # Gold only (⚡ 88% faster with bulk optimization)
 ```
 
 ### Service Management
@@ -245,12 +255,23 @@ sleep 180
 snow connection test --connection DEPLOYMENT
 ```
 
+## ⚡ Performance (Gold Layer Optimization)
+
+**Bulk Load Optimization:**
+- **Operations**: 8 (was 69) - **88% reduction**
+- **Time**: 2-3s (was 15-20s) - **85% faster**
+- **Output**: 20 lines (was 200+) - **90% cleaner**
+
+**Full Deployment Time:**
+- **Database Layers**: ~2-4 minutes
+- **With Containers**: ~7-14 minutes (includes image build)
+
 ## 📚 Documentation
 
 - **Full Guide**: [README.md](README.md)
-- **Consolidation**: [CONSOLIDATION_SUMMARY.md](CONSOLIDATION_SUMMARY.md)
-- **Latest Deployment**: [DEPLOYMENT_SUCCESS.md](DEPLOYMENT_SUCCESS.md)
-- **Test Results**: [TEST_RESULTS.md](TEST_RESULTS.md)
+- **Bulk Optimization**: [../gold/BULK_LOAD_OPTIMIZATION.md](../gold/BULK_LOAD_OPTIMIZATION.md)
+- **Script Improvements**: [DEPLOY_SCRIPT_IMPROVEMENTS.md](DEPLOY_SCRIPT_IMPROVEMENTS.md)
+- **Fix Documentation**: [fixes/README.md](fixes/README.md)
 - **Legacy Guide**: [legacy/README.md](legacy/README.md)
 
 ## ⚡ Pro Tips
@@ -268,8 +289,35 @@ snow connection test --connection DEPLOYMENT
 - **Main README**: [../README.md](../README.md)
 - **User Guide**: [../docs/USER_GUIDE.md](../docs/USER_GUIDE.md)
 
+## 🎯 Next Steps After Deployment
+
+### 1. Upload Sample Data
+```bash
+snow stage put sample_data/claims_data/provider_a/*.csv \
+    @BRONZE.SRC/provider_a/ \
+    --connection DEPLOYMENT
+```
+
+### 2. Resume Tasks (Optional)
+```bash
+snow sql --connection DEPLOYMENT -q "
+    USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
+    USE SCHEMA BRONZE;
+    ALTER TASK discover_files_task RESUME;
+"
+```
+
+### 3. Access Application (If Containers Deployed)
+```bash
+# Get frontend URL
+snow spcs service list-endpoints BORDEREAU_APP --connection DEPLOYMENT
+
+# Open in browser
+# https://xxx-xxx-xxx.snowflakecomputing.app
+```
+
 ---
 
-**Quick Reference Version**: 1.0  
-**Last Updated**: January 19, 2026  
+**Quick Reference Version**: 2.0  
+**Last Updated**: January 21, 2026  
 **Status**: ✅ Current

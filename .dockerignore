@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+venv
+.venv
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+*.test.py
+
+# Frontend build artifacts (but not source)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Node modules anywhere
+**/node_modules/
+
+# Deployment
+deployment/
+
+# Sample data
+sample_data/
+
+# SQL scripts
+bronze/
+silver/
+gold/
+definition/
+
+# Config examples (only copy actual config)
+backend/config.example.*

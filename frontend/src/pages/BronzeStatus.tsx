@@ -7,7 +7,8 @@ import {
   SyncOutlined,
   ClockCircleOutlined,
   FileTextOutlined,
-  RiseOutlined
+  RiseOutlined,
+  RedoOutlined
 } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FileQueueItem } from '../services/api'
@@ -56,6 +57,16 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
       setTotalRows(stats.total_rows || 0)
     } catch (error) {
       console.error('Failed to load Bronze stats:', error)
+    }
+  }
+
+  const handleReprocess = async (queueId: number, fileName: string) => {
+    try {
+      const result = await apiService.reprocessFile(queueId)
+      message.success(`File ${fileName} reset to PENDING status for reprocessing`)
+      loadQueue() // Refresh the queue
+    } catch (error: any) {
+      message.error(`Failed to reprocess file: ${error.response?.data?.detail || error.message}`)
     }
   }
 
@@ -153,6 +164,26 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
           return <span style={{ color: '#ff4d4f' }}>{record.ERROR_MESSAGE}</span>
         }
         return result || '-'
+      },
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 120,
+      render: (_: any, record: FileQueueItem) => {
+        if (record.STATUS === 'FAILED') {
+          return (
+            <Button
+              type="link"
+              size="small"
+              icon={<RedoOutlined />}
+              onClick={() => handleReprocess(record.QUEUE_ID, record.FILE_NAME)}
+            >
+              Reprocess
+            </Button>
+          )
+        }
+        return null
       },
     },
   ]

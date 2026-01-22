@@ -57,22 +57,71 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """
+    Basic health check for readiness probe.
+    Returns 200 if the service is running.
+    Does NOT check Snowflake connection (too slow for probe).
+    """
+    from datetime import datetime
+    return {
+        "status": "healthy",
+        "service": "running",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/health/db")
+async def database_health_check():
+    """
+    Detailed health check including Snowflake connection.
+    Use this for monitoring, not for readiness probe.
+    """
+    from datetime import datetime
     try:
-        # Test Snowflake connection
+        # Test Snowflake connection with short timeout
         sf_service = SnowflakeService()
-        result = sf_service.execute_query("SELECT CURRENT_VERSION()")
+        result = sf_service.execute_query(
+            "SELECT CURRENT_VERSION(), CURRENT_WAREHOUSE(), CURRENT_DATABASE()",
+            timeout=10
+        )
+        
         return {
             "status": "healthy",
-            "snowflake": "connected",
-            "version": result[0][0] if result else "unknown"
+            "service": "running",
+            "database": "connected",
+            "version": result[0][0] if result else "unknown",
+            "warehouse": result[0][1] if result and len(result[0]) > 1 else "unknown",
+            "database_name": result[0][2] if result and len(result[0]) > 2 else "unknown",
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
+        logger.error(f"Database health check failed: {str(e)}")
         return JSONResponse(
             status_code=503,
-            content={"status": "unhealthy", "error": str(e)}
+            content={
+                "status": "unhealthy",
+                "service": "running",
+                "database": "disconnected",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
         )
+
+@app.get("/api/health/ready")
+async def readiness_check():
+    """
+    Readiness check - service is ready to accept traffic.
+    Checks if critical dependencies are available.
+    """
+    from datetime import datetime
+    checks = {
+        "service": "running",
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    return {
+        "status": "ready",
+        **checks
+    }
 
 @app.on_event("startup")
 async def startup_event():

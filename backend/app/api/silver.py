@@ -22,6 +22,12 @@ class TargetSchemaCreate(BaseModel):
     default_value: Optional[str] = None
     description: Optional[str] = None
 
+class TargetSchemaUpdate(BaseModel):
+    data_type: Optional[str] = None
+    nullable: Optional[bool] = None
+    default_value: Optional[str] = None
+    description: Optional[str] = None
+
 class FieldMappingCreate(BaseModel):
     source_field: str
     target_table: str
@@ -68,13 +74,135 @@ async def create_target_schema(schema: TargetSchemaCreate):
         logger.error(f"Failed to create target schema: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.put("/schemas/{schema_id}")
+async def update_target_schema(schema_id: int, schema: TargetSchemaUpdate):
+    """Update target schema definition"""
+    try:
+        sf_service = SnowflakeService()
+        
+        # Build update query dynamically based on provided fields
+        update_fields = []
+        if schema.data_type is not None:
+            update_fields.append(f"data_type = '{schema.data_type}'")
+        if schema.nullable is not None:
+            update_fields.append(f"nullable = {schema.nullable}")
+        if schema.default_value is not None:
+            update_fields.append(f"default_value = '{schema.default_value}'")
+        if schema.description is not None:
+            update_fields.append(f"description = '{schema.description}'")
+        
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        query = f"""
+            UPDATE {settings.SILVER_SCHEMA_NAME}.target_schemas
+            SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP()
+            WHERE schema_id = {schema_id}
+        """
+        sf_service.execute_query(query)
+        return {"message": "Target schema updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update target schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/schemas/{schema_id}")
+async def delete_target_schema(schema_id: int):
+    """Delete target schema column definition"""
+    try:
+        sf_service = SnowflakeService()
+        query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+            WHERE schema_id = {schema_id}
+        """
+        sf_service.execute_query(query)
+        return {"message": "Target schema column deleted successfully"}
+    except Exception as e:
+        logger.error(f"Failed to delete target schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/schemas/table/{table_name}")
+async def delete_table_schema(table_name: str, tpa: str):
+    """Delete entire table schema (all columns for a table)"""
+    try:
+        sf_service = SnowflakeService()
+        
+        # First check if table exists
+        check_query = f"""
+            SELECT COUNT(*) as count
+            FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+            WHERE table_name = '{table_name.upper()}' AND tpa = '{tpa}' AND active = TRUE
+        """
+        result = sf_service.execute_query_dict(check_query)
+        
+        if not result or result[0]['COUNT'] == 0:
+            raise HTTPException(status_code=404, detail=f"Table schema '{table_name}' not found for TPA '{tpa}'")
+        
+        # Delete all columns for this table
+        delete_query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+            WHERE table_name = '{table_name.upper()}' AND tpa = '{tpa}'
+        """
+        sf_service.execute_query(delete_query)
+        
+        logger.info(f"Deleted table schema '{table_name}' for TPA '{tpa}' ({result[0]['COUNT']} columns)")
+        return {
+            "message": f"Table schema '{table_name}' deleted successfully",
+            "columns_deleted": result[0]['COUNT']
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete table schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/tables/exists")
+async def check_table_exists(table_name: str, tpa: str):
+    """Check if a physical Silver table exists
+    
+    Checks for table with name format: {TPA}_{TABLE_NAME}
+    """
+    try:
+        sf_service = SnowflakeService()
+        physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
+        
+        query = f"""
+            SELECT COUNT(*) as count
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = '{settings.SILVER_SCHEMA_NAME}'
+              AND TABLE_NAME = '{physical_table_name}'
+        """
+        result = sf_service.execute_query_dict(query)
+        exists = result[0]['COUNT'] > 0 if result else False
+        
+        return {
+            "exists": exists,
+            "physical_table_name": physical_table_name
+        }
+    except Exception as e:
+        logger.error(f"Failed to check table existence: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/tables/create")
 async def create_silver_table(table_name: str, tpa: str):
-    """Create Silver table from metadata"""
+    """Create physical Silver table from schema metadata
+    
+    Creates a table with name format: {TPA}_{TABLE_NAME}
+    Example: PROVIDER_A_MEDICAL_CLAIMS
+    """
     try:
         sf_service = SnowflakeService()
         result = sf_service.execute_procedure("create_silver_table", table_name, tpa)
-        return {"message": "Table created successfully", "result": result}
+        
+        # Extract the actual table name from the result
+        physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
+        
+        return {
+            "message": f"Table {physical_table_name} created successfully",
+            "physical_table_name": physical_table_name,
+            "result": result
+        }
     except Exception as e:
         logger.error(f"Failed to create table: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

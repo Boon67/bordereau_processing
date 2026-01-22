@@ -148,7 +148,6 @@ Thumbs.db
 .Trashes
 
 # Docker
-.dockerignore
 Dockerfile.frontend.spcs
 Dockerfile.frontend.unified
 nginx-spcs.conf

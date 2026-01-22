@@ -21,9 +21,11 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 | [Implementation Log](IMPLEMENTATION_LOG.md) | ⭐ Complete implementation history |
 | [User Guide](USER_GUIDE.md) | Complete usage instructions |
 | [Deployment Guide](../deployment/README.md) | Deployment to Snowflake and Snowpark |
+| [Quick Reference](../deployment/QUICK_REFERENCE.md) | Quick deployment commands |
 | [Migration Guide](../MIGRATION_GUIDE.md) | Streamlit to React migration notes |
-| [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization |
-| [Documentation Cleanup](DOCUMENTATION_CLEANUP_SUMMARY.md) | Recent cleanup summary (v3.4) |
+| [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization (v4.0) |
+| [Documentation Cleanup v3.4](DOCUMENTATION_CLEANUP_SUMMARY.md) | Major cleanup summary |
+| [Documentation Cleanup v4.0](DOCUMENTATION_CLEANUP_V4.md) | ⭐ Final consolidation |
 
 ### Visual Documentation (with Mermaid Diagrams) 📊
 

@@ -34,8 +34,11 @@ echo -e "${GREEN}✓ Snowflake CLI is installed${NC}"
 if snow connection test &> /dev/null; then
     echo -e "${GREEN}✓ Active Snowflake connection found${NC}"
     
-    # Get all connections
-    mapfile -t connections < <(snow connection list --format json 2>/dev/null | jq -r '.[].connection_name' 2>/dev/null)
+    # Get all connections (compatible with both bash and zsh)
+    connections=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && connections+=("$line")
+    done <<< "$(snow connection list --format json 2>/dev/null | jq -r '.[].connection_name' 2>/dev/null)"
     
     if [[ ${#connections[@]} -eq 0 ]]; then
         echo -e "${RED}✗ No connections found${NC}"

@@ -407,9 +407,10 @@ deployment/
 
 ## Related Documentation
 
-- **[IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md)** - Complete project history (includes all consolidation history)
+- **[IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md)** - Complete project history
 - **[DOCUMENTATION_STRUCTURE.md](../DOCUMENTATION_STRUCTURE.md)** - Documentation map
 - **[deployment/fixes/README.md](../deployment/fixes/README.md)** - Fix documentation index
+- **[deployment/QUICK_REFERENCE.md](../deployment/QUICK_REFERENCE.md)** - Quick deployment commands
 
 ---
 

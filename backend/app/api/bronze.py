@@ -358,6 +358,59 @@ async def reset_stuck_files():
         logger.error(f"Failed to reset stuck files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/reprocess/{queue_id}")
+async def reprocess_file(queue_id: int):
+    """Reprocess a failed file by resetting it to PENDING status"""
+    try:
+        sf_service = SnowflakeService()
+        
+        # Check if file exists and get its current status
+        check_query = f"""
+            SELECT queue_id, file_name, status, tpa
+            FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+            WHERE queue_id = {queue_id}
+        """
+        result = sf_service.execute_query_dict(check_query)
+        
+        if not result:
+            raise HTTPException(status_code=404, detail=f"File with queue_id {queue_id} not found")
+        
+        file_info = result[0]
+        current_status = file_info['STATUS']
+        file_name = file_info['FILE_NAME']
+        
+        # Only allow reprocessing of FAILED files
+        if current_status not in ['FAILED', 'SUCCESS']:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot reprocess file with status '{current_status}'. Only FAILED or SUCCESS files can be reprocessed."
+            )
+        
+        # Reset the file to PENDING status
+        reset_query = f"""
+            UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+            SET status = 'PENDING',
+                error_message = NULL,
+                process_result = NULL,
+                processed_timestamp = NULL
+            WHERE queue_id = {queue_id}
+        """
+        sf_service.execute_query(reset_query)
+        
+        logger.info(f"Reset file {file_name} (queue_id={queue_id}) from {current_status} to PENDING for reprocessing")
+        
+        return {
+            "message": f"File {file_name} reset to PENDING status for reprocessing",
+            "queue_id": queue_id,
+            "file_name": file_name,
+            "previous_status": current_status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reprocess file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/process")
 async def process_queue():
     """Manually trigger queue processing"""
@@ -405,8 +458,9 @@ async def process_queue():
                 
                 logger.info(f"Calling procedure: {proc_query}")
                 
-                # Execute procedure and get result with longer timeout (10 minutes for file processing)
-                result = sf_service.execute_query(proc_query, timeout=600)
+                # Execute procedure and get result with longer timeout (20 minutes for file processing)
+                # Increased from 10 to 20 minutes to handle larger files
+                result = sf_service.execute_query(proc_query, timeout=1200)
                 result_msg = result[0][0] if result and len(result) > 0 else "No result returned"
                 
                 logger.info(f"Processing result for {file_name}: {result_msg}")

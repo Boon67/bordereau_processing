@@ -38,8 +38,8 @@ DECLARE
     column_defs VARCHAR DEFAULT '';
     result_msg VARCHAR;
 BEGIN
-    -- Build full table name with TPA
-    full_table_name := UPPER(:table_name) || '_' || UPPER(:tpa);
+    -- Build full table name with TPA prefix
+    full_table_name := UPPER(:tpa) || '_' || UPPER(:table_name);
     
     -- Build column definitions from target_schemas
     FOR col_record IN (
