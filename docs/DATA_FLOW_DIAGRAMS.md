@@ -1,8 +1,8 @@
 # Data Flow Documentation
 
 **Bordereau Processing Pipeline**  
-**Version**: 2.0  
-**Date**: January 19, 2026
+**Version**: 2.1  
+**Date**: January 22, 2026
 
 ---
 
@@ -81,74 +81,100 @@ flowchart TD
 
 ## Bronze Layer Data Flow
 
-### File Upload and Processing
+### File Upload and Processing (Current Implementation)
 
 ```mermaid
 sequenceDiagram
     participant User
     participant UI as Frontend
     participant API as Backend API
-    participant Stage as @BRONZE_STAGE
-    participant Table as raw_claims_data
-    participant Log as file_processing_log
-    participant Task as Bronze Task
+    participant SRC as @SRC Stage
+    participant Queue as file_processing_queue
+    participant Discover as discover_files()
+    participant Process as process_single_csv_file()
+    participant Raw as RAW_DATA_TABLE
     
     User->>UI: 1. Select File & TPA
     UI->>API: 2. POST /api/bronze/upload
-    API->>Stage: 3. PUT file
-    Stage-->>API: 4. File stored
+    API->>SRC: 3. PUT file to @SRC/tpa/
+    SRC-->>API: 4. File stored
+    API-->>UI: 5. Upload complete
+    UI-->>User: 6. Success message
     
-    API->>Table: 5. INSERT metadata
-    Note over Table: file_id, tpa, filename,<br/>size, status=UPLOADED
+    Note over Discover: Task runs every 5 min<br/>or manual trigger
+    Discover->>SRC: 7. LIST @SRC
+    SRC-->>Discover: 8. File list
+    Discover->>Queue: 9. INSERT with @SRC/ prefix
+    Note over Queue: file_name: @SRC/tpa/file.csv<br/>tpa: extracted from path<br/>status: PENDING
     
-    API->>Log: 6. Log upload
-    Log-->>API: 7. Log ID
-    API-->>UI: 8. {file_id, status}
-    UI-->>User: 9. Upload Success
+    Note over Process: Task or manual trigger
+    Process->>Queue: 10. SELECT PENDING files
+    Queue-->>Process: 11. File paths with @
     
-    Note over Task: Runs every 5 minutes
-    Task->>Table: 10. SELECT status=UPLOADED
-    Table-->>Task: 11. Pending files
-    
-    loop For each file
-        Task->>Task: 12. Validate format
-        Task->>Task: 13. Parse data
-        Task->>Table: 14. UPDATE status=PROCESSED
-        Task->>Log: 15. Log processing
+    loop For each row in CSV
+        Process->>SRC: 12. Read file via @SRC path
+        Process->>Raw: 13. MERGE row data
+        Note over Raw: Deduplication by<br/>FILE_NAME + ROW_NUMBER
     end
     
-    Task->>Stage: 16. MOVE to @COMPLETED
+    Process->>Queue: 14. UPDATE status=SUCCESS
+    Process-->>UI: 15. Processing complete
+    
+    Note over Process: If errors occur
+    Process->>Queue: 16. UPDATE status=FAILED<br/>with error_message
 ```
 
-### Bronze Processing States
+**Key Changes in Current Implementation**:
+- ✅ Files stored with `@SRC/` prefix for proper stage reference
+- ✅ TPA extracted from file path (2nd segment)
+- ✅ Row-by-row MERGE for deduplication
+- ✅ Reprocess capability for failed files
+- ⚠️ Performance: Row-by-row processing (slow for large files)
+
+### Bronze Processing States (Current Implementation)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> UPLOADED: File uploaded
-    UPLOADED --> VALIDATING: Task picks up
-    VALIDATING --> PROCESSING: Validation passed
-    VALIDATING --> ERROR: Validation failed
-    PROCESSING --> PROCESSED: Processing complete
-    PROCESSING --> ERROR: Processing failed
-    PROCESSED --> COMPLETED: Moved to @COMPLETED
-    ERROR --> MANUAL_REVIEW: Needs attention
-    MANUAL_REVIEW --> UPLOADED: Retry
-    MANUAL_REVIEW --> ARCHIVED: Discard
-    COMPLETED --> ARCHIVED: After retention period
-    ARCHIVED --> [*]
+    [*] --> PENDING: File discovered
+    PENDING --> PROCESSING: Task/Manual trigger
+    PROCESSING --> SUCCESS: All rows processed
+    PROCESSING --> FAILED: Processing error
+    SUCCESS --> [*]: Complete
+    FAILED --> PENDING: Reprocess button
+    FAILED --> [*]: Manual review/discard
     
-    note right of VALIDATING
-        Check format
-        Verify TPA
-        Validate structure
+    note right of PENDING
+        File in @SRC stage
+        Path: @SRC/tpa/file.csv
+        Waiting for processing
     end note
     
     note right of PROCESSING
-        Parse data
-        Load to table
-        Generate metadata
+        Read file from stage
+        Parse CSV/Excel
+        MERGE rows into RAW_DATA_TABLE
+        Track progress
+    end note
+    
+    note right of SUCCESS
+        All rows inserted
+        Error count tracked
+        Result message stored
+    end note
+    
+    note right of FAILED
+        Error message stored
+        Can be reprocessed
+        Manual intervention available
     end note
 ```
+
+**State Transitions**:
+- `PENDING` → File discovered by `discover_files()`, ready for processing
+- `PROCESSING` → Currently being processed by stored procedure
+- `SUCCESS` → Processing completed, rows inserted into RAW_DATA_TABLE
+- `FAILED` → Processing failed, error message stored
+- `FAILED` → `PENDING` → Reprocess feature allows retry
 
 ### Bronze Data Storage
 

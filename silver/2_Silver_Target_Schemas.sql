@@ -42,12 +42,12 @@ BEGIN
     full_table_name := UPPER(:tpa) || '_' || UPPER(:table_name);
     
     -- Build column definitions from target_schemas
-    FOR col_record IN (
+    FOR COL_RECORD IN (
         SELECT 
-            column_name,
-            data_type,
-            nullable,
-            default_value
+            COLUMN_NAME,
+            DATA_TYPE,
+            NULLABLE,
+            DEFAULT_VALUE
         FROM target_schemas
         WHERE table_name = UPPER(:table_name)
           AND tpa = :tpa
@@ -58,14 +58,14 @@ BEGIN
             column_defs := column_defs || ', ';
         END IF;
         
-        column_defs := column_defs || col_record.column_name || ' ' || col_record.data_type;
+        column_defs := column_defs || COL_RECORD.COLUMN_NAME || ' ' || COL_RECORD.DATA_TYPE;
         
-        IF (NOT col_record.nullable) THEN
+        IF (NOT COL_RECORD.NULLABLE) THEN
             column_defs := column_defs || ' NOT NULL';
         END IF;
         
-        IF (col_record.default_value IS NOT NULL) THEN
-            column_defs := column_defs || ' DEFAULT ' || col_record.default_value;
+        IF (COL_RECORD.DEFAULT_VALUE IS NOT NULL) THEN
+            column_defs := column_defs || ' DEFAULT ' || COL_RECORD.DEFAULT_VALUE;
         END IF;
     END FOR;
     

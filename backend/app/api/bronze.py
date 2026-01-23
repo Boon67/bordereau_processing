@@ -275,54 +275,63 @@ async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
 
 @router.post("/discover")
 async def discover_files():
-    """Manually trigger file discovery"""
+    """Manually trigger file discovery
+    
+    This endpoint triggers the Snowflake task to discover files asynchronously.
+    It returns immediately without waiting for discovery to complete.
+    Use the /queue endpoint to check for newly discovered files.
+    """
     try:
         sf_service = SnowflakeService()
         
-        # List files in SRC stage
-        stage_files = sf_service.list_stage_files(f"@{settings.BRONZE_SCHEMA_NAME}.SRC")
+        # First, get a quick count of files in the stage
+        try:
+            stage_files = sf_service.list_stage_files(f"@{settings.BRONZE_SCHEMA_NAME}.SRC", timeout=10)
+            file_count = len(stage_files)
+        except Exception as e:
+            # If listing times out, just proceed with task execution
+            logger.warning(f"Could not list stage files: {e}")
+            file_count = "unknown"
         
-        # Insert new files into queue
-        files_discovered = 0
-        for file_info in stage_files:
-            file_name = file_info.get('name', '')
-            if not file_name:
-                continue
-                
-            # Extract TPA from path (e.g., "src/provider_a/file.csv" -> "provider_a")
-            path_parts = file_name.split('/')
-            tpa = path_parts[1] if len(path_parts) > 1 else 'unknown'
-            
-            # Determine file type
-            file_ext = file_name.lower()
-            if file_ext.endswith('.csv'):
-                file_type = 'CSV'
-            elif file_ext.endswith(('.xlsx', '.xls')):
-                file_type = 'EXCEL'
-            else:
-                file_type = 'UNKNOWN'
-            
-            # Check if file already exists in queue
-            check_query = f"""
-                SELECT COUNT(*) FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                WHERE file_name = '{file_name}'
+        # Trigger the Snowflake task to discover files asynchronously
+        # This executes the task immediately without waiting for its schedule
+        try:
+            execute_task_query = f"""
+                EXECUTE TASK {settings.BRONZE_SCHEMA_NAME}.discover_files_task
             """
-            exists = sf_service.execute_query(check_query)[0][0] > 0
+            sf_service.execute_query(execute_task_query, timeout=10)
+            logger.info(f"Triggered discover_files_task for {file_count} files in stage")
             
-            if not exists:
-                # Insert into queue
-                insert_query = f"""
-                    INSERT INTO {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                    (file_name, tpa, file_type, file_size_bytes, status)
-                    VALUES ('{file_name}', '{tpa}', '{file_type}', {file_info.get('size', 0)}, 'PENDING')
-                """
-                sf_service.execute_query(insert_query)
-                files_discovered += 1
-        
-        return {
-            "message": f"File discovery completed successfully. Discovered {files_discovered} new files.",
-            "files_discovered": files_discovered
-        }
+            return {
+                "message": f"File discovery started for approximately {file_count} file(s) in @SRC stage",
+                "status": "discovering",
+                "note": "Discovery is happening asynchronously. Check /api/bronze/queue for newly discovered files."
+            }
+        except Exception as task_error:
+            # If task execution fails (maybe task doesn't exist or is suspended),
+            # fall back to calling the procedure directly
+            logger.warning(f"Failed to execute task, falling back to direct procedure call: {task_error}")
+            
+            try:
+                # Call the discover_files procedure directly (with timeout)
+                proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.discover_files()"
+                result = sf_service.execute_query(proc_query, timeout=30)
+                result_msg = result[0][0] if result and len(result) > 0 else "Discovery completed"
+                
+                return {
+                    "message": result_msg,
+                    "status": "completed",
+                    "note": "Discovery completed synchronously (fallback mode).",
+                    "fallback_mode": True
+                }
+            except Exception as proc_error:
+                logger.error(f"Both task and procedure execution failed: {proc_error}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"File discovery failed. Please check that discover_files_task is resumed: {str(proc_error)}"
+                )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"File discovery failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -413,112 +422,76 @@ async def reprocess_file(queue_id: int):
 
 @router.post("/process")
 async def process_queue():
-    """Manually trigger queue processing"""
+    """Manually trigger file discovery and processing
+    
+    This endpoint triggers the discover_files_task which automatically triggers
+    process_files_task as its successor. This ensures both discovery and processing
+    happen in the correct order.
+    
+    Returns immediately without waiting for processing to complete.
+    Use the /queue endpoint to check processing status.
+    """
     try:
         sf_service = SnowflakeService()
         
-        # Get pending files from queue with short timeout
-        query = f"""
-            SELECT queue_id, file_name, tpa, file_type 
-            FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-            WHERE status = 'PENDING'
-            LIMIT 10
-        """
-        pending_files = sf_service.execute_query_dict(query, timeout=30)
+        # Get quick counts for informational purposes
+        try:
+            check_query = f"""
+                SELECT 
+                    COUNT(*) as pending_count,
+                    (SELECT COUNT(*) FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue WHERE status = 'PROCESSING') as processing_count
+                FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+                WHERE status = 'PENDING'
+            """
+            result = sf_service.execute_query_dict(check_query, timeout=10)
+            pending_count = result[0]['PENDING_COUNT'] if result else 0
+            processing_count = result[0]['PROCESSING_COUNT'] if result else 0
+        except Exception as e:
+            logger.warning(f"Could not get queue counts: {e}")
+            pending_count = "unknown"
+            processing_count = "unknown"
         
-        files_processed = 0
-        for file_info in pending_files:
-            queue_id = file_info['QUEUE_ID']
-            file_name = file_info['FILE_NAME']
-            tpa = file_info['TPA']
-            file_type = file_info['FILE_TYPE']
+        # Trigger discover_files_task which will automatically trigger process_files_task
+        # This ensures we discover any new files AND process all pending files
+        try:
+            execute_task_query = f"""
+                EXECUTE TASK {settings.BRONZE_SCHEMA_NAME}.discover_files_task
+            """
+            sf_service.execute_query(execute_task_query, timeout=10)
+            logger.info(f"Triggered discover_files_task (which triggers process_files_task). Pending: {pending_count}, Processing: {processing_count}")
+            
+            return {
+                "message": f"Discovery and processing started. {pending_count} pending file(s) in queue.",
+                "pending_count": pending_count,
+                "processing_count": processing_count,
+                "status": "discovering_and_processing",
+                "note": "discover_files_task will find new files, then process_files_task will process all pending files. Check /api/bronze/queue for status updates."
+            }
+        except Exception as task_error:
+            # If task execution fails, fall back to calling the discover procedure directly
+            logger.warning(f"Failed to execute discover_files_task, falling back to procedure: {task_error}")
             
             try:
-                # Update status to PROCESSING
-                logger.info(f"Processing file: {file_name} (queue_id={queue_id}, type={file_type}, tpa={tpa})")
-                update_query = f"""
-                    UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                    SET status = 'PROCESSING',
-                        processed_timestamp = CURRENT_TIMESTAMP()
-                    WHERE queue_id = {queue_id}
-                """
-                sf_service.execute_query(update_query)
+                # Call discover procedure directly (with timeout)
+                proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.discover_files()"
+                result = sf_service.execute_query(proc_query, timeout=30)
+                result_msg = result[0][0] if result and len(result) > 0 else "Discovery completed"
                 
-                # Call appropriate processing procedure
-                # Convert file_name to stage path format: src/provider_a/file.csv -> @SRC/provider_a/file.csv
-                stage_path = f"@{file_name.upper().split('/')[0]}/{'/'.join(file_name.split('/')[1:])}"
-                logger.info(f"Stage path: {stage_path}")
-                
-                if file_type == 'CSV':
-                    proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.process_single_csv_file('{stage_path}', '{tpa}')"
-                elif file_type == 'EXCEL':
-                    proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.process_single_excel_file('{stage_path}', '{tpa}')"
-                else:
-                    raise Exception(f"Unsupported file type: {file_type}")
-                
-                logger.info(f"Calling procedure: {proc_query}")
-                
-                # Execute procedure and get result with longer timeout (20 minutes for file processing)
-                # Increased from 10 to 20 minutes to handle larger files
-                result = sf_service.execute_query(proc_query, timeout=1200)
-                result_msg = result[0][0] if result and len(result) > 0 else "No result returned"
-                
-                logger.info(f"Processing result for {file_name}: {result_msg}")
-                
-                # Check if procedure returned an error (check for common error patterns)
-                if any(keyword in result_msg.upper() for keyword in ['ERROR:', 'FAILED', 'EXCEPTION']):
-                    raise Exception(result_msg)
-                
-                # Sanitize result message for SQL
-                # Replace backslashes first, then single quotes
-                safe_result_msg = result_msg.replace("\\", "\\\\").replace("'", "''")
-                # Truncate safely to 500 chars
-                if len(safe_result_msg) > 500:
-                    safe_result_msg = safe_result_msg[:497] + "..."
-                
-                # Update status to SUCCESS
-                success_query = f"""
-                    UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                    SET status = 'SUCCESS',
-                        process_result = '{safe_result_msg}',
-                        processed_timestamp = CURRENT_TIMESTAMP()
-                    WHERE queue_id = {queue_id}
-                """
-                sf_service.execute_query(success_query)
-                files_processed += 1
-                logger.info(f"Successfully processed file: {file_name}")
-                
+                return {
+                    "message": f"{result_msg}. Processing will happen via scheduled tasks.",
+                    "pending_count": pending_count,
+                    "status": "discovered",
+                    "note": "Discovery completed. Scheduled tasks will process files. Check /api/bronze/queue for status.",
+                    "fallback_mode": True
+                }
             except Exception as proc_error:
-                logger.error(f"Error processing file {file_name} (queue_id={queue_id}): {str(proc_error)}", exc_info=True)
-                
-                # Sanitize error message for SQL
-                error_str = str(proc_error)
-                # Replace backslashes first, then single quotes
-                safe_error_msg = error_str.replace("\\", "\\\\").replace("'", "''")
-                # Truncate safely to 500 chars
-                if len(safe_error_msg) > 500:
-                    safe_error_msg = safe_error_msg[:497] + "..."
-                
-                # Update status to FAILED
-                try:
-                    fail_query = f"""
-                        UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
-                        SET status = 'FAILED', 
-                            error_message = '{safe_error_msg}',
-                            processed_timestamp = CURRENT_TIMESTAMP(),
-                            retry_count = COALESCE(retry_count, 0) + 1
-                        WHERE queue_id = {queue_id}
-                    """
-                    sf_service.execute_query(fail_query)
-                    logger.info(f"Updated queue status to FAILED for {file_name}")
-                except Exception as update_error:
-                    logger.error(f"Failed to update queue status for {file_name}: {update_error}")
-                    # Continue processing other files even if update fails
-        
-        return {
-            "message": f"Queue processing completed. Processed {files_processed} files.",
-            "files_processed": files_processed
-        }
+                logger.error(f"Both task and procedure execution failed: {proc_error}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Discovery and processing failed. Please check that discover_files_task is resumed: {str(proc_error)}"
+                )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Queue processing failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -11,16 +11,17 @@ graph TD
     ROOT[deployment/] --> README[README.md<br/>This file]
     
     ROOT --> SCRIPTS[Core Deployment Scripts]
-    SCRIPTS --> S1[deploy.sh<br/>Main deployment Bronze + Silver]
-    SCRIPTS --> S2[deploy_bronze.sh<br/>Bronze layer only]
-    SCRIPTS --> S3[deploy_silver.sh<br/>Silver layer only]
-    SCRIPTS --> S4[deploy_container.sh<br/>Container Services Recommended]
+    SCRIPTS --> S1[deploy.sh / deploy.bat<br/>Main deployment Bronze + Silver + Gold]
+    SCRIPTS --> S2[deploy_bronze.sh / deploy_bronze.bat<br/>Bronze layer only]
+    SCRIPTS --> S3[deploy_silver.sh / deploy_silver.bat<br/>Silver layer only]
+    SCRIPTS --> S4[deploy_gold.sh / deploy_gold.bat<br/>Gold layer only]
+    SCRIPTS --> S5[deploy_container.sh / deploy_container.bat<br/>Container Services Recommended]
     
     ROOT --> MGMT[Management & Utilities]
     MGMT --> M1[manage_services.sh<br/>Service management Recommended]
     MGMT --> M2[test_deploy_container.sh<br/>Test container deployment]
-    MGMT --> M3[check_snow_connection.sh<br/>Connection verification]
-    MGMT --> M4[undeploy.sh<br/>Remove all resources]
+    MGMT --> M3[check_snow_connection.sh / .bat<br/>Connection verification]
+    MGMT --> M4[undeploy.sh / undeploy.bat<br/>Remove all resources]
     
     ROOT --> CONFIG[Configuration Files]
     CONFIG --> C1[default.config<br/>Default configuration]
@@ -31,7 +32,9 @@ graph TD
     DOCS --> D1[DEPLOYMENT_SNOW_CLI.md]
     DOCS --> D2[SNOWPARK_CONTAINER_DEPLOYMENT.md]
     DOCS --> D3[AUTHENTICATION_SETUP.md]
-    DOCS --> D4[... other guides]
+    DOCS --> D4[WINDOWS_DEPLOYMENT.md<br/>Windows deployment guide]
+    DOCS --> D5[WINDOWS_QUICK_REFERENCE.md<br/>Windows quick commands]
+    DOCS --> D6[... other guides]
     
     ROOT --> LEGACY[legacy/<br/>Legacy separate services not recommended]
     LEGACY --> L1[deploy_full_stack.sh]
@@ -48,11 +51,22 @@ graph TD
 
 ## Quick Start
 
+> **💻 Windows Users:** 
+> - Full Guide: [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md)
+> - Quick Commands: [WINDOWS_QUICK_REFERENCE.md](WINDOWS_QUICK_REFERENCE.md)
+
 ### 1. Deploy to Snowflake (Bronze + Silver + Gold Layers)
 
+**Linux/Mac:**
 ```bash
 cd deployment
 ./deploy.sh
+```
+
+**Windows:**
+```cmd
+cd deployment
+deploy.bat
 ```
 
 **What gets deployed:**
@@ -65,9 +79,16 @@ cd deployment
 
 Deploy both backend and frontend services:
 
+**Linux/Mac:**
 ```bash
 cd deployment
 ./deploy_container.sh
+```
+
+**Windows:**
+```cmd
+cd deployment
+deploy_container.bat
 ```
 
 **This is the recommended approach** - unified deployment, backend internal-only, more secure.
@@ -519,4 +540,4 @@ The main `deploy.sh` script includes optional container deployment:
 
 ---
 
-**Version**: 2.0 | **Last Updated**: January 21, 2026 | **Status**: ✅ Production Ready
+**Version**: 2.0 | **Last Updated**: January 22, 2026 | **Status**: ✅ Production Ready

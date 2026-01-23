@@ -66,9 +66,13 @@ def process_csv_file(session, file_path, tpa):
         
         # Prepare data for insertion
         rows_inserted = 0
+        rows_failed = 0
         for idx, row in df.iterrows():
             # Convert row to JSON
             row_json = row.to_json()
+            
+            # Escape single quotes in JSON for SQL (replace ' with '')
+            row_json_escaped = row_json.replace("'", "''")
             
             # Insert into RAW_DATA_TABLE using MERGE (deduplication)
             merge_query = f"""
@@ -78,7 +82,7 @@ def process_csv_file(session, file_path, tpa):
                         '{file_name}' AS FILE_NAME,
                         {idx + 1} AS FILE_ROW_NUMBER,
                         '{tpa}' AS TPA,
-                        PARSE_JSON('{row_json}') AS RAW_DATA,
+                        PARSE_JSON('{row_json_escaped}') AS RAW_DATA,
                         'CSV' AS FILE_TYPE
                 ) s
                 ON t.FILE_NAME = s.FILE_NAME AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER
@@ -91,9 +95,17 @@ def process_csv_file(session, file_path, tpa):
                 rows_inserted += 1
             except Exception as e:
                 # Log error but continue processing
+                rows_failed += 1
                 pass
         
-        return f"SUCCESS: Processed {rows_inserted} rows from {file_name}"
+        # Return success if at least some rows were inserted
+        if rows_inserted > 0:
+            if rows_failed > 0:
+                return f"SUCCESS: Processed {rows_inserted} rows from {file_name} ({rows_failed} rows skipped due to errors)"
+            else:
+                return f"SUCCESS: Processed {rows_inserted} rows from {file_name}"
+        else:
+            return f"ERROR: No rows inserted from {file_name}. Total rows in file: {len(df)}"
         
     except Exception as e:
         return f"ERROR: {str(e)}"
@@ -128,15 +140,21 @@ def process_excel_file(session, file_path, tpa):
         file_name = file_path.split('/')[-1]
         
         total_rows_inserted = 0
+        total_rows_failed = 0
+        total_rows_in_file = 0
         
         # Process all sheets
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
+            total_rows_in_file += len(df)
             
             # Prepare data for insertion
             for idx, row in df.iterrows():
                 # Convert row to JSON
                 row_json = row.to_json()
+                
+                # Escape single quotes in JSON for SQL (replace ' with '')
+                row_json_escaped = row_json.replace("'", "''")
                 
                 # Insert into RAW_DATA_TABLE using MERGE (deduplication)
                 # Use sheet name in row number for multi-sheet files
@@ -149,7 +167,7 @@ def process_excel_file(session, file_path, tpa):
                             '{file_name}' AS FILE_NAME,
                             '{row_number}' AS FILE_ROW_NUMBER,
                             '{tpa}' AS TPA,
-                            PARSE_JSON('{row_json}') AS RAW_DATA,
+                            PARSE_JSON('{row_json_escaped}') AS RAW_DATA,
                             'EXCEL' AS FILE_TYPE
                     ) s
                     ON t.FILE_NAME = s.FILE_NAME AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER
@@ -162,9 +180,17 @@ def process_excel_file(session, file_path, tpa):
                     total_rows_inserted += 1
                 except Exception as e:
                     # Log error but continue processing
+                    total_rows_failed += 1
                     pass
         
-        return f"SUCCESS: Processed {total_rows_inserted} rows from {file_name} ({len(excel_file.sheet_names)} sheets)"
+        # Return success if at least some rows were inserted
+        if total_rows_inserted > 0:
+            if total_rows_failed > 0:
+                return f"SUCCESS: Processed {total_rows_inserted} rows from {file_name} ({len(excel_file.sheet_names)} sheets, {total_rows_failed} rows skipped due to errors)"
+            else:
+                return f"SUCCESS: Processed {total_rows_inserted} rows from {file_name} ({len(excel_file.sheet_names)} sheets)"
+        else:
+            return f"ERROR: No rows inserted from {file_name}. Total rows in file: {total_rows_in_file}"
         
     except Exception as e:
         return f"ERROR: {str(e)}"
@@ -183,23 +209,28 @@ DECLARE
     files_discovered INTEGER DEFAULT 0;
     result_msg VARCHAR;
 BEGIN
-    -- Scan @SRC stage for new files
+    -- Scan @SRC stage for new files and insert into queue
     -- Extract TPA from path (folder name)
+    -- Use DIRECTORY table to list files
     INSERT INTO file_processing_queue (file_name, tpa, file_type, file_size_bytes, status)
     SELECT 
-        "name" AS file_name,
-        -- Extract TPA from path: @SRC/provider_a/file.csv → provider_a
-        SPLIT_PART(SPLIT_PART("name", '/', 1), '/', 1) AS tpa,
+        -- Store relative path without @SRC/ prefix
+        RELATIVE_PATH AS file_name,
+        -- Extract TPA from path: provider_a/file.csv → provider_a
+        SPLIT_PART(RELATIVE_PATH, '/', 1) AS tpa,
         CASE 
-            WHEN UPPER("name") LIKE '%.CSV' THEN 'CSV'
-            WHEN UPPER("name") LIKE '%.XLSX' THEN 'EXCEL'
-            WHEN UPPER("name") LIKE '%.XLS' THEN 'EXCEL'
+            WHEN UPPER(RELATIVE_PATH) LIKE '%.CSV' THEN 'CSV'
+            WHEN UPPER(RELATIVE_PATH) LIKE '%.XLSX' THEN 'EXCEL'
+            WHEN UPPER(RELATIVE_PATH) LIKE '%.XLS' THEN 'EXCEL'
             ELSE 'UNKNOWN'
         END AS file_type,
-        "size" AS file_size_bytes,
+        SIZE AS file_size_bytes,
         'PENDING' AS status
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID(-1)))
-    WHERE "name" NOT IN (SELECT file_name FROM file_processing_queue);
+    FROM DIRECTORY(@SRC)
+    WHERE RELATIVE_PATH NOT IN (
+        SELECT file_name 
+        FROM file_processing_queue
+    );
     
     -- Get count of files discovered
     files_discovered := SQLROWCOUNT;

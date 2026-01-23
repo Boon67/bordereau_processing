@@ -62,7 +62,7 @@ const BronzeUpload: React.FC<Props> = ({ selectedTpa, selectedTpaName }) => {
       if (processNow) {
         try {
           message.info('Triggering file discovery and processing...')
-          await apiService.discoverFiles()
+          // Only call processQueue - it triggers discover_files_task which auto-triggers process_files_task
           await apiService.processQueue()
           message.success('Processing started! Check Processing Status for updates.')
         } catch (error) {

@@ -53,19 +53,23 @@ CREATE OR REPLACE STAGE ARCHIVE
 
 
 -- ============================================
--- CREATE TPA MASTER TABLE
+-- CREATE TPA MASTER TABLE (HYBRID)
 -- ============================================
+-- Using HYBRID TABLE for fast lookups by TPA_CODE and ACTIVE status
+-- Hybrid tables support indexes for point queries and frequent updates
 
-CREATE TABLE IF NOT EXISTS TPA_MASTER (
+CREATE HYBRID TABLE IF NOT EXISTS TPA_MASTER (
     TPA_CODE VARCHAR(500) PRIMARY KEY,
     TPA_NAME VARCHAR(500) NOT NULL,
     TPA_DESCRIPTION VARCHAR(5000),
     ACTIVE BOOLEAN DEFAULT TRUE,
     CREATED_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     UPDATED_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
-    CREATED_BY VARCHAR(500) DEFAULT CURRENT_USER()
+    CREATED_BY VARCHAR(500) DEFAULT CURRENT_USER(),
+    INDEX idx_tpa_active (ACTIVE),
+    INDEX idx_tpa_name (TPA_NAME)
 )
-COMMENT = 'Master reference table for valid TPAs (Third Party Administrators). All TPAs must be registered here before processing files.';
+COMMENT = 'Master reference table for valid TPAs (Third Party Administrators). All TPAs must be registered here before processing files. HYBRID TABLE for fast lookups.';
 
 -- Insert default TPAs
 MERGE INTO TPA_MASTER t
@@ -85,8 +89,10 @@ WHEN NOT MATCHED THEN INSERT (TPA_CODE, TPA_NAME, TPA_DESCRIPTION)
     VALUES (s.TPA_CODE, s.TPA_NAME, s.TPA_DESCRIPTION);
 
 -- ============================================
--- CREATE RAW DATA TABLE
+-- CREATE RAW DATA TABLE (STANDARD WITH CLUSTERING)
 -- ============================================
+-- Using STANDARD TABLE with clustering for large-scale data storage
+-- This table will grow to millions of rows, so standard table with clustering is optimal
 
 CREATE TABLE IF NOT EXISTS RAW_DATA_TABLE (
     RECORD_ID NUMBER(38,0) AUTOINCREMENT PRIMARY KEY,
@@ -99,16 +105,16 @@ CREATE TABLE IF NOT EXISTS RAW_DATA_TABLE (
     LOADED_BY VARCHAR(500) DEFAULT CURRENT_USER(),
     CONSTRAINT uk_file_row UNIQUE (FILE_NAME, FILE_ROW_NUMBER)
 )
-COMMENT = 'Raw data storage table. Each row represents one record from a source file, stored as VARIANT (JSON). TPA is extracted from file path during ingestion.';
-
--- Add clustering for performance
-ALTER TABLE RAW_DATA_TABLE CLUSTER BY (TPA, FILE_NAME);
+CLUSTER BY (TPA, FILE_NAME, LOAD_TIMESTAMP)
+COMMENT = 'Raw data storage table. Each row represents one record from a source file, stored as VARIANT (JSON). TPA is extracted from file path during ingestion. STANDARD TABLE with clustering for large-scale storage.';
 
 -- ============================================
--- CREATE FILE PROCESSING QUEUE
+-- CREATE FILE PROCESSING QUEUE (HYBRID)
 -- ============================================
+-- Using HYBRID TABLE for fast status lookups and frequent updates
+-- Hybrid tables support indexes for efficient filtering by status, TPA, and file_name
 
-CREATE TABLE IF NOT EXISTS file_processing_queue (
+CREATE HYBRID TABLE IF NOT EXISTS file_processing_queue (
     queue_id NUMBER(38,0) AUTOINCREMENT PRIMARY KEY,
     file_name VARCHAR(500) NOT NULL UNIQUE,
     tpa VARCHAR(500) NOT NULL,  -- TPA from file path
@@ -119,12 +125,13 @@ CREATE TABLE IF NOT EXISTS file_processing_queue (
     processed_timestamp TIMESTAMP_NTZ,
     error_message VARCHAR(5000),
     process_result VARCHAR(5000),
-    retry_count NUMBER(38,0) DEFAULT 0
+    retry_count NUMBER(38,0) DEFAULT 0,
+    INDEX idx_queue_status (status),
+    INDEX idx_queue_tpa (tpa),
+    INDEX idx_queue_status_tpa (status, tpa),
+    INDEX idx_queue_discovered (discovered_timestamp)
 )
-COMMENT = 'File processing queue. Tracks status of each file from discovery to completion. Status values: PENDING, PROCESSING, SUCCESS, FAILED.';
-
--- Add index for performance
-ALTER TABLE file_processing_queue CLUSTER BY (status, tpa);
+COMMENT = 'File processing queue. Tracks status of each file from discovery to completion. Status values: PENDING, PROCESSING, SUCCESS, FAILED. HYBRID TABLE for fast status queries and updates.';
 
 -- ============================================
 -- CREATE VIEWS FOR MONITORING

@@ -71,10 +71,11 @@ show_help() {
     echo "        BRONZE_SCHEMA_NAME         - Bronze layer schema name"
     echo "        SILVER_SCHEMA_NAME         - Silver layer schema name"
     echo "        BRONZE_DISCOVERY_SCHEDULE  - Task schedule for file discovery"
+    echo "        DEPLOY_CONTAINERS          - Set to 'true' to automatically deploy to SPCS"
     echo ""
-    echo "    Note: Container deployment to SPCS is optional and will be prompted"
-    echo "          after database layers are deployed. Set AUTO_APPROVE=true to"
-    echo "          skip container deployment automatically."
+    echo "    Note: Container deployment to SPCS is optional. Set DEPLOY_CONTAINERS=true"
+    echo "          in your config file to deploy automatically, or you will be prompted"
+    echo "          after database layers are deployed."
     echo ""
     echo -e "${YELLOW}EXAMPLES:${NC}"
     echo -e "    ${CYAN}# Deploy using default connection and default.config${NC}"
@@ -403,11 +404,12 @@ echo ""
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${YELLOW}DEPLOYMENT CONFIGURATION${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-echo -e "  Connection:     ${CYAN}$CONNECTION_NAME${NC}"
-echo -e "  Database:       ${CYAN}$DATABASE${NC}"
-echo -e "  Warehouse:      ${CYAN}$WAREHOUSE${NC}"
-echo -e "  Bronze Schema:  ${CYAN}$BRONZE_SCHEMA${NC}"
-echo -e "  Silver Schema:  ${CYAN}$SILVER_SCHEMA${NC}"
+echo -e "  Connection:        ${CYAN}$CONNECTION_NAME${NC}"
+echo -e "  Database:          ${CYAN}$DATABASE${NC}"
+echo -e "  Warehouse:         ${CYAN}$WAREHOUSE${NC}"
+echo -e "  Bronze Schema:     ${CYAN}$BRONZE_SCHEMA${NC}"
+echo -e "  Silver Schema:     ${CYAN}$SILVER_SCHEMA${NC}"
+echo -e "  Deploy Containers: ${CYAN}${DEPLOY_CONTAINERS:-false}${NC}"
 echo ""
 echo -e "  ${YELLOW}Objects to be created:${NC}"
 echo -e "    ${GREEN}Database:${NC}"
@@ -415,6 +417,7 @@ echo -e "      - ${CYAN}${DATABASE}${NC}"
 echo -e "    ${GREEN}Schemas:${NC}"
 echo -e "      - ${CYAN}${DATABASE}.${BRONZE_SCHEMA}${NC}"
 echo -e "      - ${CYAN}${DATABASE}.${SILVER_SCHEMA}${NC}"
+echo -e "      - ${CYAN}${DATABASE}.GOLD${NC}"
 echo -e "    ${GREEN}Roles:${NC}"
 echo -e "      - ${CYAN}${DATABASE}_ADMIN${NC} (full admin access)"
 echo -e "      - ${CYAN}${DATABASE}_READWRITE${NC} (read/write + execute procedures)"
@@ -428,6 +431,11 @@ echo -e "    ${GREEN}Silver Layer:${NC}"
 echo -e "      - Tables: target_schemas, field_mappings, transformation_rules"
 echo -e "      - Procedures: create_silver_table, transform_bronze_to_silver, etc."
 echo -e "      - Tasks: Bronze to Silver transformation"
+echo -e "    ${GREEN}Gold Layer:${NC}"
+echo -e "      - Analytics Tables: CLAIMS_ANALYTICS_ALL, MEMBER_360_ALL, etc."
+echo -e "      - Metadata: target_schemas, quality_rules, business_metrics"
+echo -e "      - Procedures: transform_claims_analytics, run_gold_transformations, etc."
+echo -e "      - Tasks: Daily/weekly/monthly analytics refresh"
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -578,23 +586,30 @@ echo -e "${YELLOW}════════════════════�
 echo -e "${YELLOW}OPTIONAL: SNOWPARK CONTAINER SERVICES DEPLOYMENT${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "Would you like to deploy the application to Snowpark Container Services?"
-echo "This will:"
-echo "  • Build Docker images for backend and frontend"
-echo "  • Push images to Snowflake image repository"
-echo "  • Create compute pool (if needed)"
-echo "  • Deploy unified service with health checks"
-echo ""
 
-# Default to 'no' if AUTO_APPROVE is enabled (containers are optional)
-DEPLOY_CONTAINERS="n"
-if [[ "${AUTO_APPROVE}" != "true" ]]; then
-    read -p "Deploy to Snowpark Container Services? (y/n) [n]: " -n 1 -r
+# Check if DEPLOY_CONTAINERS is set in config
+if [[ "${DEPLOY_CONTAINERS}" == "true" ]]; then
+    log_message INFO "DEPLOY_CONTAINERS=true in config - deploying containers automatically"
+    DEPLOY_CONTAINERS_DECISION="y"
+else
+    echo "Would you like to deploy the application to Snowpark Container Services?"
+    echo "This will:"
+    echo "  • Build Docker images for backend and frontend"
+    echo "  • Push images to Snowflake image repository"
+    echo "  • Create compute pool (if needed)"
+    echo "  • Deploy unified service with health checks"
     echo ""
-    DEPLOY_CONTAINERS=$REPLY
+    
+    # Default to 'no' if AUTO_APPROVE is enabled (containers are optional)
+    DEPLOY_CONTAINERS_DECISION="n"
+    if [[ "${AUTO_APPROVE}" != "true" ]]; then
+        read -p "Deploy to Snowpark Container Services? (y/n) [n]: " -n 1 -r
+        echo ""
+        DEPLOY_CONTAINERS_DECISION=$REPLY
+    fi
 fi
 
-if [[ $DEPLOY_CONTAINERS =~ ^[Yy]$ ]]; then
+if [[ $DEPLOY_CONTAINERS_DECISION =~ ^[Yy]$ ]]; then
     echo ""
     echo -e "${CYAN}🐳 Deploying to Snowpark Container Services...${NC}"
     

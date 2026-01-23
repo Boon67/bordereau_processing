@@ -14,15 +14,30 @@ A modern healthcare claims data processing pipeline built with **FastAPI**, **Re
 
 ```mermaid
 graph TD
-    A[React Frontend<br/>TypeScript + Ant Design] -->|REST API| B[FastAPI Backend<br/>Python 3.10+]
-    B -->|Snowflake Connector| C[Snowflake<br/>Bronze + Silver Layers]
+    A[React Frontend<br/>TypeScript + Ant Design<br/>Port 3000 Local / 80 SPCS] -->|REST API /api/*| B[FastAPI Backend<br/>Python 3.11<br/>Port 8000]
+    B -->|Snowflake Connector| C[Snowflake Database<br/>BORDEREAU_PROCESSING_PIPELINE]
+    
+    subgraph Layers["Data Layers"]
+        Bronze[Bronze Layer<br/>Raw Data + Stages]
+        Silver[Silver Layer<br/>Cleaned Data + Schemas]
+        Gold[Gold Layer<br/>Analytics + Aggregations]
+    end
+    
+    C --> Bronze
+    Bronze -->|Tasks| Silver
+    Silver -->|Tasks| Gold
     
     style A fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
     style B fill:#009688,stroke:#333,stroke-width:2px,color:#fff
     style C fill:#29b5e8,stroke:#333,stroke-width:2px,color:#fff
+    style Bronze fill:#ffcdd2,stroke:#333,stroke-width:1px
+    style Silver fill:#bbdefb,stroke:#333,stroke-width:1px
+    style Gold fill:#fff9c4,stroke:#333,stroke-width:1px
 ```
 
 ## 🚀 Quick Start
+
+> **💻 Windows Users:** See [deployment/WINDOWS_DEPLOYMENT.md](deployment/WINDOWS_DEPLOYMENT.md) for Windows batch file deployment.
 
 ### 1. Prerequisites
 - Python 3.10+, Node.js 18+
@@ -30,9 +45,17 @@ graph TD
 - Snow CLI installed (recommended)
 
 ### 2. Deploy to Snowflake
+
+**Linux/Mac:**
 ```bash
 cd deployment
 ./deploy.sh  # Deploys Bronze + Silver layers
+```
+
+**Windows:**
+```cmd
+cd deployment
+deploy.bat
 ```
 
 ### 3. Start the Application
@@ -52,23 +75,61 @@ cd deployment
 
 **For detailed setup instructions, see [Quick Start Guide](QUICK_START.md)**
 
+## 📖 Documentation
+
+**Quick Links:**
+- **[DOCS.md](DOCS.md)** - Complete documentation map
+- **[QUICK_START.md](QUICK_START.md)** - Get started in 10 minutes
+- **[docs/README.md](docs/README.md)** - Documentation hub
+- **[deployment/README.md](deployment/README.md)** - Deployment guide
+
 ## 📦 Deployment Options
 
 ### Local Development
+**Linux/Mac:**
 ```bash
 ./start.sh  # Starts both backend and frontend
 ```
 
+**Windows:** Start backend and frontend separately in two terminals:
+```cmd
+REM Terminal 1 - Backend
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+REM Terminal 2 - Frontend
+cd frontend
+npm install
+npm run dev
+```
+
 ### Snowflake (Bronze + Silver Layers)
+**Linux/Mac:**
 ```bash
 cd deployment
 ./deploy.sh
 ```
 
+**Windows:**
+```cmd
+cd deployment
+deploy.bat
+```
+
 ### Snowpark Container Services (Full Stack)
+**Linux/Mac:**
 ```bash
 cd deployment
 ./deploy_container.sh  # Deploys backend + frontend with health checks
+```
+
+**Windows:**
+```cmd
+cd deployment
+deploy_container.bat
 ```
 
 **Features**: 
@@ -91,24 +152,26 @@ cd deployment/legacy
 
 ```mermaid
 graph LR
-    A[bordereau/] --> B[backend/<br/>FastAPI backend]
-    A --> C[frontend/<br/>React frontend]
-    A --> D[bronze/<br/>Bronze layer SQL]
-    A --> E[silver/<br/>Silver layer SQL]
-    A --> F[deployment/<br/>Deployment scripts]
-    A --> G[docker/<br/>Docker configs]
-    A --> H[docs/<br/>Documentation hub]
-    A --> I[sample_data/<br/>Sample files]
+    A[bordereau/] --> B[backend/<br/>FastAPI + Snowflake]
+    A --> C[frontend/<br/>React + TypeScript]
+    A --> D[bronze/<br/>Bronze layer SQL<br/>8 tables]
+    A --> E[silver/<br/>Silver layer SQL<br/>12 hybrid tables]
+    A --> F[gold/<br/>Gold layer SQL<br/>12 tables]
+    A --> G[deployment/<br/>Scripts + Fixes]
+    A --> H[docker/<br/>Dockerfiles + Specs]
+    A --> I[docs/<br/>Architecture + Guides]
+    A --> J[sample_data/<br/>Generators + Samples]
     
     style A fill:#f9f,stroke:#333,stroke-width:3px
     style B fill:#009688,stroke:#333,stroke-width:2px,color:#fff
     style C fill:#61dafb,stroke:#333,stroke-width:2px,color:#000
-    style D fill:#cd7f32,stroke:#333,stroke-width:2px,color:#fff
-    style E fill:#c0c0c0,stroke:#333,stroke-width:2px,color:#000
-    style F fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
-    style G fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
-    style H fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
-    style I fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
+    style D fill:#ffcdd2,stroke:#333,stroke-width:2px,color:#000
+    style E fill:#bbdefb,stroke:#333,stroke-width:2px,color:#000
+    style F fill:#fff9c4,stroke:#333,stroke-width:2px,color:#000
+    style G fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style H fill:#2196f3,stroke:#333,stroke-width:2px,color:#fff
+    style I fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
+    style J fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ## 📖 Documentation
@@ -158,7 +221,9 @@ See [backend/README.md](backend/README.md) for setup details.
 **Frontend issues**: Clear cache, reinstall node_modules  
 **Connection issues**: Verify Snow CLI connection with `snow connection test`
 
-**For detailed troubleshooting, see [docs/README.md](docs/README.md)**
+**For detailed troubleshooting:**
+- [Documentation Hub](docs/README.md) - Full documentation and guides
+- [Deployment Guide](deployment/README.md) - Deployment troubleshooting
 
 ## 📝 License
 
@@ -166,4 +231,4 @@ Proprietary software. All rights reserved.
 
 ---
 
-**Version**: 1.0 | **Last Updated**: January 19, 2026 | **Status**: ✅ Production Ready
+**Version**: 1.1 | **Last Updated**: January 22, 2026 | **Status**: ✅ Production Ready

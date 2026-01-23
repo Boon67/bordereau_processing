@@ -193,7 +193,9 @@ async def create_silver_table(table_name: str, tpa: str):
     """
     try:
         sf_service = SnowflakeService()
-        result = sf_service.execute_procedure("create_silver_table", table_name, tpa)
+        # Use fully qualified procedure name
+        proc_name = f"{settings.SILVER_SCHEMA_NAME}.create_silver_table"
+        result = sf_service.execute_procedure(proc_name, table_name, tpa)
         
         # Extract the actual table name from the result
         physical_table_name = f"{tpa.upper()}_{table_name.upper()}"

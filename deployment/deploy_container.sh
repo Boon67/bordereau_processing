@@ -587,20 +587,33 @@ get_service_endpoint() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        # Use snow CLI to get service info
-        local service_info=$(snow spcs service list \
+        # Use snow CLI to get service endpoints (this returns public ingress URLs)
+        local endpoints=$(snow spcs service list-endpoints "${SERVICE_NAME}" \
             --database "${DATABASE_NAME}" \
             --schema "${SCHEMA_NAME}" \
-            --format json 2>/dev/null | \
-            jq -r ".[] | select(.name == \"${SERVICE_NAME}\")" 2>/dev/null)
+            --format json 2>/dev/null)
         
-        if [ -n "$service_info" ]; then
-            # Extract DNS name from service info
-            local dns_name=$(echo "$service_info" | jq -r '.dns_name // empty' 2>/dev/null)
+        if [ -n "$endpoints" ] && [ "$endpoints" != "[]" ]; then
+            # Extract the public ingress URL for the 'app' endpoint
+            local ingress_url=$(echo "$endpoints" | jq -r '.[] | select(.name == "app") | .ingress_url // empty' 2>/dev/null)
             
-            if [ -n "$dns_name" ] && [ "$dns_name" != "null" ] && [ "$dns_name" != "" ]; then
-                SERVICE_ENDPOINT="https://${dns_name}"
-                log_success "Service endpoint: $SERVICE_ENDPOINT"
+            if [ -n "$ingress_url" ] && [ "$ingress_url" != "null" ] && [ "$ingress_url" != "" ]; then
+                SERVICE_ENDPOINT="$ingress_url"
+                log_success "Public endpoint: $SERVICE_ENDPOINT"
+                
+                # Also get internal DNS name for reference
+                local service_info=$(snow spcs service list \
+                    --database "${DATABASE_NAME}" \
+                    --schema "${SCHEMA_NAME}" \
+                    --format json 2>/dev/null | \
+                    jq -r ".[] | select(.name == \"${SERVICE_NAME}\")" 2>/dev/null)
+                local dns_name=$(echo "$service_info" | jq -r '.dns_name // empty' 2>/dev/null)
+                
+                if [ -n "$dns_name" ] && [ "$dns_name" != "null" ]; then
+                    SERVICE_INTERNAL_ENDPOINT="https://${dns_name}"
+                    log_info "Internal endpoint: $SERVICE_INTERNAL_ENDPOINT"
+                fi
+                
                 return 0
             fi
         fi
@@ -615,7 +628,7 @@ get_service_endpoint() {
     
     log_warning "Endpoint not available yet. Service may still be starting."
     log_info "Check status with: cd deployment && ./manage_services.sh status"
-    log_info "Or use: snow spcs service list --database ${DATABASE_NAME} --schema ${SCHEMA_NAME}"
+    log_info "Or use: snow spcs service list-endpoints ${SERVICE_NAME} --database ${DATABASE_NAME} --schema ${SCHEMA_NAME}"
 }
 
 # ============================================
@@ -634,21 +647,27 @@ print_summary() {
     echo "     • Frontend proxies /api/* to backend"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  📍 ENDPOINT"
+    echo "  📍 ENDPOINTS"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     if [ -n "$SERVICE_ENDPOINT" ]; then
-        echo "  Application (Frontend):"
+        echo "  🌐 Public URL (Internet-accessible):"
         echo -e "    ${GREEN}${SERVICE_ENDPOINT}${NC}"
         echo ""
-        echo "  API (via Frontend proxy):"
+        echo "  API Health Check:"
         echo -e "    ${BLUE}${SERVICE_ENDPOINT}/api/health${NC}"
         echo ""
-        echo "  Test:"
+        if [ -n "$SERVICE_INTERNAL_ENDPOINT" ]; then
+            echo "  🔒 Internal URL (SPCS only):"
+            echo -e "    ${CYAN}${SERVICE_INTERNAL_ENDPOINT}${NC}"
+            echo ""
+        fi
+        echo "  Test from anywhere:"
         echo -e "    ${CYAN}curl ${SERVICE_ENDPOINT}/api/health${NC}"
     else
         echo -e "  ${YELLOW}Endpoint provisioning in progress...${NC}"
         echo "  Check status: ./manage_services.sh status"
+        echo "  Or run: snow spcs service list-endpoints ${SERVICE_NAME}"
     fi
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

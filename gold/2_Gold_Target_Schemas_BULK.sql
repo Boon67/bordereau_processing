@@ -9,6 +9,52 @@ USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
 USE SCHEMA GOLD;
 
 -- ============================================
+-- HELPER PROCEDURE: Create Target Schema
+-- ============================================
+
+CREATE OR REPLACE PROCEDURE create_gold_target_schema(
+    p_table_name VARCHAR,
+    p_tpa VARCHAR,
+    p_description VARCHAR,
+    p_business_owner VARCHAR DEFAULT 'Data Analytics Team',
+    p_refresh_frequency VARCHAR DEFAULT 'DAILY',
+    p_retention_days NUMBER DEFAULT 2555
+)
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    -- Use MERGE to handle existing records
+    MERGE INTO target_schemas AS t
+    USING (
+        SELECT 
+            :p_table_name AS table_name,
+            :p_tpa AS tpa,
+            :p_description AS description,
+            :p_business_owner AS business_owner,
+            'CONFIDENTIAL' AS data_classification,
+            :p_refresh_frequency AS refresh_frequency,
+            :p_retention_days AS retention_days,
+            TRUE AS is_active
+    ) AS s
+    ON t.table_name = s.table_name AND t.tpa = s.tpa
+    WHEN MATCHED THEN
+        UPDATE SET
+            t.description = s.description,
+            t.business_owner = s.business_owner,
+            t.refresh_frequency = s.refresh_frequency,
+            t.retention_days = s.retention_days,
+            t.updated_at = CURRENT_TIMESTAMP()
+    WHEN NOT MATCHED THEN
+        INSERT (table_name, tpa, description, business_owner, data_classification, refresh_frequency, retention_days, is_active)
+        VALUES (s.table_name, s.tpa, s.description, s.business_owner, s.data_classification, s.refresh_frequency, s.retention_days, s.is_active);
+
+    RETURN 'Target schema created/updated: ' || :p_table_name || ' for TPA: ' || :p_tpa;
+END;
+$$;
+
+-- ============================================
 -- TARGET SCHEMA 1: CLAIMS_ANALYTICS
 -- ============================================
 

@@ -220,35 +220,56 @@ const BronzeTasks: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       width: 120,
-      render: (_: any, record: Task) => (
-        <Space>
-          {record.state.toLowerCase() === 'suspended' ? (
-            <Tooltip title="Start this task">
+      render: (_: any, record: Task) => {
+        const taskHasPredecessors = hasPredecessors(record)
+        const isSuspended = record.state.toLowerCase() === 'suspended'
+        
+        // Tasks with predecessors cannot be manually started
+        if (taskHasPredecessors && isSuspended) {
+          return (
+            <Tooltip title="This task runs automatically after its predecessor completes. It cannot be started manually.">
               <Button
                 type="primary"
                 size="small"
                 icon={<PlayCircleOutlined />}
-                onClick={() => handleResumeTask(record.name)}
-                loading={actionLoading === record.name}
+                disabled
               >
                 Start
               </Button>
             </Tooltip>
-          ) : (
-            <Tooltip title="Stop this task">
-              <Button
-                danger
-                size="small"
-                icon={<PauseCircleOutlined />}
-                onClick={() => handleSuspendTask(record.name)}
-                loading={actionLoading === record.name}
-              >
-                Stop
-              </Button>
-            </Tooltip>
-          )}
-        </Space>
-      ),
+          )
+        }
+        
+        return (
+          <Space>
+            {isSuspended ? (
+              <Tooltip title="Start this task">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<PlayCircleOutlined />}
+                  onClick={() => handleResumeTask(record.name)}
+                  loading={actionLoading === record.name}
+                >
+                  Start
+                </Button>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Stop this task">
+                <Button
+                  danger
+                  size="small"
+                  icon={<PauseCircleOutlined />}
+                  onClick={() => handleSuspendTask(record.name)}
+                  loading={actionLoading === record.name}
+                >
+                  Stop
+                </Button>
+              </Tooltip>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
@@ -291,7 +312,10 @@ const BronzeTasks: React.FC = () => {
           <div><strong>File Movement Task:</strong> Moves processed files from SRC to COMPLETED or ERROR stages.</div>
           <div><strong>Archive Task:</strong> Archives old files from COMPLETED and ERROR stages to ARCHIVE.</div>
           <div style={{ marginTop: 8, color: '#666' }}>
-            <InfoCircleOutlined /> <em>Tasks with predecessors (shown with info icon) cannot have their schedule edited.</em>
+            <InfoCircleOutlined /> <em>Tasks with predecessors (shown with info icon) run automatically after their predecessor completes.</em>
+          </div>
+          <div style={{ color: '#666' }}>
+            <InfoCircleOutlined /> <em>Dependent tasks cannot be started manually or have their schedule edited.</em>
           </div>
         </Space>
       </Card>

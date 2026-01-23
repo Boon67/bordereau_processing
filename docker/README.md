@@ -388,8 +388,7 @@ snow spcs service logs SERVICE_NAME \
 ### Related Documentation
 
 - [Deployment Guide](../deployment/README.md)
-- [Readiness Probe Fix](../deployment/fixes/READINESS_PROBE_FIX.md)
-- [Upgrade Method](../UPGRADE_METHOD_SUMMARY.md)
+- [Container Deployment](../deployment/SNOWPARK_CONTAINER_DEPLOYMENT.md)
 - [Snowflake SPCS Docs](https://docs.snowflake.com/en/developer-guide/snowpark-container-services)
 
 ### Configuration Files

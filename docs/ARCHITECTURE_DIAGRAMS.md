@@ -1,8 +1,8 @@
 # System Architecture Documentation
 
 **Bordereau Processing Pipeline**  
-**Version**: 2.0  
-**Date**: January 19, 2026
+**Version**: 2.1  
+**Date**: January 22, 2026
 
 ---
 
@@ -397,42 +397,54 @@ graph TB
     style External fill:#e8f5e9
 ```
 
-### Snowpark Container Services (SPCS)
+### Snowpark Container Services (SPCS) - Current Deployment
 
 ```mermaid
 graph TB
     subgraph SPCS["Snowpark Container Services"]
-        subgraph ComputePool["Compute Pool"]
-            Pool[CPU_X64_XS<br/>1 CPU, 2GB RAM]
+        subgraph ComputePool["Compute Pool: BORDEREAU_COMPUTE_POOL"]
+            Pool[CPU_X64_XS<br/>Min: 1 node, Max: 3 nodes<br/>Auto-suspend: 10 min]
         end
         
-        subgraph ImageRepo["Image Repository"]
-            Repo[BORDEREAU_IMAGES<br/>Frontend + Backend Images]
+        subgraph ImageRepo["Image Repository: BORDEREAU_REPOSITORY"]
+            Repo[Registry: sfsenorthamerica-tboon-aws2<br/>Backend Image: bordereau_backend:latest<br/>Frontend Image: bordereau_frontend:latest]
         end
         
-        subgraph Service["Unified Service"]
-            FEPod[Frontend Pod<br/>0.4 CPU<br/>512MB RAM]
-            BEPod[Backend Pod<br/>0.6 CPU<br/>1GB RAM]
+        subgraph Service["Unified Service: BORDEREAU_APP"]
+            FEPod[Frontend Container<br/>nginx:alpine<br/>Port 80 PUBLIC<br/>Proxies /api/* to backend]
+            BEPod[Backend Container<br/>python:3.11-slim<br/>Port 8000 INTERNAL<br/>FastAPI + Snowflake Connector]
         end
         
         subgraph Network["Networking"]
-            Ingress[Service Endpoint<br/>HTTPS]
-            Internal[Internal Network]
+            Ingress[Public Endpoint<br/>HTTPS<br/>j6cmn2pb-*.snowflakecomputing.app]
+            Internal[Internal Network<br/>backend:8000]
         end
     end
     
-    subgraph Database["Same Database"]
-        DB[BORDEREAU_PROCESSING_PIPELINE<br/>Bronze, Silver, Gold]
+    subgraph Database["Database: BORDEREAU_PROCESSING_PIPELINE"]
+        Bronze[BRONZE Schema<br/>8 Tables + Stages]
+        Silver[SILVER Schema<br/>12 Hybrid Tables]
+        Gold[GOLD Schema<br/>12 Tables + 4 Analytics]
     end
     
     Pool --> Service
     Repo --> Service
     Service --> Network
-    Service -->|Direct Access| DB
+    Ingress --> FEPod
+    FEPod -->|Internal Proxy| BEPod
+    BEPod -->|Direct SQL| Database
     
     style SPCS fill:#fff4e1
     style Database fill:#e8f5e9
+    style Service fill:#e3f2fd
 ```
+
+**Key Features**:
+- ✅ **Unified Service**: Single service with both frontend and backend
+- ✅ **Secure**: Backend is internal-only, not publicly accessible
+- ✅ **Efficient**: Frontend proxies API calls to backend
+- ✅ **Scalable**: Min 1, Max 3 instances with auto-scaling
+- ✅ **Cost-Effective**: Auto-suspend after 10 minutes of inactivity
 
 ---
 

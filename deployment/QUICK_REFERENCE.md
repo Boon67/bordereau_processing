@@ -271,7 +271,6 @@ snow connection test --connection DEPLOYMENT
 - **Full Guide**: [README.md](README.md)
 - **Bulk Optimization**: [../gold/BULK_LOAD_OPTIMIZATION.md](../gold/BULK_LOAD_OPTIMIZATION.md)
 - **Script Improvements**: [DEPLOY_SCRIPT_IMPROVEMENTS.md](DEPLOY_SCRIPT_IMPROVEMENTS.md)
-- **Fix Documentation**: [fixes/README.md](fixes/README.md)
 - **Legacy Guide**: [legacy/README.md](legacy/README.md)
 
 ## ⚡ Pro Tips

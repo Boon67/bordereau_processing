@@ -1,6 +1,10 @@
 # Bordereau Processing Pipeline - Documentation Hub
 
+**Last Updated**: January 22, 2026
+
 Welcome to the complete documentation for the Bordereau Processing Pipeline, a modern healthcare claims data processing system built with FastAPI, React, and Snowflake.
+
+> **📖 Quick Navigation**: See [DOCS.md](../DOCS.md) for a complete documentation map
 
 ## 📚 Table of Contents
 
@@ -24,8 +28,7 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 | [Quick Reference](../deployment/QUICK_REFERENCE.md) | Quick deployment commands |
 | [Migration Guide](../MIGRATION_GUIDE.md) | Streamlit to React migration notes |
 | [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization (v4.0) |
-| [Documentation Cleanup v3.4](DOCUMENTATION_CLEANUP_SUMMARY.md) | Major cleanup summary |
-| [Documentation Cleanup v4.0](DOCUMENTATION_CLEANUP_V4.md) | ⭐ Final consolidation |
+| [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Complete documentation map |
 
 ### Visual Documentation (with Mermaid Diagrams) 📊
 
