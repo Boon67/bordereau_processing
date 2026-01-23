@@ -44,9 +44,10 @@ AS
 $$
 import pandas as pd
 import io
+from snowflake.snowpark.types import StructType, StructField, StringType, IntegerType, VariantType
 
 def process_csv_file(session, file_path, tpa):
-    """Process a single CSV file and load into RAW_DATA_TABLE"""
+    """Process a single CSV file and load into RAW_DATA_TABLE using bulk operations"""
     
     try:
         # Read file from stage
@@ -64,48 +65,77 @@ def process_csv_file(session, file_path, tpa):
         # Get file name from path
         file_name = file_path.split('/')[-1]
         
-        # Prepare data for insertion
-        rows_inserted = 0
-        rows_failed = 0
+        # Check if file already processed (prevent duplicate processing)
+        check_query = f"""
+            SELECT COUNT(*) as cnt 
+            FROM RAW_DATA_TABLE 
+            WHERE FILE_NAME = '{file_name}'
+        """
+        existing_count = session.sql(check_query).collect()[0]['CNT']
+        
+        if existing_count > 0:
+            return f"SKIPPED: File {file_name} already processed ({existing_count} rows exist)"
+        
+        # Prepare data for bulk insertion
+        rows_data = []
         for idx, row in df.iterrows():
-            # Convert row to JSON
+            # Convert row to JSON string
             row_json = row.to_json()
             
-            # Escape single quotes in JSON for SQL (replace ' with '')
-            row_json_escaped = row_json.replace("'", "''")
-            
-            # Insert into RAW_DATA_TABLE using MERGE (deduplication)
-            merge_query = f"""
-                MERGE INTO RAW_DATA_TABLE t
-                USING (
-                    SELECT 
-                        '{file_name}' AS FILE_NAME,
-                        {idx + 1} AS FILE_ROW_NUMBER,
-                        '{tpa}' AS TPA,
-                        PARSE_JSON('{row_json_escaped}') AS RAW_DATA,
-                        'CSV' AS FILE_TYPE
-                ) s
-                ON t.FILE_NAME = s.FILE_NAME AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER
-                WHEN NOT MATCHED THEN INSERT (FILE_NAME, FILE_ROW_NUMBER, TPA, RAW_DATA, FILE_TYPE)
-                    VALUES (s.FILE_NAME, s.FILE_ROW_NUMBER, s.TPA, s.RAW_DATA, s.FILE_TYPE)
-            """
-            
-            try:
-                session.sql(merge_query).collect()
-                rows_inserted += 1
-            except Exception as e:
-                # Log error but continue processing
-                rows_failed += 1
-                pass
+            rows_data.append({
+                'FILE_NAME': file_name,
+                'FILE_ROW_NUMBER': idx + 1,
+                'TPA': tpa,
+                'RAW_DATA': row_json,
+                'FILE_TYPE': 'CSV'
+            })
         
-        # Return success if at least some rows were inserted
-        if rows_inserted > 0:
-            if rows_failed > 0:
-                return f"SUCCESS: Processed {rows_inserted} rows from {file_name} ({rows_failed} rows skipped due to errors)"
-            else:
-                return f"SUCCESS: Processed {rows_inserted} rows from {file_name}"
-        else:
-            return f"ERROR: No rows inserted from {file_name}. Total rows in file: {len(df)}"
+        if not rows_data:
+            return f"ERROR: No data rows found in {file_name}"
+        
+        # Create temporary table with data
+        temp_table_name = f"TEMP_CSV_LOAD_{session.sql('SELECT UUID_STRING()').collect()[0][0].replace('-', '_')}"
+        
+        # Define schema for temp table
+        schema = StructType([
+            StructField("FILE_NAME", StringType()),
+            StructField("FILE_ROW_NUMBER", IntegerType()),
+            StructField("TPA", StringType()),
+            StructField("RAW_DATA", StringType()),
+            StructField("FILE_TYPE", StringType())
+        ])
+        
+        # Create DataFrame from rows_data
+        temp_df = session.create_dataframe(rows_data, schema)
+        
+        # Write to temporary table
+        temp_df.write.mode("overwrite").save_as_table(temp_table_name, table_type="temporary")
+        
+        # Bulk MERGE from temp table to RAW_DATA_TABLE
+        merge_query = f"""
+            MERGE INTO RAW_DATA_TABLE t
+            USING (
+                SELECT 
+                    FILE_NAME,
+                    FILE_ROW_NUMBER,
+                    TPA,
+                    PARSE_JSON(RAW_DATA) AS RAW_DATA,
+                    FILE_TYPE
+                FROM {temp_table_name}
+            ) s
+            ON t.FILE_NAME = s.FILE_NAME AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER
+            WHEN NOT MATCHED THEN 
+                INSERT (FILE_NAME, FILE_ROW_NUMBER, TPA, RAW_DATA, FILE_TYPE)
+                VALUES (s.FILE_NAME, s.FILE_ROW_NUMBER, s.TPA, s.RAW_DATA, s.FILE_TYPE)
+        """
+        
+        result = session.sql(merge_query).collect()
+        rows_inserted = result[0]['number of rows inserted']
+        
+        # Clean up temp table
+        session.sql(f"DROP TABLE IF EXISTS {temp_table_name}").collect()
+        
+        return f"SUCCESS: Processed {rows_inserted} rows from {file_name}"
         
     except Exception as e:
         return f"ERROR: {str(e)}"

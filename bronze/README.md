@@ -135,28 +135,34 @@ SELECT * FROM TPA_MASTER;
 
 ### Deployment Steps
 
-1. **Database and RBAC Setup** (`1_Setup_Database_Roles.sql`)
+1. **Container Service Privileges** (`0_Setup_Container_Privileges.sql`) - **OPTIONAL, ONE-TIME**
+   - **Only needed if deploying Snowpark Container Services**
+   - Grants account-level privileges (CREATE COMPUTE POOL, BIND SERVICE ENDPOINT)
+   - **Requires ACCOUNTADMIN role**
+   - Run once before first container deployment
+
+2. **Database and RBAC Setup** (`1_Setup_Database_Roles.sql`)
    - Creates database and schemas
    - Sets up three-tier role hierarchy
    - Grants permissions
 
-2. **Schema and Tables** (`2_Bronze_Schema_Tables.sql`)
+3. **Schema and Tables** (`2_Bronze_Schema_Tables.sql`)
    - Creates stages
-   - Creates tables
+   - Creates tables (hybrid and standard)
    - Creates views
    - Inserts default TPAs
 
-3. **Stored Procedures** (`3_Bronze_Setup_Logic.sql`)
+4. **Stored Procedures** (`3_Bronze_Setup_Logic.sql`)
    - Creates file processing procedures
-   - Python procedures for CSV/Excel parsing
+   - Python procedures for CSV/Excel parsing (optimized with bulk operations)
    - SQL procedures for file management
 
-4. **Tasks** (`4_Bronze_Tasks.sql`)
+5. **Tasks** (`4_Bronze_Tasks.sql`)
    - Creates task pipeline
    - Sets up dependencies
    - Configures schedules
 
-5. **Task Privileges** (`Fix_Task_Privileges.sql`)
+6. **Task Privileges** (`Fix_Task_Privileges.sql`)
    - Grants EXECUTE TASK privilege (requires ACCOUNTADMIN)
 
 ## Usage

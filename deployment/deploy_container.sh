@@ -93,7 +93,7 @@ print_header() {
 # ============================================
 
 validate_prerequisites() {
-    log_step "1/10: Validating prerequisites..."
+    log_step "1/11: Validating prerequisites..."
     
     local missing_commands=()
     
@@ -127,11 +127,38 @@ validate_prerequisites() {
 }
 
 # ============================================
+# Grant Container Service Privileges
+# ============================================
+
+grant_container_privileges() {
+    log_step "2/11: Granting container service privileges..."
+    
+    log_info "Granting CREATE SERVICE privileges to ${SNOWFLAKE_ROLE}..."
+    
+    cat > /tmp/grant_container_privs.sql << EOF
+-- Use SYSADMIN to grant container service privileges
+USE ROLE SYSADMIN;
+
+-- Grant CREATE SERVICE privilege on the schema
+GRANT CREATE SERVICE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+
+-- Note: BIND SERVICE ENDPOINT and CREATE COMPUTE POOL must be granted by ACCOUNTADMIN
+-- These should be granted once during initial setup via bronze/1_Setup_Database_Roles.sql
+EOF
+    
+    execute_sql_file /tmp/grant_container_privs.sql || {
+        log_warning "Some privileges may already be granted (this is OK)"
+    }
+    
+    log_success "Container service privileges granted"
+}
+
+# ============================================
 # Create Compute Pool
 # ============================================
 
 create_compute_pool() {
-    log_step "2/10: Creating compute pool..."
+    log_step "3/11: Creating compute pool..."
     
     # Check if compute pool exists
     local pool_exists=$(snow sql -q "SHOW COMPUTE POOLS LIKE '${COMPUTE_POOL_NAME}'" \
@@ -139,15 +166,29 @@ create_compute_pool() {
     
     if [ "$pool_exists" -gt 0 ]; then
         log_info "Compute pool already exists: $COMPUTE_POOL_NAME"
+        
+        # Ensure permissions are granted even if pool exists
+        log_info "Granting permissions on existing compute pool..."
+        cat > /tmp/grant_pool_perms.sql << EOF
+USE ROLE SYSADMIN;
+
+-- Grant permissions on compute pool to admin role
+GRANT USAGE ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+GRANT MONITOR ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+GRANT OPERATE ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+EOF
+        execute_sql_file /tmp/grant_pool_perms.sql || {
+            log_warning "Failed to grant permissions (may already exist)"
+        }
+        
         return 0
     fi
     
     log_info "Creating compute pool: $COMPUTE_POOL_NAME"
     
     cat > /tmp/create_pool.sql << EOF
-USE ROLE ${SNOWFLAKE_ROLE};
-USE DATABASE ${DATABASE_NAME};
-USE SCHEMA ${SCHEMA_NAME};
+-- Create compute pool with SYSADMIN
+USE ROLE SYSADMIN;
 
 CREATE COMPUTE POOL ${COMPUTE_POOL_NAME}
     MIN_NODES = 1
@@ -156,6 +197,16 @@ CREATE COMPUTE POOL ${COMPUTE_POOL_NAME}
     AUTO_RESUME = TRUE
     AUTO_SUSPEND_SECS = 3600
     COMMENT = 'Compute pool for Bordereau unified service';
+
+-- Grant permissions to admin role
+GRANT USAGE ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+GRANT MONITOR ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+GRANT OPERATE ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+
+-- Switch back to admin role
+USE ROLE ${SNOWFLAKE_ROLE};
+USE DATABASE ${DATABASE_NAME};
+USE SCHEMA ${SCHEMA_NAME};
 EOF
     
     execute_sql_file /tmp/create_pool.sql || {
@@ -163,7 +214,7 @@ EOF
         exit 1
     }
     
-    log_success "Compute pool created: $COMPUTE_POOL_NAME"
+    log_success "Compute pool created and permissions granted: $COMPUTE_POOL_NAME"
 }
 
 # ============================================
@@ -171,7 +222,7 @@ EOF
 # ============================================
 
 create_image_repository() {
-    log_step "3/10: Creating image repository..."
+    log_step "4/11: Creating image repository..."
     
     # Check if repository exists
     local repo_exists=$(snow sql -q "SHOW IMAGE REPOSITORIES LIKE '${REPOSITORY_NAME}'" \
@@ -179,18 +230,40 @@ create_image_repository() {
     
     if [ "$repo_exists" -gt 0 ]; then
         log_info "Image repository already exists: $REPOSITORY_NAME"
+        
+        # Ensure permissions are granted even if repository exists
+        log_info "Granting permissions on existing image repository..."
+        cat > /tmp/grant_repo_perms.sql << EOF
+USE ROLE SYSADMIN;
+USE DATABASE ${DATABASE_NAME};
+USE SCHEMA ${SCHEMA_NAME};
+
+-- Grant permissions on image repository to admin role
+GRANT READ, WRITE ON IMAGE REPOSITORY ${REPOSITORY_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+EOF
+        execute_sql_file /tmp/grant_repo_perms.sql || {
+            log_warning "Failed to grant permissions (may already exist)"
+        }
+        
         return 0
     fi
     
     log_info "Creating image repository: $REPOSITORY_NAME"
     
     cat > /tmp/create_repo.sql << EOF
-USE ROLE ${SNOWFLAKE_ROLE};
+-- Use SYSADMIN to create image repository
+USE ROLE SYSADMIN;
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
 
 CREATE IMAGE REPOSITORY ${REPOSITORY_NAME}
     COMMENT = 'Container images for Bordereau unified service';
+
+-- Grant permissions to admin role
+GRANT READ, WRITE ON IMAGE REPOSITORY ${REPOSITORY_NAME} TO ROLE ${SNOWFLAKE_ROLE};
+
+-- Switch back to admin role
+USE ROLE ${SNOWFLAKE_ROLE};
 EOF
     
     execute_sql_file /tmp/create_repo.sql || {
@@ -198,7 +271,7 @@ EOF
         exit 1
     }
     
-    log_success "Image repository created: $REPOSITORY_NAME"
+    log_success "Image repository created and permissions granted: $REPOSITORY_NAME"
 }
 
 # ============================================
@@ -206,7 +279,7 @@ EOF
 # ============================================
 
 get_repository_url() {
-    log_step "4/10: Getting repository URL..."
+    log_step "5/11: Getting repository URL..."
     
     local repo_url=$(snow spcs image-repository url "${REPOSITORY_NAME}" \
         --connection DEPLOYMENT \
@@ -227,7 +300,7 @@ get_repository_url() {
 # ============================================
 
 docker_login() {
-    log_step "5/10: Logging into Docker registry..."
+    log_step "6/11: Logging into Docker registry..."
     
     snow spcs image-registry login --connection DEPLOYMENT || {
         log_error "Docker login failed"
@@ -242,7 +315,7 @@ docker_login() {
 # ============================================
 
 build_backend_image() {
-    log_step "6/10: Building backend Docker image..."
+    log_step "7/11: Building backend Docker image..."
     
     local full_image_name="${REPOSITORY_URL}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
     
@@ -274,7 +347,7 @@ build_backend_image() {
 # ============================================
 
 build_frontend_image() {
-    log_step "7/10: Building frontend Docker image..."
+    log_step "8/11: Building frontend Docker image..."
     
     local full_image_name="${REPOSITORY_URL}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
     
@@ -388,7 +461,7 @@ EOF
 # ============================================
 
 push_images() {
-    log_step "8/10: Pushing Docker images..."
+    log_step "9/11: Pushing Docker images..."
     
     local backend_image="${REPOSITORY_URL}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
     local frontend_image="${REPOSITORY_URL}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
@@ -413,7 +486,7 @@ push_images() {
 # ============================================
 
 create_service_spec() {
-    log_step "9/10: Creating unified service specification..."
+    log_step "10/11: Creating unified service specification..."
     
     cat > /tmp/unified_service_spec.yaml << EOF
 spec:
@@ -472,7 +545,7 @@ EOF
 # ============================================
 
 deploy_service() {
-    log_step "10/10: Deploying unified service..."
+    log_step "11/11: Deploying unified service..."
     
     # Create stage
     log_info "Creating stage for service specifications..."
@@ -696,6 +769,7 @@ print_summary() {
 main() {
     print_header
     validate_prerequisites
+    grant_container_privileges
     create_compute_pool
     create_image_repository
     get_repository_url

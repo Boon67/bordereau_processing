@@ -233,6 +233,23 @@ GRANT USAGE ON WAREHOUSE IDENTIFIER($WAREHOUSE_NAME)
 -- This is handled in Fix_Task_Privileges.sql
 
 -- ============================================
+-- CONTAINER SERVICE PRIVILEGES (ACCOUNTADMIN ONLY)
+-- ============================================
+-- Note: These privileges can only be granted by ACCOUNTADMIN
+-- Run this section manually with ACCOUNTADMIN role if deploying containers
+
+-- USE ROLE ACCOUNTADMIN;
+-- 
+-- -- Grant CREATE COMPUTE POOL privilege (account-level)
+-- GRANT CREATE COMPUTE POOL ON ACCOUNT TO ROLE IDENTIFIER($ADMIN_ROLE_NAME);
+-- 
+-- -- Grant BIND SERVICE ENDPOINT privilege (account-level)
+-- GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE IDENTIFIER($ADMIN_ROLE_NAME);
+--
+-- -- Note: After compute pools and image repositories are created by SYSADMIN,
+-- -- SYSADMIN can grant USAGE/MONITOR/OPERATE permissions to the admin role
+
+-- ============================================
 -- SET DEFAULT CONTEXT
 -- ============================================
 

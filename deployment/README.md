@@ -77,6 +77,21 @@ deploy.bat
 
 ### 2. Deploy Container Services to SPCS (Recommended)
 
+#### Prerequisites (One-Time Setup)
+
+**IMPORTANT:** Before deploying containers for the first time, you must grant account-level privileges using ACCOUNTADMIN:
+
+```bash
+# Run this ONCE with ACCOUNTADMIN role
+snow sql -f bronze/0_Setup_Container_Privileges.sql \
+  --connection DEPLOYMENT \
+  -D DATABASE_NAME=BORDEREAU_PROCESSING_PIPELINE
+```
+
+This grants the admin role permission to create compute pools and bind service endpoints.
+
+#### Deploy Services
+
 Deploy both backend and frontend services:
 
 **Linux/Mac:**

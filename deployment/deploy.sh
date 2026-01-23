@@ -98,17 +98,19 @@ show_help() {
     echo "    - Connection must have SYSADMIN and SECURITYADMIN roles"
     echo "    - EXECUTE TASK privilege on SYSADMIN (script will attempt to grant)"
     echo "    - Warehouse must exist and be accessible"
+    echo "    - For containers: CREATE COMPUTE POOL and BIND SERVICE ENDPOINT (script will check)"
     echo ""
     echo -e "${YELLOW}DEPLOYMENT PROCESS:${NC}"
     echo "    1. Validates Snowflake CLI connection"
     echo "    2. Checks required roles (SYSADMIN, SECURITYADMIN)"
     echo "    3. Verifies warehouse exists"
     echo "    4. Checks/grants EXECUTE TASK privilege"
-    echo "    5. Displays configuration and prompts for confirmation"
-    echo "    6. Deploys Bronze layer (schemas, tables, procedures, tasks)"
-    echo "    7. Deploys Silver layer (schemas, tables, procedures, tasks)"
-    echo "    8. Deploys Gold layer (schemas, tables, procedures, tasks)"
-    echo "    9. Optionally deploys to Snowpark Container Services (SPCS)"
+    echo "    5. Checks container service privileges (for SPCS deployment)"
+    echo "    6. Displays configuration and prompts for confirmation"
+    echo "    7. Deploys Bronze layer (schemas, tables, procedures, tasks)"
+    echo "    8. Deploys Silver layer (schemas, tables, procedures, tasks)"
+    echo "    9. Deploys Gold layer (schemas, tables, procedures, tasks)"
+    echo "    10. Optionally deploys to Snowpark Container Services (SPCS)"
     echo ""
     echo -e "${YELLOW}OUTPUT:${NC}"
     echo "    Deployment logs are saved to: logs/deployment_YYYYMMDD_HHMMSS.log"
@@ -510,6 +512,65 @@ else
     log_message SUCCESS "EXECUTE TASK privilege verified for SYSADMIN"
 fi
 
+# Check Container Service privileges for admin role (if deploying containers)
+log_message INFO "Checking container service privileges..."
+
+ADMIN_ROLE_NAME="${DATABASE_NAME}_ADMIN"
+
+# Check if CREATE COMPUTE POOL is granted
+CREATE_COMPUTE_POOL_GRANTED=$(snow sql --connection "$CONNECTION_NAME" --format json -q "SHOW GRANTS TO ROLE ${ADMIN_ROLE_NAME}" 2>/dev/null | jq -r '.[] | select(.privilege == "CREATE COMPUTE POOL" and .granted_on == "ACCOUNT") | .privilege' 2>/dev/null || echo "")
+
+# Check if BIND SERVICE ENDPOINT is granted
+BIND_ENDPOINT_GRANTED=$(snow sql --connection "$CONNECTION_NAME" --format json -q "SHOW GRANTS TO ROLE ${ADMIN_ROLE_NAME}" 2>/dev/null | jq -r '.[] | select(.privilege == "BIND SERVICE ENDPOINT" and .granted_on == "ACCOUNT") | .privilege' 2>/dev/null || echo "")
+
+if [[ -z "$CREATE_COMPUTE_POOL_GRANTED" ]] || [[ -z "$BIND_ENDPOINT_GRANTED" ]]; then
+    log_message WARNING "Container service privileges not fully granted to ${ADMIN_ROLE_NAME}"
+    
+    if [[ -z "$CREATE_COMPUTE_POOL_GRANTED" ]]; then
+        log_message WARNING "  Missing: CREATE COMPUTE POOL ON ACCOUNT"
+    fi
+    
+    if [[ -z "$BIND_ENDPOINT_GRANTED" ]]; then
+        log_message WARNING "  Missing: BIND SERVICE ENDPOINT ON ACCOUNT"
+    fi
+    
+    log_message INFO "These privileges are required for Snowpark Container Services deployment"
+    log_message INFO "To grant these privileges, run the following SQL as ACCOUNTADMIN:"
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}USE ROLE ACCOUNTADMIN;${NC}"
+    
+    if [[ -z "$CREATE_COMPUTE_POOL_GRANTED" ]]; then
+        echo -e "${CYAN}GRANT CREATE COMPUTE POOL ON ACCOUNT TO ROLE SYSADMIN;${NC}"
+    fi
+    
+    if [[ -z "$BIND_ENDPOINT_GRANTED" ]]; then
+        echo -e "${CYAN}GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE SYSADMIN;${NC}"
+    fi
+    
+    echo ""
+    echo -e "${CYAN}-- Then SYSADMIN can grant to admin role:${NC}"
+    echo -e "${CYAN}USE ROLE SYSADMIN;${NC}"
+    
+    if [[ -z "$CREATE_COMPUTE_POOL_GRANTED" ]]; then
+        echo -e "${CYAN}GRANT CREATE COMPUTE POOL ON ACCOUNT TO ROLE ${ADMIN_ROLE_NAME};${NC}"
+    fi
+    
+    if [[ -z "$BIND_ENDPOINT_GRANTED" ]]; then
+        echo -e "${CYAN}GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE ${ADMIN_ROLE_NAME};${NC}"
+    fi
+    
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    log_message INFO "Or run: snow sql -f bronze/0_Setup_Container_Privileges.sql --connection $CONNECTION_NAME -D DATABASE_NAME=$DATABASE_NAME"
+    echo ""
+    log_message WARNING "Container deployment will be skipped if these privileges are not granted"
+    log_message INFO "You can continue with Bronze/Silver/Gold deployment and add containers later"
+    echo ""
+else
+    log_message SUCCESS "Container service privileges verified for ${ADMIN_ROLE_NAME}"
+fi
+
 # Deploy Bronze Layer
 echo ""
 echo -e "${CYAN}🥉 Deploying Bronze Layer...${NC}"
@@ -592,20 +653,27 @@ if [[ "${DEPLOY_CONTAINERS}" == "true" ]]; then
     log_message INFO "DEPLOY_CONTAINERS=true in config - deploying containers automatically"
     DEPLOY_CONTAINERS_DECISION="y"
 else
-    echo "Would you like to deploy the application to Snowpark Container Services?"
-    echo "This will:"
-    echo "  • Build Docker images for backend and frontend"
-    echo "  • Push images to Snowflake image repository"
-    echo "  • Create compute pool (if needed)"
-    echo "  • Deploy unified service with health checks"
-    echo ""
-    
-    # Default to 'no' if AUTO_APPROVE is enabled (containers are optional)
-    DEPLOY_CONTAINERS_DECISION="n"
-    if [[ "${AUTO_APPROVE}" != "true" ]]; then
-        read -p "Deploy to Snowpark Container Services? (y/n) [n]: " -n 1 -r
+    # Check if container privileges are available before prompting
+    if [[ -z "$CREATE_COMPUTE_POOL_GRANTED" ]] || [[ -z "$BIND_ENDPOINT_GRANTED" ]]; then
+        log_message INFO "Skipping container deployment prompt (privileges not granted)"
+        log_message INFO "Run bronze/0_Setup_Container_Privileges.sql to enable container deployment"
+        DEPLOY_CONTAINERS_DECISION="n"
+    else
+        echo "Would you like to deploy the application to Snowpark Container Services?"
+        echo "This will:"
+        echo "  • Build Docker images for backend and frontend"
+        echo "  • Push images to Snowflake image repository"
+        echo "  • Create compute pool (if needed)"
+        echo "  • Deploy unified service with health checks"
         echo ""
-        DEPLOY_CONTAINERS_DECISION=$REPLY
+        
+        # Default to 'no' if AUTO_APPROVE is enabled (containers are optional)
+        DEPLOY_CONTAINERS_DECISION="n"
+        if [[ "${AUTO_APPROVE}" != "true" ]]; then
+            read -p "Deploy to Snowpark Container Services? (y/n) [n]: " -n 1 -r
+            echo ""
+            DEPLOY_CONTAINERS_DECISION=$REPLY
+        fi
     fi
 fi
 
