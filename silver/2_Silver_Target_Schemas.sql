@@ -29,62 +29,68 @@ USE SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
 
 CREATE OR REPLACE PROCEDURE create_silver_table(table_name VARCHAR, tpa VARCHAR)
 RETURNS VARCHAR
-LANGUAGE SQL
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.11'
+PACKAGES = ('snowflake-snowpark-python')
+HANDLER = 'create_silver_table'
 AS
 $$
-DECLARE
-    full_table_name VARCHAR;
-    create_sql VARCHAR;
-    column_defs VARCHAR DEFAULT '';
-    result_msg VARCHAR;
-BEGIN
-    -- Build full table name with TPA prefix
-    full_table_name := UPPER(:tpa) || '_' || UPPER(:table_name);
+def create_silver_table(session, table_name, tpa):
+    """Create a Silver table from schema metadata"""
     
-    -- Build column definitions from target_schemas
-    FOR COL_RECORD IN (
+    table_name_upper = table_name.upper()
+    tpa_upper = tpa.upper()
+    full_table_name = f"{tpa_upper}_{table_name_upper}"
+    
+    # Get column definitions from target_schemas
+    query = f"""
         SELECT 
             COLUMN_NAME,
             DATA_TYPE,
             NULLABLE,
             DEFAULT_VALUE
         FROM target_schemas
-        WHERE table_name = UPPER(:table_name)
-          AND tpa = :tpa
+        WHERE table_name = '{table_name_upper}'
+          AND tpa = '{tpa}'
           AND active = TRUE
         ORDER BY schema_id
-    ) DO
-        IF (column_defs != '') THEN
-            column_defs := column_defs || ', ';
-        END IF;
+    """
+    
+    columns = session.sql(query).collect()
+    
+    if not columns:
+        return f"ERROR: No columns defined for table {table_name} and TPA {tpa}"
+    
+    # Build column definitions
+    column_defs = []
+    for col in columns:
+        col_def = f"{col['COLUMN_NAME']} {col['DATA_TYPE']}"
         
-        column_defs := column_defs || COL_RECORD.COLUMN_NAME || ' ' || COL_RECORD.DATA_TYPE;
+        if not col['NULLABLE']:
+            col_def += " NOT NULL"
         
-        IF (NOT COL_RECORD.NULLABLE) THEN
-            column_defs := column_defs || ' NOT NULL';
-        END IF;
+        if col['DEFAULT_VALUE']:
+            default_val = col['DEFAULT_VALUE']
+            # Check if it's a function call (contains parentheses) or a number
+            if '(' in default_val or default_val.replace('.', '').replace('-', '').isdigit():
+                col_def += f" DEFAULT {default_val}"
+            else:
+                # It's a string literal, needs quotes
+                col_def += f" DEFAULT '{default_val}'"
         
-        IF (COL_RECORD.DEFAULT_VALUE IS NOT NULL) THEN
-            column_defs := column_defs || ' DEFAULT ' || COL_RECORD.DEFAULT_VALUE;
-        END IF;
-    END FOR;
+        column_defs.append(col_def)
     
-    IF (column_defs = '') THEN
-        RETURN 'ERROR: No columns defined for table ' || :table_name || ' and TPA ' || :tpa;
-    END IF;
+    # Add metadata columns
+    column_defs.append(f"_TPA VARCHAR(100) DEFAULT '{tpa}'")
+    column_defs.append("_BATCH_ID VARCHAR(100)")
+    column_defs.append("_LOAD_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()")
+    column_defs.append("_LOADED_BY VARCHAR(500) DEFAULT CURRENT_USER()")
     
-    -- Add standard metadata columns
-    column_defs := column_defs || ', _BATCH_ID VARCHAR(100)';
-    column_defs := column_defs || ', _LOAD_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()';
-    column_defs := column_defs || ', _LOADED_BY VARCHAR(500) DEFAULT CURRENT_USER()';
+    # Create table
+    create_sql = f"CREATE TABLE IF NOT EXISTS {full_table_name} ({', '.join(column_defs)})"
+    session.sql(create_sql).collect()
     
-    -- Create table
-    create_sql := 'CREATE TABLE IF NOT EXISTS ' || full_table_name || ' (' || column_defs || ')';
-    EXECUTE IMMEDIATE :create_sql;
-    
-    result_msg := 'Successfully created table: ' || full_table_name;
-    RETURN result_msg;
-END;
+    return f"Successfully created table: {full_table_name} ({len(columns)} columns + 4 metadata columns)"
 $$;
 
 -- ============================================

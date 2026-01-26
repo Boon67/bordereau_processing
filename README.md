@@ -80,6 +80,7 @@ deploy.bat
 **Quick Links:**
 - **[DOCS.md](DOCS.md)** - Complete documentation map
 - **[QUICK_START.md](QUICK_START.md)** - Get started in 10 minutes
+- **[RECENT_FIXES.md](RECENT_FIXES.md)** - Latest fixes and enhancements
 - **[docs/README.md](docs/README.md)** - Documentation hub
 - **[docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md)** - Complete implementation history
 - **[deployment/README.md](deployment/README.md)** - Deployment guide

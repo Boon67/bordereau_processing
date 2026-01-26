@@ -528,9 +528,9 @@ def move_processed_files(session):
             copy_cmd = f"COPY FILES INTO {dest_path} FROM {src_path}"
             session.sql(copy_cmd).collect()
             
-            # Note: We don't remove from @SRC to avoid file movement issues
-            # Files remain in @SRC as the source of truth
-            # A separate cleanup task can archive old files later
+            # Remove file from @SRC after successful copy
+            remove_cmd = f"REMOVE {src_path}"
+            session.sql(remove_cmd).collect()
             
             files_moved += 1
             
@@ -614,9 +614,9 @@ def move_failed_files(session):
             copy_cmd = f"COPY FILES INTO {dest_path} FROM {src_path}"
             session.sql(copy_cmd).collect()
             
-            # Note: We don't remove from @SRC to avoid file movement issues
-            # Files remain in @SRC as the source of truth
-            # A separate cleanup task can archive old files later
+            # Remove file from @SRC after successful copy
+            remove_cmd = f"REMOVE {src_path}"
+            session.sql(remove_cmd).collect()
             
             files_moved += 1
         except Exception as e:

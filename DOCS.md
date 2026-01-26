@@ -15,6 +15,7 @@ All documentation is organized into clear categories for easy navigation.
 |----------|-------------|
 | [README.md](README.md) | Project overview, features, and quick start |
 | [QUICK_START.md](QUICK_START.md) | 10-minute quick start guide |
+| [RECENT_FIXES.md](RECENT_FIXES.md) | Latest fixes and enhancements (consolidated) |
 | [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) | Complete implementation history |
 
 ### 📖 Core Documentation
