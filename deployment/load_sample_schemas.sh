@@ -37,25 +37,35 @@ echo ""
 
 # Step 2: Upload to Snowflake
 echo -e "${YELLOW}[2/3]${NC} Uploading schemas to Snowflake..."
-if snow sql -q "
+UPLOAD_OUTPUT=$(snow sql -q "
 USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
 USE SCHEMA SILVER;
 CREATE STAGE IF NOT EXISTS SILVER_CONFIG;
 PUT file://${PROJECT_ROOT}/sample_data/config/silver_target_schemas.csv @SILVER_CONFIG/ AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-" --connection "$CONNECTION_NAME" > /dev/null 2>&1; then
+" --connection "$CONNECTION_NAME" 2>&1)
+UPLOAD_EXIT_CODE=$?
+
+if [[ $UPLOAD_EXIT_CODE -eq 0 ]]; then
     echo -e "${GREEN}✓ Schemas uploaded to @SILVER_CONFIG/${NC}"
 else
     echo -e "${RED}✗ Failed to upload schemas${NC}"
+    echo -e "${RED}Error output:${NC}"
+    echo "$UPLOAD_OUTPUT"
     exit 1
 fi
 echo ""
 
 # Step 3: Load into target_schemas table
 echo -e "${YELLOW}[3/3]${NC} Loading schemas into database..."
-if snow sql -f "${PROJECT_ROOT}/sample_data/config/load_sample_schemas.sql" --connection "$CONNECTION_NAME" > /dev/null 2>&1; then
+LOAD_OUTPUT=$(snow sql -f "${PROJECT_ROOT}/sample_data/config/load_sample_schemas.sql" --connection "$CONNECTION_NAME" 2>&1)
+LOAD_EXIT_CODE=$?
+
+if [[ $LOAD_EXIT_CODE -eq 0 ]]; then
     echo -e "${GREEN}✓ Schemas loaded successfully${NC}"
 else
     echo -e "${RED}✗ Failed to load schemas${NC}"
+    echo -e "${RED}Error output:${NC}"
+    echo "$LOAD_OUTPUT"
     exit 1
 fi
 echo ""

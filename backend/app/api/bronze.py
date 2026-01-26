@@ -8,9 +8,11 @@ from typing import List, Optional
 import tempfile
 import os
 import logging
+import traceback
 
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
+from app.utils.logging_utils import SnowflakeLogger, log_exception
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,16 +27,26 @@ async def upload_file(
         # Validate file extension
         file_ext = os.path.splitext(file.filename)[1].lower()
         if file_ext not in settings.ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File type {file_ext} not allowed. Allowed types: {settings.ALLOWED_EXTENSIONS}"
+            error_msg = f"File type {file_ext} not allowed. Allowed types: {settings.ALLOWED_EXTENSIONS}"
+            
+            # Log validation error
+            SnowflakeLogger.log_error(
+                source='bronze.upload',
+                error_type='ValidationError',
+                error_message=error_msg,
+                context={'file_name': file.filename, 'file_ext': file_ext, 'tpa': tpa},
+                tpa_code=tpa
             )
+            
+            raise HTTPException(status_code=400, detail=error_msg)
         
         # Save file temporarily with original filename
         temp_dir = tempfile.gettempdir()
         tmp_path = os.path.join(temp_dir, file.filename)
         
         content = await file.read()
+        file_size = len(content)
+        
         with open(tmp_path, 'wb') as tmp_file:
             tmp_file.write(content)
         
@@ -44,18 +56,53 @@ async def upload_file(
             stage_path = f"@{settings.BRONZE_SCHEMA_NAME}.SRC/{tpa}/"
             sf_service.upload_file_to_stage(tmp_path, stage_path)
             
+            # Log successful upload
+            SnowflakeLogger.log_application_event(
+                level='INFO',
+                source='bronze.upload',
+                message=f'File uploaded successfully: {file.filename}',
+                details={
+                    'file_name': file.filename,
+                    'size_bytes': file_size,
+                    'stage_path': stage_path
+                },
+                tpa_code=tpa
+            )
+            
+            logger.info(f"File uploaded: {file.filename} ({file_size} bytes) to {stage_path}")
+            
             return {
                 "message": f"File uploaded successfully to {stage_path}",
                 "file_name": file.filename,
                 "tpa": tpa,
-                "size": len(content)
+                "size": file_size
             }
         finally:
             # Clean up temp file
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
             
+    except HTTPException:
+        # Re-raise HTTP exceptions (already logged above)
+        raise
     except Exception as e:
-        logger.error(f"File upload failed: {str(e)}")
+        # Log unexpected errors to Snowflake
+        error_context = {
+            'file_name': file.filename if file else 'unknown',
+            'tpa': tpa,
+            'error_type': type(e).__name__
+        }
+        
+        SnowflakeLogger.log_error(
+            source='bronze.upload',
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            context=error_context,
+            tpa_code=tpa
+        )
+        
+        logger.error(f"File upload failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/queue")

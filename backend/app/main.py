@@ -32,12 +32,15 @@ app = FastAPI(
 )
 
 # Configure CORS
+# In SPCS, the ingress proxy handles authentication via cookies
+# We need to allow credentials to be sent with requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Expose all headers including Set-Cookie
 )
 
 # Add logging middleware

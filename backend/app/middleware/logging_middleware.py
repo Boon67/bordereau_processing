@@ -33,25 +33,34 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         params = dict(request.query_params) if request.query_params else None
         
         # Try to extract request body (for POST/PUT requests)
+        # IMPORTANT: Skip body reading for file uploads (multipart/form-data)
+        # as it consumes the stream and prevents FastAPI from reading the file
         body = None
         if method in ['POST', 'PUT', 'PATCH']:
-            try:
-                # Store body for later use
-                body_bytes = await request.body()
-                # Try to parse as JSON
-                if body_bytes:
-                    try:
-                        body = json.loads(body_bytes.decode('utf-8'))
-                    except:
-                        body = {'raw': body_bytes.decode('utf-8', errors='ignore')[:500]}
-                
-                # Create a new request with the body
-                async def receive():
-                    return {'type': 'http.request', 'body': body_bytes}
-                
-                request._receive = receive
-            except Exception as e:
-                logger.debug(f"Could not read request body: {e}")
+            content_type = request.headers.get('content-type', '')
+            
+            # Only read body for JSON/form data, not for file uploads
+            if 'multipart/form-data' not in content_type:
+                try:
+                    # Store body for later use
+                    body_bytes = await request.body()
+                    # Try to parse as JSON
+                    if body_bytes:
+                        try:
+                            body = json.loads(body_bytes.decode('utf-8'))
+                        except:
+                            body = {'raw': body_bytes.decode('utf-8', errors='ignore')[:500]}
+                    
+                    # Create a new request with the body
+                    async def receive():
+                        return {'type': 'http.request', 'body': body_bytes}
+                    
+                    request._receive = receive
+                except Exception as e:
+                    logger.debug(f"Could not read request body: {e}")
+            else:
+                # For file uploads, just note it in the log
+                body = {'note': 'File upload - body not logged'}
         
         # Process request
         response = None

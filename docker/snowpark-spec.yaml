@@ -24,9 +24,22 @@ spec:
       limits:
         cpu: "2"
         memory: 4Gi
+    startupProbe:
+      port: 8000
+      path: /api/health
+      initialDelaySeconds: 10    # Wait 10s before first startup check
+      periodSeconds: 5            # Check every 5 seconds
+      timeoutSeconds: 3           # Timeout after 3 seconds
+      successThreshold: 1         # 1 success = started
+      failureThreshold: 12        # 12 failures = failed to start (60s total)
     readinessProbe:
       port: 8000
       path: /api/health
+      initialDelaySeconds: 5     # After startup, wait 5s before readiness checks
+      periodSeconds: 10           # Check every 10 seconds
+      timeoutSeconds: 5           # Timeout after 5 seconds
+      successThreshold: 1         # 1 successful probe = ready
+      failureThreshold: 3         # 3 failed probes = not ready (30s total)
   
   # Frontend container (public endpoint, proxies to backend)
   - name: frontend

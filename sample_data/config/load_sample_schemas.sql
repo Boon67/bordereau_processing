@@ -10,7 +10,12 @@ CREATE STAGE IF NOT EXISTS SILVER_CONFIG;
 -- Upload the CSV file first:
 -- snow stage put sample_data/config/silver_target_schemas.csv @SILVER_CONFIG/ --connection DEPLOYMENT
 
+-- Clear existing data to avoid duplicate key violations
+-- (target_schemas has a unique key on TABLE_NAME, COLUMN_NAME, TPA)
+TRUNCATE TABLE target_schemas;
+
 -- Load schemas from CSV
+-- Note: Hybrid tables require ON_ERROR = ABORT_STATEMENT (not CONTINUE)
 COPY INTO target_schemas (
     TABLE_NAME,
     TPA,
@@ -39,7 +44,7 @@ FILE_FORMAT = (
     TRIM_SPACE = TRUE
     ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
 )
-ON_ERROR = CONTINUE;
+ON_ERROR = ABORT_STATEMENT;
 
 -- Verify loaded schemas
 SELECT 

@@ -51,7 +51,18 @@ class Settings(BaseSettings):
     
     # API Configuration
     API_PREFIX: str = "/api"
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS origins - supports both local dev and SPCS deployment
+    # Can be overridden via CORS_ORIGINS env var (comma-separated)
+    # In SPCS, frontend and backend are same origin, so CORS is less of an issue
+    # but we still need proper configuration for the ingress proxy
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS_ORIGINS string into list"""
+        if isinstance(self.CORS_ORIGINS, list):
+            return self.CORS_ORIGINS
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100 MB
