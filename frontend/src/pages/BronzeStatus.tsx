@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Button, Table, Tag, Statistic, Row, Col, Select, Space, message } from 'antd'
+import { Card, Typography, Button, Table, Tag, Statistic, Row, Col, Select, Space, message, Popconfirm } from 'antd'
 import { 
   ReloadOutlined, 
   CheckCircleOutlined, 
@@ -8,7 +8,8 @@ import {
   ClockCircleOutlined,
   FileTextOutlined,
   RiseOutlined,
-  RedoOutlined
+  RedoOutlined,
+  DeleteOutlined
 } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FileQueueItem } from '../services/api'
@@ -67,6 +68,17 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
       loadQueue() // Refresh the queue
     } catch (error: any) {
       message.error(`Failed to reprocess file: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
+  const handleDeleteFileData = async (fileName: string) => {
+    try {
+      const result = await apiService.deleteFileData(fileName)
+      message.success(result.message || `Data deleted for file: ${fileName}`)
+      loadQueue() // Refresh the queue
+      loadStats() // Refresh stats
+    } catch (error: any) {
+      message.error(`Failed to delete file data: ${error.response?.data?.detail || error.message}`)
     }
   }
 
@@ -169,10 +181,10 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
-      render: (_: any, record: FileQueueItem) => {
-        if (record.STATUS === 'FAILED') {
-          return (
+      width: 180,
+      render: (_: any, record: FileQueueItem) => (
+        <Space>
+          {record.STATUS === 'FAILED' && (
             <Button
               type="link"
               size="small"
@@ -181,10 +193,28 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
             >
               Reprocess
             </Button>
-          )
-        }
-        return null
-      },
+          )}
+          {record.STATUS === 'SUCCESS' && (
+            <Popconfirm
+              title="Delete File Data"
+              description={`This will delete all ${record.PROCESS_RESULT?.match(/\d+/)?.[0] || 'data'} rows for this file. Continue?`}
+              onConfirm={() => handleDeleteFileData(record.FILE_NAME)}
+              okText="Yes, Delete"
+              cancelText="Cancel"
+              okButtonProps={{ danger: true }}
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              >
+                Delete Data
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      ),
     },
   ]
 

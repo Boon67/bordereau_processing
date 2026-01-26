@@ -17,6 +17,7 @@ import {
   UserOutlined,
   SafetyOutlined,
   CloudServerOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons'
 import BronzeUpload from './pages/BronzeUpload'
 import BronzeStatus from './pages/BronzeStatus'
@@ -32,6 +33,7 @@ import GoldMetrics from './pages/GoldMetrics'
 import GoldQuality from './pages/GoldQuality'
 import GoldRules from './pages/GoldRules'
 import TPAManagement from './pages/TPAManagement'
+import AdminLogs from './pages/AdminLogs'
 import { apiService, UserInfo } from './services/api'
 import type { TPA } from './types'
 import './App.css'
@@ -123,8 +125,12 @@ function App() {
               })
             }
           }
+          // Return a resolved promise to close the modal
+          return Promise.resolve()
         } catch (error: any) {
           message.error(error.response?.data?.detail || 'Failed to clear data')
+          // Return a rejected promise to keep the modal open on error
+          return Promise.reject()
         }
       },
     })
@@ -231,6 +237,11 @@ function App() {
           label: 'TPA Management',
         },
         {
+          key: '/admin/logs',
+          icon: <FileTextOutlined />,
+          label: 'System Logs',
+        },
+        {
           key: 'clear-data',
           icon: <DeleteOutlined />,
           label: 'Clear All Data',
@@ -309,6 +320,7 @@ function App() {
               <Route path="/gold/quality" element={<GoldQuality selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/gold/rules" element={<GoldRules selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/admin/tpas" element={<TPAManagement onTpaChange={loadTpas} />} />
+              <Route path="/admin/logs" element={<AdminLogs />} />
             </Routes>
           </Content>
           <Footer

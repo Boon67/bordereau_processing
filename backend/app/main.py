@@ -9,9 +9,10 @@ from fastapi.responses import JSONResponse
 from typing import List, Optional
 import logging
 
-from app.api import bronze, silver, gold, tpa, user
+from app.api import bronze, silver, gold, tpa, user, logs
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
+from app.middleware.logging_middleware import LoggingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -39,12 +40,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add logging middleware
+app.add_middleware(LoggingMiddleware)
+
 # Include routers
 app.include_router(tpa.router, prefix="/api/tpas", tags=["TPA"])
 app.include_router(bronze.router, prefix="/api/bronze", tags=["Bronze"])
 app.include_router(silver.router, prefix="/api/silver", tags=["Silver"])
 app.include_router(gold.router, prefix="/api/gold", tags=["Gold"])
 app.include_router(user.router, prefix="/api/user", tags=["User"])
+app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])
 
 @app.get("/")
 async def root():

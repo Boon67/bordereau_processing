@@ -76,6 +76,7 @@ execute_sql() {
 # Execute Bronze SQL scripts in order
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 execute_sql "${PROJECT_ROOT}/bronze/1_Setup_Database_Roles.sql"
+execute_sql "${PROJECT_ROOT}/bronze/0_Setup_Logging.sql"
 execute_sql "${PROJECT_ROOT}/bronze/2_Bronze_Schema_Tables.sql"
 execute_sql "${PROJECT_ROOT}/bronze/3_Bronze_Setup_Logic.sql"
 execute_sql "${PROJECT_ROOT}/bronze/4_Bronze_Tasks.sql"

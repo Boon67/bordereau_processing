@@ -21,11 +21,13 @@ interface BronzeStagesProps {
 const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [srcFiles, setSrcFiles] = useState<StageFile[]>([])
+  const [processingFiles, setProcessingFiles] = useState<StageFile[]>([])
   const [completedFiles, setCompletedFiles] = useState<StageFile[]>([])
   const [errorFiles, setErrorFiles] = useState<StageFile[]>([])
   const [archiveFiles, setArchiveFiles] = useState<StageFile[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<Record<string, React.Key[]>>({
     SRC: [],
+    PROCESSING: [],
     COMPLETED: [],
     ERROR: [],
     ARCHIVE: []
@@ -41,6 +43,7 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
     try {
       await Promise.all([
         loadStage('SRC', setSrcFiles),
+        loadStage('PROCESSING', setProcessingFiles),
         loadStage('COMPLETED', setCompletedFiles),
         loadStage('ERROR', setErrorFiles),
         loadStage('ARCHIVE', setArchiveFiles),
@@ -112,6 +115,7 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
 
   const reloadStage = (stageName: string) => {
     if (stageName === 'SRC') loadStage('SRC', setSrcFiles)
+    else if (stageName === 'PROCESSING') loadStage('PROCESSING', setProcessingFiles)
     else if (stageName === 'COMPLETED') loadStage('COMPLETED', setCompletedFiles)
     else if (stageName === 'ERROR') loadStage('ERROR', setErrorFiles)
     else if (stageName === 'ARCHIVE') loadStage('ARCHIVE', setArchiveFiles)
@@ -195,7 +199,8 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
   const getStageInfo = (stageName: string, files: StageFile[]) => {
     const totalSize = files.reduce((sum, f) => sum + f.size, 0)
     const descriptions: Record<string, string> = {
-      SRC: 'Source files waiting to be processed',
+      SRC: 'Source files (uploaded, queued, or being processed)',
+      PROCESSING: 'Reserved for future use',
       COMPLETED: 'Successfully processed files',
       ERROR: 'Files that failed processing',
       ARCHIVE: 'Archived files (older than 30 days)',
@@ -281,6 +286,66 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
               rowSelection={{
                 selectedRowKeys: selectedRowKeys.SRC,
                 onChange: (keys) => setSelectedRowKeys(prev => ({ ...prev, SRC: keys })),
+              }}
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane 
+          tab={
+            <span>
+              <FolderOutlined />
+              PROCESSING ({processingFiles.length})
+            </span>
+          } 
+          key="PROCESSING"
+        >
+          <Card>
+            <div style={{ marginBottom: 16 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <div><strong>Description:</strong> {getStageInfo('PROCESSING', processingFiles).description}</div>
+                </Space>
+                <Space>
+                  <div><strong>Files:</strong> {getStageInfo('PROCESSING', processingFiles).count}</div>
+                  <div><strong>Total Size:</strong> {getStageInfo('PROCESSING', processingFiles).totalSize}</div>
+                </Space>
+                {selectedRowKeys.PROCESSING.length > 0 && (
+                  <Space>
+                    <Popconfirm
+                      title={`Delete ${selectedRowKeys.PROCESSING.length} selected file(s)?`}
+                      description="This will remove the files from the stage and update the processing queue."
+                      onConfirm={() => handleBulkDelete('PROCESSING')}
+                      okText="Yes, delete all"
+                      cancelText="Cancel"
+                    >
+                      <Button 
+                        type="primary" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        loading={bulkDeleting}
+                      >
+                        Delete Selected ({selectedRowKeys.PROCESSING.length})
+                      </Button>
+                    </Popconfirm>
+                    <Button 
+                      onClick={() => setSelectedRowKeys(prev => ({ ...prev, PROCESSING: [] }))}
+                    >
+                      Clear Selection
+                    </Button>
+                  </Space>
+                )}
+              </Space>
+            </div>
+            <Table
+              columns={getColumns('PROCESSING')}
+              dataSource={processingFiles}
+              rowKey="name"
+              loading={loading}
+              pagination={{ pageSize: 20, showSizeChanger: true }}
+              rowSelection={{
+                selectedRowKeys: selectedRowKeys.PROCESSING,
+                onChange: (keys) => setSelectedRowKeys(prev => ({ ...prev, PROCESSING: keys })),
               }}
             />
           </Card>

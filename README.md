@@ -81,6 +81,7 @@ deploy.bat
 - **[DOCS.md](DOCS.md)** - Complete documentation map
 - **[QUICK_START.md](QUICK_START.md)** - Get started in 10 minutes
 - **[docs/README.md](docs/README.md)** - Documentation hub
+- **[docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md)** - Complete implementation history
 - **[deployment/README.md](deployment/README.md)** - Deployment guide
 
 ## 📦 Deployment Options
@@ -181,11 +182,11 @@ graph LR
 | **[Documentation Hub](docs/README.md)** | Complete documentation index |
 | [Quick Start Guide](QUICK_START.md) | Get running in 10 minutes |
 | [Implementation Log](docs/IMPLEMENTATION_LOG.md) | Complete implementation history |
+| [Test Reports](docs/testing/COMPREHENSIVE_TEST_REPORT.md) | Comprehensive test results |
 | [User Guide](docs/USER_GUIDE.md) | Complete usage instructions |
 | [Deployment Guide](deployment/README.md) | Full deployment documentation |
 | [Quick Reference](deployment/QUICK_REFERENCE.md) | Quick deployment commands |
 | [Backend README](backend/README.md) | Backend API documentation |
-| [Migration Guide](MIGRATION_GUIDE.md) | Streamlit to React migration |
 
 ## 🛠️ Development
 

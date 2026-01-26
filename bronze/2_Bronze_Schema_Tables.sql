@@ -36,17 +36,22 @@ CREATE OR REPLACE STAGE SRC
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Landing zone for incoming CSV and Excel files. Organize files by TPA: @SRC/provider_a/, @SRC/provider_b/';
 
--- Stage 2: Completed files (30-day retention)
+-- Stage 2: Processing stage (files being actively processed)
+CREATE OR REPLACE STAGE PROCESSING
+    DIRECTORY = (ENABLE = TRUE)
+    COMMENT = 'Files currently being processed. Moved here from @SRC during discovery.';
+
+-- Stage 3: Completed files (30-day retention)
 CREATE OR REPLACE STAGE COMPLETED
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Successfully processed files (30-day retention before archival)';
 
--- Stage 3: Error files (30-day retention)
+-- Stage 4: Error files (30-day retention)
 CREATE OR REPLACE STAGE ERROR
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Failed files with processing errors (30-day retention before archival)';
 
--- Stage 4: Archive (long-term storage)
+-- Stage 5: Archive (long-term storage)
 CREATE OR REPLACE STAGE ARCHIVE
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Long-term archive for files older than 30 days';

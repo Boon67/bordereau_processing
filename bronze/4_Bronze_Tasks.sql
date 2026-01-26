@@ -75,9 +75,8 @@ CALL process_queued_files();
 
 CREATE OR REPLACE TASK move_successful_files_task
     WAREHOUSE = IDENTIFIER($WAREHOUSE_NAME)
-    COMMENT = 'Move successfully processed files from @SRC to @COMPLETED. Runs after file processing.'
+    COMMENT = 'Move successfully processed files from @PROCESSING to @COMPLETED. Runs after file processing.'
     AFTER process_files_task
-    WHEN SYSTEM$STREAM_HAS_DATA('file_processing_queue')
 AS
 CALL move_processed_files();
 
@@ -87,9 +86,8 @@ CALL move_processed_files();
 
 CREATE OR REPLACE TASK move_failed_files_task
     WAREHOUSE = IDENTIFIER($WAREHOUSE_NAME)
-    COMMENT = 'Move failed files from @SRC to @ERROR. Runs after file processing (parallel with move_successful_files_task).'
+    COMMENT = 'Move failed files from @PROCESSING to @ERROR. Runs after file processing (parallel with move_successful_files_task).'
     AFTER process_files_task
-    WHEN SYSTEM$STREAM_HAS_DATA('file_processing_queue')
 AS
 CALL move_failed_files();
 

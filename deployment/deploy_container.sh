@@ -672,7 +672,7 @@ get_service_endpoint() {
             
             if [ -n "$ingress_url" ] && [ "$ingress_url" != "null" ] && [ "$ingress_url" != "" ]; then
                 SERVICE_ENDPOINT="$ingress_url"
-                log_success "Public endpoint: $SERVICE_ENDPOINT"
+                log_success "Public endpoint URL obtained: $SERVICE_ENDPOINT"
                 
                 # Also get internal DNS name for reference
                 local service_info=$(snow spcs service list \
@@ -705,13 +705,85 @@ get_service_endpoint() {
 }
 
 # ============================================
+# Wait for Service to be Accessible
+# ============================================
+
+wait_for_service_ready() {
+    echo ""
+    log_info "Waiting for service to be accessible..."
+    
+    if [ -z "$SERVICE_ENDPOINT" ]; then
+        log_warning "No service endpoint available to test"
+        return 1
+    fi
+    
+    local max_attempts=30
+    local attempt=1
+    local wait_seconds=10
+    
+    log_info "Testing URL: ${SERVICE_ENDPOINT}"
+    log_info "This may take several minutes as the service initializes..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        # Try to access the root endpoint
+        if command_exists curl; then
+            local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${SERVICE_ENDPOINT}" 2>/dev/null || echo "000")
+            
+            if [ "$http_code" = "200" ] || [ "$http_code" = "301" ] || [ "$http_code" = "302" ]; then
+                log_success "Service is accessible! (HTTP $http_code)"
+                
+                # Try API health check
+                log_info "Testing API health endpoint..."
+                local api_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${SERVICE_ENDPOINT}/api/health" 2>/dev/null || echo "000")
+                
+                if [ "$api_code" = "200" ]; then
+                    log_success "API health check passed! (HTTP $api_code)"
+                else
+                    log_warning "Frontend is accessible but API may still be starting (HTTP $api_code)"
+                fi
+                
+                return 0
+            elif [ "$http_code" = "000" ]; then
+                log_info "Connection timeout or network error (attempt $attempt/$max_attempts)"
+            else
+                log_info "Service returned HTTP $http_code (attempt $attempt/$max_attempts)"
+            fi
+        elif command_exists wget; then
+            if wget --spider --timeout=10 --tries=1 "${SERVICE_ENDPOINT}" >/dev/null 2>&1; then
+                log_success "Service is accessible!"
+                return 0
+            else
+                log_info "Service not yet accessible (attempt $attempt/$max_attempts)"
+            fi
+        else
+            log_warning "Neither curl nor wget available, skipping accessibility check"
+            return 1
+        fi
+        
+        if [ $attempt -lt $max_attempts ]; then
+            log_info "Waiting ${wait_seconds} seconds before next attempt..."
+            sleep $wait_seconds
+        fi
+        
+        ((attempt++))
+    done
+    
+    log_warning "Service endpoint is published but not yet accessible after $((max_attempts * wait_seconds)) seconds"
+    log_info "The service may still be initializing. This is normal for first deployment."
+    log_info "You can check status with: cd deployment && ./manage_services.sh status"
+    log_info "Or manually test: curl ${SERVICE_ENDPOINT}"
+    
+    return 1
+}
+
+# ============================================
 # Print Summary
 # ============================================
 
 print_summary() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  🎉 DEPLOYMENT SUCCESSFUL!"
+    echo "  🎉 DEPLOYMENT COMPLETE!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "  ✅ Unified Service Deployed"
@@ -727,6 +799,19 @@ print_summary() {
         echo "  🌐 Public URL (Internet-accessible):"
         echo -e "    ${GREEN}${SERVICE_ENDPOINT}${NC}"
         echo ""
+        
+        # Check if service was verified as accessible
+        if command_exists curl; then
+            local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${SERVICE_ENDPOINT}" 2>/dev/null || echo "000")
+            if [ "$http_code" = "200" ] || [ "$http_code" = "301" ] || [ "$http_code" = "302" ]; then
+                echo -e "  ${GREEN}✓ Service is accessible and responding${NC}"
+            else
+                echo -e "  ${YELLOW}⚠ Service URL published but may still be initializing${NC}"
+                echo "    (This is normal for first deployment - may take a few minutes)"
+            fi
+        fi
+        echo ""
+        
         echo "  API Health Check:"
         echo -e "    ${BLUE}${SERVICE_ENDPOINT}/api/health${NC}"
         echo ""
@@ -736,6 +821,7 @@ print_summary() {
             echo ""
         fi
         echo "  Test from anywhere:"
+        echo -e "    ${CYAN}curl ${SERVICE_ENDPOINT}${NC}"
         echo -e "    ${CYAN}curl ${SERVICE_ENDPOINT}/api/health${NC}"
     else
         echo -e "  ${YELLOW}Endpoint provisioning in progress...${NC}"
@@ -757,6 +843,9 @@ print_summary() {
     echo ""
     echo "  Run health check:"
     echo -e "    ${CYAN}./manage_services.sh health${NC}"
+    echo ""
+    echo "  If service is not accessible yet, wait a few minutes and check:"
+    echo -e "    ${CYAN}curl ${SERVICE_ENDPOINT}${NC}"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
@@ -780,6 +869,7 @@ main() {
     create_service_spec
     deploy_service
     get_service_endpoint
+    wait_for_service_ready
     print_summary
 }
 

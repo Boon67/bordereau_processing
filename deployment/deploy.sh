@@ -72,6 +72,7 @@ show_help() {
     echo "        SILVER_SCHEMA_NAME         - Silver layer schema name"
     echo "        BRONZE_DISCOVERY_SCHEDULE  - Task schedule for file discovery"
     echo "        DEPLOY_CONTAINERS          - Set to 'true' to automatically deploy to SPCS"
+    echo "        LOAD_SAMPLE_SCHEMAS        - Set to 'true' to automatically load sample schemas"
     echo ""
     echo "    Note: Container deployment to SPCS is optional. Set DEPLOY_CONTAINERS=true"
     echo "          in your config file to deploy automatically, or you will be prompted"
@@ -599,19 +600,26 @@ echo -e "${YELLOW}════════════════════�
 echo -e "${YELLOW}OPTIONAL: LOAD SAMPLE SILVER TARGET SCHEMAS${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "Would you like to load sample Silver target schemas?"
-echo "This will:"
-echo "  • Generate schema definitions for 5 TPAs"
-echo "  • Create 4 table types (Medical, Dental, Pharmacy, Eligibility)"
-echo "  • Load 310 column definitions"
-echo ""
 
-# Default to 'yes' if AUTO_APPROVE is enabled
-LOAD_SCHEMAS="y"
-if [[ "${AUTO_APPROVE}" != "true" ]]; then
-    read -p "Load sample schemas? (y/n) [y]: " -n 1 -r
+# Check if LOAD_SAMPLE_SCHEMAS is set in config
+if [[ "${LOAD_SAMPLE_SCHEMAS}" == "true" ]]; then
+    log_message INFO "LOAD_SAMPLE_SCHEMAS=true in config - loading schemas automatically"
+    LOAD_SCHEMAS="y"
+else
+    echo "Would you like to load sample Silver target schemas?"
+    echo "This will:"
+    echo "  • Generate schema definitions for 5 TPAs"
+    echo "  • Create 4 table types (Medical, Dental, Pharmacy, Eligibility)"
+    echo "  • Load 310 column definitions"
     echo ""
-    LOAD_SCHEMAS=$REPLY
+
+    # Default to 'yes' if AUTO_APPROVE is enabled
+    LOAD_SCHEMAS="y"
+    if [[ "${AUTO_APPROVE}" != "true" ]]; then
+        read -p "Load sample schemas? (y/n) [y]: " -n 1 -r
+        echo ""
+        LOAD_SCHEMAS=$REPLY
+    fi
 fi
 
 if [[ $LOAD_SCHEMAS =~ ^[Yy]$ ]] || [[ -z $LOAD_SCHEMAS ]]; then

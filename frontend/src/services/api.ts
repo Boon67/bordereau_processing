@@ -176,6 +176,11 @@ export const apiService = {
     return response.data
   },
 
+  deleteFileData: async (fileName: string): Promise<any> => {
+    const response = await api.delete(`/bronze/data/file/${encodeURIComponent(fileName)}`)
+    return response.data
+  },
+
   getTasks: async (): Promise<any[]> => {
     const response = await api.get('/bronze/tasks')
     return response.data
@@ -381,6 +386,37 @@ export const apiService = {
       ? `/gold/rules/transformation/${ruleId}/status`
       : `/gold/rules/quality/${ruleId}/status`
     const response = await api.patch(endpoint, { is_active: isActive })
+    return response.data
+  },
+
+  // Logging endpoints
+  getApplicationLogs: async (params?: { limit?: number; level?: string; source?: string; days?: number }): Promise<any[]> => {
+    const response = await api.get('/logs/application', { params })
+    return response.data
+  },
+
+  getTaskExecutionLogs: async (params?: { limit?: number; task_name?: string; status?: string; days?: number }): Promise<any[]> => {
+    const response = await api.get('/logs/tasks', { params })
+    return response.data
+  },
+
+  getFileProcessingLogs: async (params?: { limit?: number; file_name?: string; stage?: string; tpa?: string; days?: number }): Promise<any[]> => {
+    const response = await api.get('/logs/file-processing', { params })
+    return response.data
+  },
+
+  getErrorLogs: async (params?: { limit?: number; source?: string; resolution_status?: string; days?: number }): Promise<any[]> => {
+    const response = await api.get('/logs/errors', { params })
+    return response.data
+  },
+
+  getAPIRequestLogs: async (params?: { limit?: number; method?: string; path?: string; min_response_time?: number; days?: number }): Promise<any[]> => {
+    const response = await api.get('/logs/api-requests', { params })
+    return response.data
+  },
+
+  getLogStatistics: async (days?: number): Promise<any[]> => {
+    const response = await api.get('/logs/stats', { params: { days } })
     return response.data
   },
 }

@@ -652,3 +652,36 @@ async def clear_all_data():
     except Exception as e:
         logger.error(f"Failed to clear all data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/data/file/{file_name}")
+async def delete_file_data(file_name: str):
+    """
+    Delete all data records for a specific file from RAW_DATA_TABLE.
+    Updates the queue status to 'DELETED'.
+    
+    Args:
+        file_name: Name of the file (with or without path)
+    
+    Returns:
+        Success message with number of rows deleted
+    """
+    try:
+        sf_service = SnowflakeService()
+        
+        # Call the stored procedure to delete file data
+        query = f"CALL {settings.BRONZE_SCHEMA_NAME}.delete_file_data('{file_name}')"
+        result = sf_service.execute_query(query)
+        
+        result_message = result[0][0] if result and len(result) > 0 else "File data deleted"
+        
+        logger.info(f"Deleted data for file: {file_name} - {result_message}")
+        
+        return {
+            "message": result_message,
+            "file_name": file_name
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to delete file data for {file_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
