@@ -46,8 +46,8 @@ class TransformRequest(BaseModel):
     incremental: bool = False
 
 @router.get("/schemas")
-async def get_target_schemas(tpa: str, table_name: Optional[str] = None):
-    """Get target schemas"""
+async def get_target_schemas(tpa: Optional[str] = None, table_name: Optional[str] = None):
+    """Get target schemas (TPA-agnostic)"""
     try:
         sf_service = SnowflakeService()
         return sf_service.get_target_schemas(tpa, table_name)
@@ -57,13 +57,13 @@ async def get_target_schemas(tpa: str, table_name: Optional[str] = None):
 
 @router.post("/schemas")
 async def create_target_schema(schema: TargetSchemaCreate):
-    """Create target schema definition"""
+    """Create target schema definition (TPA-agnostic)"""
     try:
         sf_service = SnowflakeService()
         query = f"""
             INSERT INTO {settings.SILVER_SCHEMA_NAME}.target_schemas
-            (table_name, column_name, tpa, data_type, nullable, default_value, description)
-            VALUES ('{schema.table_name.upper()}', '{schema.column_name.upper()}', '{schema.tpa}',
+            (table_name, column_name, data_type, nullable, default_value, description)
+            VALUES ('{schema.table_name.upper()}', '{schema.column_name.upper()}',
                     '{schema.data_type}', {schema.nullable}, 
                     {'NULL' if not schema.default_value else f"'{schema.default_value}'"},
                     {'NULL' if not schema.description else f"'{schema.description}'"})

@@ -20,17 +20,29 @@ CONNECTION_NAME="${1:-DEPLOYMENT}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Load config if available
+if [[ -f "${SCRIPT_DIR}/custom.config" ]]; then
+    source "${SCRIPT_DIR}/custom.config"
+elif [[ -f "${SCRIPT_DIR}/default.config" ]]; then
+    source "${SCRIPT_DIR}/default.config"
+fi
+
+# Set defaults if not in config
+DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
+SILVER_SCHEMA_NAME="${SILVER_SCHEMA_NAME:-SILVER}"
+
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}LOAD SAMPLE SILVER TARGET SCHEMAS${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 
-# Step 1: Generate sample schemas
-echo -e "${YELLOW}[1/3]${NC} Generating sample schemas..."
-if python3 "${PROJECT_ROOT}/sample_data/generate_sample_schemas.py"; then
-    echo -e "${GREEN}✓ Sample schemas generated${NC}"
+# Step 1: Use existing TPA-agnostic schemas (no generation needed)
+echo -e "${YELLOW}[1/3]${NC} Using existing TPA-agnostic schemas..."
+if [[ -f "${PROJECT_ROOT}/sample_data/config/silver_target_schemas.csv" ]]; then
+    SCHEMA_COUNT=$(wc -l < "${PROJECT_ROOT}/sample_data/config/silver_target_schemas.csv")
+    echo -e "${GREEN}✓ Found TPA-agnostic schemas (${SCHEMA_COUNT} rows)${NC}"
 else
-    echo -e "${RED}✗ Failed to generate sample schemas${NC}"
+    echo -e "${RED}✗ Schema file not found${NC}"
     exit 1
 fi
 echo ""
@@ -38,8 +50,8 @@ echo ""
 # Step 2: Upload to Snowflake
 echo -e "${YELLOW}[2/3]${NC} Uploading schemas to Snowflake..."
 UPLOAD_OUTPUT=$(snow sql -q "
-USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
-USE SCHEMA SILVER;
+USE DATABASE ${DATABASE_NAME};
+USE SCHEMA ${SILVER_SCHEMA_NAME};
 CREATE STAGE IF NOT EXISTS SILVER_CONFIG;
 PUT file://${PROJECT_ROOT}/sample_data/config/silver_target_schemas.csv @SILVER_CONFIG/ AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
 " --connection "$CONNECTION_NAME" 2>&1)
@@ -73,15 +85,15 @@ echo ""
 # Verify
 echo -e "${BLUE}Verifying loaded schemas...${NC}"
 snow sql -q "
-USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
-USE SCHEMA SILVER;
+USE DATABASE ${DATABASE_NAME};
+USE SCHEMA ${SILVER_SCHEMA_NAME};
 SELECT 
-    TPA,
     TABLE_NAME,
     COUNT(*) as COLUMN_COUNT
 FROM target_schemas
-GROUP BY TPA, TABLE_NAME
-ORDER BY TPA, TABLE_NAME;
+WHERE active = TRUE
+GROUP BY TABLE_NAME
+ORDER BY TABLE_NAME;
 " --connection "$CONNECTION_NAME"
 
 echo ""
@@ -90,10 +102,10 @@ echo -e "${GREEN}✓ SAMPLE SCHEMAS LOADED SUCCESSFULLY${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 echo -e "${YELLOW}Summary:${NC}"
-echo -e "  • 5 TPAs (provider_a through provider_e)"
-echo -e "  • 4 table types per TPA"
-echo -e "  • 62 columns per TPA"
-echo -e "  • 310 total schema definitions"
+echo -e "  • TPA-agnostic schema definitions"
+echo -e "  • 4 table types (DENTAL_CLAIMS, MEDICAL_CLAIMS, MEMBER_ELIGIBILITY, PHARMACY_CLAIMS)"
+echo -e "  • 62 total column definitions"
+echo -e "  • Shared across all TPAs"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. View schemas in UI: Navigate to Silver Schemas page"

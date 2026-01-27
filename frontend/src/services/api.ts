@@ -42,7 +42,6 @@ export interface TargetSchema {
   SCHEMA_ID: number
   TABLE_NAME: string
   COLUMN_NAME: string
-  TPA: string
   DATA_TYPE: string
   NULLABLE: boolean
   DEFAULT_VALUE?: string
@@ -203,9 +202,9 @@ export const apiService = {
   },
 
   // Silver endpoints
-  getTargetSchemas: async (tpa: string, tableName?: string): Promise<TargetSchema[]> => {
+  getTargetSchemas: async (tableName?: string): Promise<TargetSchema[]> => {
     const response = await api.get('/silver/schemas', {
-      params: { tpa, table_name: tableName },
+      params: { table_name: tableName },
     })
     return response.data
   },
@@ -214,7 +213,6 @@ export const apiService = {
     const response = await api.post('/silver/schemas', {
       table_name: schema.TABLE_NAME,
       column_name: schema.COLUMN_NAME,
-      tpa: schema.TPA,
       data_type: schema.DATA_TYPE,
       nullable: schema.NULLABLE,
       default_value: schema.DEFAULT_VALUE,
@@ -238,10 +236,8 @@ export const apiService = {
     return response.data
   },
 
-  deleteTableSchema: async (tableName: string, tpa: string): Promise<any> => {
-    const response = await api.delete(`/silver/schemas/table/${tableName}`, {
-      params: { tpa }
-    })
+  deleteTableSchema: async (tableName: string): Promise<any> => {
+    const response = await api.delete(`/silver/schemas/table/${tableName}`)
     return response.data
   },
 

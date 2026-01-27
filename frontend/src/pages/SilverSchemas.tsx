@@ -27,25 +27,64 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
   const [createTableForm] = Form.useForm()
   const [activeKeys, setActiveKeys] = useState<string[]>([])
   const [tableExistence, setTableExistence] = useState<Record<string, boolean>>({})
+  const [createTableModalVisible, setCreateTableModalVisible] = useState(false)
+  const [selectedTableForCreation, setSelectedTableForCreation] = useState<string>('')
+  const [createPhysicalTableForm] = Form.useForm()
+  const [tpas, setTpas] = useState<Array<{ TPA_CODE: string; TPA_NAME: string }>>([])
+  const [loadingTpas, setLoadingTpas] = useState(false)
 
   useEffect(() => {
-    if (selectedTpa) {
-      setSelectedTable('') // Reset table filter when TPA changes
-      setSchemas([]) // Clear current schemas
-      setAllSchemas([]) // Clear all schemas
-      loadSchemas()
+    // Load schemas once on mount (TPA-agnostic)
+    loadSchemas()
+    loadTpas()
+  }, [])
+
+  useEffect(() => {
+    // Reload table existence checks when TPA changes
+    if (selectedTpa && tables.length > 0) {
+      checkTableExistence()
     }
   }, [selectedTpa])
 
-  const loadSchemas = async () => {
-    if (!selectedTpa) {
-      message.warning('Please select a TPA')
-      return
-    }
+  const checkTableExistence = async () => {
+    if (!selectedTpa || tables.length === 0) return
+    
+    const existenceChecks = await Promise.all(
+      tables.map(async (tableName) => {
+        try {
+          const result = await apiService.checkTableExists(tableName, selectedTpa)
+          return { tableName, exists: result.exists }
+        } catch {
+          return { tableName, exists: false }
+        }
+      })
+    )
+    
+    const existenceMap = existenceChecks.reduce((acc, { tableName, exists }) => {
+      acc[tableName] = exists
+      return acc
+    }, {} as Record<string, boolean>)
+    
+    setTableExistence(existenceMap)
+  }
 
+  const loadTpas = async () => {
+    setLoadingTpas(true)
+    try {
+      const data = await apiService.getTpas()
+      setTpas(data)
+    } catch (error) {
+      message.error('Failed to load TPAs')
+    } finally {
+      setLoadingTpas(false)
+    }
+  }
+
+  const loadSchemas = async () => {
     setLoading(true)
     try {
-      const data = await apiService.getTargetSchemas(selectedTpa)
+      // Load TPA-agnostic schemas
+      const data = await apiService.getTargetSchemas()
       setAllSchemas(data)
       setSchemas(data)
       
@@ -53,28 +92,30 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
       const uniqueTables = Array.from(new Set(data.map(s => s.TABLE_NAME)))
       setTables(uniqueTables)
       
-      // Check which tables physically exist
-      const existenceChecks = await Promise.all(
-        uniqueTables.map(async (tableName) => {
-          try {
-            const result = await apiService.checkTableExists(tableName, selectedTpa)
-            return { tableName, exists: result.exists }
-          } catch {
-            return { tableName, exists: false }
-          }
-        })
-      )
-      
-      const existenceMap = existenceChecks.reduce((acc, { tableName, exists }) => {
-        acc[tableName] = exists
-        return acc
-      }, {} as Record<string, boolean>)
-      
-      setTableExistence(existenceMap)
+      // Check which tables physically exist for the selected TPA
+      if (selectedTpa) {
+        const existenceChecks = await Promise.all(
+          uniqueTables.map(async (tableName) => {
+            try {
+              const result = await apiService.checkTableExists(tableName, selectedTpa)
+              return { tableName, exists: result.exists }
+            } catch {
+              return { tableName, exists: false }
+            }
+          })
+        )
+        
+        const existenceMap = existenceChecks.reduce((acc, { tableName, exists }) => {
+          acc[tableName] = exists
+          return acc
+        }, {} as Record<string, boolean>)
+        
+        setTableExistence(existenceMap)
+      }
       
       const schemaCount = uniqueTables.length
       const columnCount = data.length
-      message.success(`Loaded ${schemaCount} schema${schemaCount !== 1 ? 's' : ''} (${columnCount} column${columnCount !== 1 ? 's' : ''}) for ${selectedTpaName || selectedTpa}`)
+      message.success(`Loaded ${schemaCount} schema${schemaCount !== 1 ? 's' : ''} (${columnCount} column${columnCount !== 1 ? 's' : ''})`)
     } catch (error) {
       message.error('Failed to load target schemas')
     } finally {
@@ -171,14 +212,21 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
     }
   }
 
-  const handleCreateTable = async (tableName: string) => {
+  const showCreateTableModal = (tableName: string) => {
+    setSelectedTableForCreation(tableName)
+    createPhysicalTableForm.setFieldsValue({ tpa: selectedTpa })
+    setCreateTableModalVisible(true)
+  }
+
+  const handleCreateTable = async (values: any) => {
     try {
-      const result = await apiService.createSilverTable(tableName, selectedTpa)
-      const physicalTableName = result.physical_table_name || `${selectedTpa.toUpperCase()}_${tableName.toUpperCase()}`
+      const result = await apiService.createSilverTable(selectedTableForCreation, values.tpa)
+      const physicalTableName = result.physical_table_name || `${values.tpa.toUpperCase()}_${selectedTableForCreation.toUpperCase()}`
       message.success(`Physical table ${physicalTableName} created successfully in Silver layer`)
       
       // Update table existence state
-      setTableExistence(prev => ({ ...prev, [tableName]: true }))
+      setTableExistence(prev => ({ ...prev, [selectedTableForCreation]: true }))
+      setCreateTableModalVisible(false)
     } catch (error: any) {
       message.error(`Failed to create table: ${error.response?.data?.detail || error.message}`)
     }
@@ -268,11 +316,10 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Title level={4} style={{ margin: 0 }}>
-                Silver Target Schemas
-                {selectedTpaName && <Tag color="blue" style={{ marginLeft: 8 }}>{selectedTpaName}</Tag>}
+                Schemas and Tables
               </Title>
               <p style={{ margin: '8px 0 0 0', color: '#666' }}>
-                Define target table structures for the Silver layer
+                Define target table structures for the Silver layer (shared across all providers)
               </p>
             </div>
             <Space>
@@ -291,13 +338,13 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
         <Card style={{ marginTop: 16 }}>
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <Spin size="large" />
-            <p style={{ marginTop: 16, color: '#666' }}>Loading schemas for {selectedTpaName}...</p>
+            <p style={{ marginTop: 16, color: '#666' }}>Loading schemas...</p>
           </div>
         </Card>
       ) : Object.keys(schemasByTable).length === 0 ? (
         <Card style={{ marginTop: 16 }}>
           <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            No target schemas found for {selectedTpaName || 'this TPA'}. Schemas need to be defined before transformation.
+            No target schemas found. Schemas need to be defined before transformation.
           </p>
         </Card>
       ) : (
@@ -315,40 +362,20 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
                     <Space>
                       <TableOutlined />
                       <strong>{tableName}</strong>
-                      {selectedTpaName && <Tag color="blue">{selectedTpaName}</Tag>}
                       <Tag color="purple">{tableSchemas.length} columns</Tag>
-                      {tableExistence[tableName] && (
-                        <Tag color="cyan">{selectedTpa.toUpperCase()}_{tableName}</Tag>
-                      )}
                     </Space>
                     <Space>
-                      <Popconfirm
-                        title="Create physical table"
-                        description={
-                          <div>
-                            <p>Create physical table in Silver layer:</p>
-                            <p><strong>{selectedTpa.toUpperCase()}_{tableName}</strong></p>
-                            <p style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-                              This will create the actual Snowflake table based on the {tableSchemas.length} columns defined in this schema.
-                            </p>
-                          </div>
-                        }
-                        onConfirm={(e) => {
-                          e?.stopPropagation()
-                          handleCreateTable(tableName)
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<DatabaseOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          showCreateTableModal(tableName)
                         }}
-                        okText="Create Table"
-                        cancelText="Cancel"
                       >
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<DatabaseOutlined />}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Create Table
-                        </Button>
-                      </Popconfirm>
+                        Create Table
+                      </Button>
                       <Popconfirm
                         title="Delete table schema"
                         description={`Are you sure you want to delete ${tableName} and all its ${tableSchemas.length} columns?`}
@@ -396,17 +423,81 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
         </Card>
       )}
 
-      <Card title="ℹ️ Schema Information" style={{ marginTop: 16 }}>
-        <Descriptions column={1} size="small">
-          <Descriptions.Item label="Provider">
-            <strong style={{ fontSize: '16px', color: '#1890ff' }}>{selectedTpaName || selectedTpa}</strong>
-          </Descriptions.Item>
-          <Descriptions.Item label="Total Tables">{tables.length}</Descriptions.Item>
-          <Descriptions.Item label="Total Columns">{schemas.length}</Descriptions.Item>
-          <Descriptions.Item label="TPA Code">{selectedTpa}</Descriptions.Item>
-        </Descriptions>
-        <div style={{ marginTop: 16, color: '#666' }}>
-          <p><strong>Note:</strong> Target schemas define the structure of tables in the Silver layer where transformed data will be stored for <strong>{selectedTpaName || selectedTpa}</strong>.</p>
+      <Card title="📋 Schema Information" style={{ marginTop: 16 }}>
+        <Table
+          columns={[
+            {
+              title: 'Table Name',
+              dataIndex: 'tableName',
+              key: 'tableName',
+              render: (text: string) => (
+                <Space>
+                  <TableOutlined />
+                  <strong>{text}</strong>
+                </Space>
+              ),
+            },
+            {
+              title: 'Columns',
+              dataIndex: 'columnCount',
+              key: 'columnCount',
+              width: 100,
+              render: (count: number) => <Tag color="purple">{count} columns</Tag>,
+            },
+            {
+              title: 'Schema Type',
+              key: 'schemaType',
+              width: 150,
+              render: () => <Tag color="green">TPA-Agnostic</Tag>,
+            },
+            {
+              title: 'Created By',
+              dataIndex: 'createdBy',
+              key: 'createdBy',
+              width: 150,
+            },
+            {
+              title: 'Created At',
+              dataIndex: 'createdAt',
+              key: 'createdAt',
+              width: 180,
+              render: (date: string) => {
+                if (!date) return <span style={{ color: '#999' }}>-</span>
+                const d = new Date(date)
+                return d.toLocaleString()
+              },
+            },
+            {
+              title: 'Last Updated',
+              dataIndex: 'updatedAt',
+              key: 'updatedAt',
+              width: 180,
+              render: (date: string) => {
+                if (!date) return <span style={{ color: '#999' }}>-</span>
+                const d = new Date(date)
+                return d.toLocaleString()
+              },
+            },
+          ]}
+          dataSource={tables.map(tableName => {
+            const tableSchemas = schemasByTable[tableName] || []
+            const firstSchema = tableSchemas[0]
+            return {
+              key: tableName,
+              tableName,
+              columnCount: tableSchemas.length,
+              createdBy: firstSchema?.CREATED_BY || 'N/A',
+              createdAt: firstSchema?.CREATED_TIMESTAMP,
+              updatedAt: firstSchema?.UPDATED_TIMESTAMP,
+            }
+          })}
+          pagination={false}
+          size="small"
+        />
+        <div style={{ marginTop: 16, padding: '12px', backgroundColor: '#f0f7ff', borderRadius: '4px' }}>
+          <p style={{ margin: 0, color: '#666' }}>
+            <strong>Note:</strong> Schemas are shared across all providers. When you create a table, it will be created for a specific provider (e.g., PROVIDER_A_DENTAL_CLAIMS).
+          </p>
         </div>
       </Card>
 
@@ -528,11 +619,11 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
             message="Add New Schema Definition"
             description={
               <div>
-                <p>This creates a schema definition (metadata) for a new table.</p>
+                <p>This creates a TPA-agnostic schema definition (metadata) for a new table.</p>
                 <p style={{ marginTop: 8 }}>After adding the schema:</p>
                 <ol style={{ marginTop: 4, marginBottom: 0, paddingLeft: 20 }}>
                   <li>Define columns for the table</li>
-                  <li>Click "Create Table" to create the physical table: <strong>{selectedTpa.toUpperCase()}_[TABLE_NAME]</strong></li>
+                  <li>Click "Create Table" and select a provider to create the physical table</li>
                 </ol>
               </div>
             }
@@ -550,11 +641,12 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
           </Form.Item>
 
           <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="TPA">{selectedTpa}</Descriptions.Item>
-            <Descriptions.Item label="TPA Name">{selectedTpaName}</Descriptions.Item>
+            <Descriptions.Item label="Schema Type">
+              <Tag color="green">TPA-Agnostic (Shared)</Tag>
+            </Descriptions.Item>
             <Descriptions.Item label="Schema">SILVER</Descriptions.Item>
-            <Descriptions.Item label="Table Name Format">
-              <Tag color="cyan">{selectedTpa.toUpperCase()}_[TABLE_NAME]</Tag>
+            <Descriptions.Item label="Physical Table Format">
+              <Tag color="cyan">[TPA_CODE]_[TABLE_NAME]</Tag>
             </Descriptions.Item>
           </Descriptions>
 
@@ -570,6 +662,99 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
           </Form.Item>
         </Form>
       </Drawer>
+
+      {/* Create Physical Table Modal */}
+      <Modal
+        title="Create Physical Table"
+        open={createTableModalVisible}
+        onCancel={() => setCreateTableModalVisible(false)}
+        footer={null}
+        width={500}
+      >
+        <Form
+          form={createPhysicalTableForm}
+          layout="vertical"
+          onFinish={handleCreateTable}
+        >
+          <Alert
+            message="Create Physical Table"
+            description={
+              <div>
+                <p>This will create the actual Snowflake table in the Silver layer based on the schema definition.</p>
+                <p style={{ marginTop: 8 }}>Select the provider (TPA) for which to create the table.</p>
+              </div>
+            }
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+
+          <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="Schema Table">{selectedTableForCreation}</Descriptions.Item>
+            <Descriptions.Item label="Columns">
+              {schemasByTable[selectedTableForCreation]?.length || 0} columns defined
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Form.Item
+            name="tpa"
+            label="Provider (TPA)"
+            rules={[{ required: true, message: 'Please select a provider' }]}
+          >
+            <Select
+              placeholder="Select provider"
+              loading={loadingTpas}
+              options={tpas.map(tpa => ({
+                label: `${tpa.TPA_NAME} (${tpa.TPA_CODE})`,
+                value: tpa.TPA_CODE
+              }))}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              onChange={() => {
+                // Force re-render to update the physical table name preview
+                createPhysicalTableForm.validateFields(['tpa'])
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.tpa !== currentValues.tpa}>
+            {({ getFieldValue }) => {
+              const selectedTpaCode = getFieldValue('tpa')
+              return (
+                <Alert
+                  message="Physical Table Name"
+                  description={
+                    <div>
+                      <p>The table will be created as:</p>
+                      <p style={{ marginTop: 8 }}>
+                        <Tag color="cyan" style={{ fontSize: '14px', padding: '4px 8px' }}>
+                          {selectedTpaCode ? `${selectedTpaCode.toUpperCase()}_${selectedTableForCreation}` : `[TPA]_${selectedTableForCreation}`}
+                        </Tag>
+                      </p>
+                    </div>
+                  }
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              )
+            }}
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" icon={<DatabaseOutlined />}>
+                Create Table
+              </Button>
+              <Button onClick={() => setCreateTableModalVisible(false)}>
+                Cancel
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

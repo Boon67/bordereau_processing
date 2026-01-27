@@ -7,6 +7,9 @@ This document consolidates all fixes and enhancements made during the recent dev
 2. [Schema Loading Fix](#schema-loading-fix)
 3. [File Removal from @SRC Stage](#file-removal-fix)
 4. [Silver Table Creation Fix](#silver-table-creation-fix)
+5. [Field Mappings Display Fix](#field-mappings-display-fix)
+6. [TPA-Agnostic Schema Redesign](#tpa-agnostic-schema-redesign)
+7. [Configuration Variable Fix](#configuration-variable-fix)
 
 ---
 
@@ -211,6 +214,199 @@ To implement shared schemas across TPAs:
 
 ---
 
+## Field Mappings Display Fix
+
+### Problem
+The Field Mappings page was not displaying target tables when no mappings existed yet. Users couldn't see which tables were available for mapping.
+
+### Root Cause
+The UI only showed tables that already had mappings, not all available target tables from the schema definitions.
+
+### Solution
+
+**Updated** `frontend/src/pages/SilverMappings.tsx`:
+
+1. **Load Available Target Tables** from schema definitions:
+```typescript
+const loadTargetTables = async () => {
+  const schemas = await apiService.getTargetSchemas(selectedTpa)
+  // Group by table name and count columns
+  const tableMap = schemas.reduce((acc, schema) => {
+    if (!acc[schema.TABLE_NAME]) {
+      acc[schema.TABLE_NAME] = { name: schema.TABLE_NAME, columns: 0 }
+    }
+    acc[schema.TABLE_NAME].columns++
+    return acc
+  }, {})
+  setAvailableTargetTables(Object.values(tableMap))
+}
+```
+
+2. **Display All Target Tables** with status:
+```typescript
+const allTargetTablesWithStatus = availableTargetTables.map(table => ({
+  name: table.name,
+  columns: table.columns,
+  mappings: mappingsByTable[table.name] || [],
+  hasMappings: !!mappingsByTable[table.name],
+}))
+```
+
+3. **Enhanced Table Cards** to show:
+   - ✅ Table name
+   - ✅ Column count (e.g., "14 columns")
+   - ✅ Mapping count or "No mappings yet"
+   - ✅ Approval status
+
+### User Experience
+
+**Before**:
+- "No field mappings found" - no visibility into available tables
+
+**After**:
+- Shows all 4 target tables (DENTAL_CLAIMS, MEDICAL_CLAIMS, MEMBER_ELIGIBILITY, PHARMACY_CLAIMS)
+- Each table displays column count and mapping status
+- Clear guidance: "Use Auto-Map (ML), Auto-Map (LLM), or Manual Mapping to create mappings"
+
+### Example Display
+
+```
+DENTAL_CLAIMS
+├─ 14 columns
+├─ No mappings yet
+└─ "Use Auto-Map (ML), Auto-Map (LLM), or Manual Mapping to create mappings."
+
+MEDICAL_CLAIMS
+├─ 14 columns
+├─ 5 mappings
+├─ 3/5 approved
+└─ [Table showing source → target field mappings]
+```
+
+---
+
+## TPA-Agnostic Schema Redesign
+
+### Problem
+Schemas were duplicated per TPA (310 rows = 62 columns × 5 TPAs), causing maintenance issues and confusion. The system didn't clearly separate schema definitions (templates) from table instances (TPA-specific data).
+
+### Root Cause
+The `target_schemas` table included TPA as part of the unique constraint, requiring identical schema definitions to be duplicated for each TPA.
+
+### Solution
+
+**Database Migration** (`silver/MIGRATE_TPA_AGNOSTIC_SCHEMAS.sql`):
+```sql
+-- Removed TPA column from target_schemas
+-- Changed unique constraint from (table_name, column_name, tpa) to (table_name, column_name)
+-- Consolidated 310 rows → 62 rows (80% reduction)
+```
+
+**Updated Procedures** (`silver/2_Silver_Target_Schemas.sql`):
+```python
+# create_silver_table: Removed TPA filter from schema query
+WHERE table_name = '{table_name_upper}' AND active = TRUE
+
+# get_target_schema: Removed tpa parameter
+```
+
+**Backend Updates**:
+- `snowflake_service.py`: Made TPA optional, removed TPA filter
+- `silver.py`: Updated API endpoints to not require TPA
+
+**Frontend Updates**:
+- `api.ts`: Removed TPA from `getTargetSchemas()` signature
+- `SilverSchemas.tsx`: Load schemas once (TPA-agnostic), check table existence per TPA
+- `SilverMappings.tsx`: Show all available tables with mapping status
+
+**Sample Data**:
+- `silver_target_schemas.csv`: Removed TPA column (311 → 63 lines)
+- `load_sample_schemas.sql`: Updated COPY INTO to match new structure
+
+### Design Principle
+
+```
+SCHEMAS (Shared)          TABLES (TPA-Specific)
+├─ DENTAL_CLAIMS     →   ├─ PROVIDER_A_DENTAL_CLAIMS
+├─ MEDICAL_CLAIMS    →   ├─ PROVIDER_A_MEDICAL_CLAIMS
+├─ MEMBER_ELIGIBILITY→   ├─ PROVIDER_A_MEMBER_ELIGIBILITY
+└─ PHARMACY_CLAIMS   →   └─ PROVIDER_A_PHARMACY_CLAIMS
+```
+
+### User Experience
+
+**Before**:
+- Schemas loaded per TPA (duplicated)
+- Field Mappings showed "No field mappings found" with no table visibility
+
+**After**:
+- Schemas load immediately (shared across TPAs)
+- Field Mappings shows all 4 tables with status:
+  - DENTAL_CLAIMS (14 columns) - No mappings yet
+  - MEDICAL_CLAIMS (14 columns) - 5 mappings, 3/5 approved
+  - MEMBER_ELIGIBILITY (18 columns) - No mappings yet
+  - PHARMACY_CLAIMS (16 columns) - No mappings yet
+- TPA selection only required when creating physical tables
+
+### Benefits
+- **80% reduction** in schema metadata (310 → 62 rows)
+- **Simplified maintenance**: Update once, applies to all TPAs
+- **Clearer architecture**: Schemas = templates, Tables = TPA-specific instances
+- **Better UX**: All tables visible, clear mapping status
+
+---
+
+## Configuration Variable Fix
+
+### Problem
+SQL files had hardcoded values like `BORDEREAU_PROCESSING_PIPELINE` and `SILVER` instead of using configuration variables from `default.config`.
+
+### Root Cause
+SQL files were using literal values instead of placeholders that could be substituted by deployment scripts.
+
+### Solution
+
+**Updated SQL Files**:
+```sql
+# OLD (hardcoded)
+USE ROLE SYSADMIN;
+USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
+USE SCHEMA SILVER;
+
+# NEW (uses config variables)
+SET DATABASE_NAME = '$DATABASE_NAME';
+SET SILVER_SCHEMA_NAME = '$SILVER_SCHEMA_NAME';
+SET SNOWFLAKE_ROLE = '$SNOWFLAKE_ROLE';
+
+USE ROLE IDENTIFIER($SNOWFLAKE_ROLE);
+USE DATABASE IDENTIFIER($DATABASE_NAME);
+USE SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
+```
+
+**Updated Deployment Scripts**:
+- `deploy_silver.sh`: Added `SNOWFLAKE_ROLE` to sed substitution
+- `deploy.sh`: Added `export DEPLOY_ROLE="$ROLE"`
+
+### Configuration Flow
+
+```
+default.config
+    ↓
+deploy.sh (loads config, exports variables)
+    ↓
+deploy_silver.sh (receives variables, substitutes in SQL)
+    ↓
+SQL files (execute with actual values)
+```
+
+### Benefits
+- ✅ **No Hardcoding**: All configuration in `default.config`
+- ✅ **Easy Customization**: Change config without modifying SQL
+- ✅ **Consistent**: Same variables across all scripts
+- ✅ **Flexible**: Deploy to different databases/schemas easily
+
+---
+
 ## Summary of Files Changed
 
 ### Backend
@@ -230,7 +426,16 @@ To implement shared schemas across TPAs:
 - `silver/fix_create_table_procedure.sql` - Standalone fix script
 
 ### Sample Data
-- `sample_data/config/load_sample_schemas.sql` - Fixed for hybrid tables
+- `sample_data/config/load_sample_schemas.sql` - Fixed for hybrid tables, uses config variables
+
+### Frontend
+- `frontend/src/pages/SilverMappings.tsx` - Enhanced to show all target tables
+- `frontend/src/pages/SilverSchemas.tsx` - TPA-agnostic schema loading
+- `frontend/src/services/api.ts` - Updated API signatures
+
+### Deployment
+- `deployment/deploy_silver.sh` - Added SNOWFLAKE_ROLE substitution
+- `deployment/deploy.sh` - Export DEPLOY_ROLE variable
 
 ---
 
@@ -258,6 +463,23 @@ To implement shared schemas across TPAs:
 - [ ] Click "Create Table"
 - [ ] Verify table created successfully
 - [ ] Check table structure with DESCRIBE
+
+### Field Mappings Display
+- [ ] Go to Silver Layer → Field Mappings
+- [ ] Select a TPA
+- [ ] Verify all target tables are displayed
+- [ ] Verify tables show column counts
+- [ ] Verify tables without mappings show guidance message
+- [ ] Click "Auto-Map (ML)" and verify dropdown shows all tables
+
+### TPA-Agnostic Schema Redesign
+- [ ] Go to Silver Layer → Target Schemas
+- [ ] Verify schemas load immediately (no TPA selection needed)
+- [ ] Verify 4 tables displayed: DENTAL_CLAIMS, MEDICAL_CLAIMS, MEMBER_ELIGIBILITY, PHARMACY_CLAIMS
+- [ ] Click "Create Table" and verify TPA selection dropdown appears
+- [ ] Select a TPA and create table
+- [ ] Verify table created as `PROVIDER_X_TABLE_NAME`
+- [ ] Go to Field Mappings and verify all tables visible with mapping status
 
 ---
 

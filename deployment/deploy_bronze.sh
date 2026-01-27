@@ -35,10 +35,12 @@ fi
 BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-BRONZE}"
 SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-SILVER}"
 BRONZE_DISCOVERY_SCHEDULE="${DEPLOY_DISCOVERY_SCHEDULE:-60 MINUTE}"
+ROLE="${DEPLOY_ROLE:-SYSADMIN}"
 
 echo -e "${CYAN}  Database: ${DATABASE}${NC}"
 echo -e "${CYAN}  Bronze Schema: ${BRONZE_SCHEMA}${NC}"
 echo -e "${CYAN}  Warehouse: ${WAREHOUSE}${NC}"
+echo -e "${CYAN}  Role: ${ROLE}${NC}"
 
 # Function to execute SQL with variable substitution using snow CLI
 execute_sql() {
@@ -53,6 +55,7 @@ execute_sql() {
             -e "s/^SET SILVER_SCHEMA_NAME = '.*';/SET SILVER_SCHEMA_NAME = '${SILVER_SCHEMA}';/" \
             -e "s/^SET WAREHOUSE_NAME = '.*';/SET WAREHOUSE_NAME = '${WAREHOUSE}';/" \
             -e "s/^SET SNOWFLAKE_WAREHOUSE = '.*';/SET SNOWFLAKE_WAREHOUSE = '${WAREHOUSE}';/" \
+            -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
             -e "s/^SET BRONZE_DISCOVERY_SCHEDULE = '.*';/SET BRONZE_DISCOVERY_SCHEDULE = '${BRONZE_DISCOVERY_SCHEDULE}';/" \
             -e "s/__BRONZE_DISCOVERY_SCHEDULE__/${BRONZE_DISCOVERY_SCHEDULE}/g" \
             "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME"
@@ -64,6 +67,7 @@ execute_sql() {
             -e "s/^SET SILVER_SCHEMA_NAME = '.*';/SET SILVER_SCHEMA_NAME = '${SILVER_SCHEMA}';/" \
             -e "s/^SET WAREHOUSE_NAME = '.*';/SET WAREHOUSE_NAME = '${WAREHOUSE}';/" \
             -e "s/^SET SNOWFLAKE_WAREHOUSE = '.*';/SET SNOWFLAKE_WAREHOUSE = '${WAREHOUSE}';/" \
+            -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
             -e "s/^SET BRONZE_DISCOVERY_SCHEDULE = '.*';/SET BRONZE_DISCOVERY_SCHEDULE = '${BRONZE_DISCOVERY_SCHEDULE}';/" \
             -e "s/__BRONZE_DISCOVERY_SCHEDULE__/${BRONZE_DISCOVERY_SCHEDULE}/g" \
             "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" 2>&1); then

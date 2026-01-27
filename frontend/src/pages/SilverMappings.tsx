@@ -17,6 +17,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
   const [mappings, setMappings] = useState<FieldMapping[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
   const [tables, setTables] = useState<string[]>([])
+  const [availableTargetTables, setAvailableTargetTables] = useState<any[]>([])
   const [isAutoMLDrawerVisible, setIsAutoMLDrawerVisible] = useState(false)
   const [isAutoLLMDrawerVisible, setIsAutoLLMDrawerVisible] = useState(false)
   const [isManualModalVisible, setIsManualModalVisible] = useState(false)
@@ -25,10 +26,39 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
   const [manualForm] = Form.useForm()
 
   useEffect(() => {
+    // Load target tables once (TPA-agnostic)
+    loadTargetTables()
+  }, [])
+
+  useEffect(() => {
+    // Load mappings when TPA changes
     if (selectedTpa) {
       loadMappings()
     }
   }, [selectedTpa])
+
+  const loadTargetTables = async () => {
+    try {
+      // Load available target schemas (TPA-agnostic)
+      const schemas = await apiService.getTargetSchemas()
+      
+      // Group by table name and count columns
+      const tableMap = schemas.reduce((acc: any, schema: any) => {
+        if (!acc[schema.TABLE_NAME]) {
+          acc[schema.TABLE_NAME] = {
+            name: schema.TABLE_NAME,
+            columns: 0,
+          }
+        }
+        acc[schema.TABLE_NAME].columns++
+        return acc
+      }, {})
+      
+      setAvailableTargetTables(Object.values(tableMap))
+    } catch (error) {
+      console.error('Failed to load target tables:', error)
+    }
+  }
 
   const loadMappings = async () => {
     if (!selectedTpa) {
@@ -41,11 +71,13 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
       const data = await apiService.getFieldMappings(selectedTpa, selectedTable || undefined)
       setMappings(data)
       
-      // Extract unique target tables
+      // Extract unique target tables from mappings
       const uniqueTables = Array.from(new Set(data.map(m => m.TARGET_TABLE)))
       setTables(uniqueTables)
       
-      message.success(`Loaded ${data.length} field mappings`)
+      if (data.length > 0) {
+        message.success(`Loaded ${data.length} field mappings`)
+      }
     } catch (error) {
       message.error('Failed to load field mappings')
     } finally {
@@ -238,6 +270,14 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
     return acc
   }, {} as Record<string, FieldMapping[]>)
 
+  // Create a list of all target tables (from schemas) with their mapping status
+  const allTargetTablesWithStatus = availableTargetTables.map(table => ({
+    name: table.name,
+    columns: table.columns,
+    mappings: mappingsByTable[table.name] || [],
+    hasMappings: !!mappingsByTable[table.name],
+  }))
+
   if (!selectedTpa) {
     return (
       <div>
@@ -302,60 +342,72 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
               value={selectedTable}
               onChange={(value) => {
                 setSelectedTable(value)
-                if (value) {
-                  const filtered = mappings.filter(m => m.TARGET_TABLE === value)
-                  setMappings(filtered)
-                } else {
-                  loadMappings()
-                }
+                loadMappings()
               }}
               style={{ width: '100%' }}
               placeholder="All tables"
               allowClear
-              options={tables.map(table => ({
-                label: table,
-                value: table,
+              options={availableTargetTables.map(table => ({
+                label: `${table.name} (${table.columns} columns)`,
+                value: table.name,
               }))}
             />
           </div>
         </Space>
       </Card>
 
-      {Object.keys(mappingsByTable).length === 0 ? (
+      {allTargetTablesWithStatus.length === 0 ? (
         <Card>
           <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            No field mappings found for this TPA. Mappings need to be created before transformation.
+            No target tables found for this TPA. Please create target schemas first.
           </p>
         </Card>
       ) : (
-        Object.entries(mappingsByTable).map(([tableName, tableMappings]) => {
+        allTargetTablesWithStatus.map((tableInfo) => {
+          const tableMappings = tableInfo.mappings
           const approvedCount = tableMappings.filter(m => m.APPROVED).length
           const totalCount = tableMappings.length
-          const approvalRate = Math.round((approvedCount / totalCount) * 100)
+          const approvalRate = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0
 
           return (
             <Card 
-              key={tableName}
+              key={tableInfo.name}
               style={{ marginBottom: 16 }}
               title={
                 <Space>
                   <ApiOutlined />
-                  <span>{tableName}</span>
-                  <Tag color="blue">{totalCount} mappings</Tag>
-                  <Tag color={approvalRate === 100 ? 'success' : 'warning'}>
-                    {approvedCount}/{totalCount} approved
-                  </Tag>
+                  <span>{tableInfo.name}</span>
+                  <Tag color="cyan">{tableInfo.columns} columns</Tag>
+                  {tableInfo.hasMappings ? (
+                    <>
+                      <Tag color="blue">{totalCount} mappings</Tag>
+                      <Tag color={approvalRate === 100 ? 'success' : 'warning'}>
+                        {approvedCount}/{totalCount} approved
+                      </Tag>
+                    </>
+                  ) : (
+                    <Tag color="default">No mappings yet</Tag>
+                  )}
                 </Space>
               }
             >
-              <Table
-                columns={columns}
-                dataSource={tableMappings}
-                rowKey="MAPPING_ID"
-                loading={loading}
-                pagination={false}
-                size="small"
-              />
+              {tableInfo.hasMappings ? (
+                <Table
+                  columns={columns}
+                  dataSource={tableMappings}
+                  rowKey="MAPPING_ID"
+                  loading={loading}
+                  pagination={false}
+                  size="small"
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                  <p>No field mappings created for this table yet.</p>
+                  <p style={{ fontSize: '12px' }}>
+                    Use <strong>Auto-Map (ML)</strong>, <strong>Auto-Map (LLM)</strong>, or <strong>Manual Mapping</strong> to create mappings.
+                  </p>
+                </div>
+              )}
             </Card>
           )
         })
@@ -366,7 +418,8 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           <div><strong>Total Mappings:</strong> {mappings.length}</div>
           <div><strong>Approved:</strong> {mappings.filter(m => m.APPROVED).length}</div>
           <div><strong>Pending:</strong> {mappings.filter(m => !m.APPROVED).length}</div>
-          <div><strong>Target Tables:</strong> {tables.length}</div>
+          <div><strong>Target Tables:</strong> {availableTargetTables.length}</div>
+          <div><strong>Tables with Mappings:</strong> {allTargetTablesWithStatus.filter(t => t.hasMappings).length}</div>
         </Space>
         <div style={{ marginTop: 16, color: '#666' }}>
           <p><strong>Mapping Methods:</strong></p>
@@ -416,7 +469,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           >
             <Select
               placeholder="Select target table"
-              options={tables.map(t => ({ label: t, value: t }))}
+              options={availableTargetTables.map(t => ({ 
+                label: `${t.name} (${t.columns} columns)`, 
+                value: t.name 
+              }))}
               showSearch
             />
           </Form.Item>
@@ -487,7 +543,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           >
             <Select
               placeholder="Select target table"
-              options={tables.map(t => ({ label: t, value: t }))}
+              options={availableTargetTables.map(t => ({ 
+                label: `${t.name} (${t.columns} columns)`, 
+                value: t.name 
+              }))}
               showSearch
             />
           </Form.Item>
@@ -556,7 +615,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           >
             <Select
               placeholder="Select target table"
-              options={tables.map(t => ({ label: t, value: t }))}
+              options={availableTargetTables.map(t => ({ 
+                label: `${t.name} (${t.columns} columns)`, 
+                value: t.name 
+              }))}
               showSearch
             />
           </Form.Item>

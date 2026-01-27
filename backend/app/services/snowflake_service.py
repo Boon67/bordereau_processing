@@ -189,32 +189,22 @@ class SnowflakeService:
         
         return self.execute_query_dict(query)
     
-    def get_target_schemas(self, tpa: str, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get target schemas"""
-        logger.info(f"Getting target schemas for TPA: '{tpa}', table_name: '{table_name}'")
-        
-        # Debug: Check what TPAs exist in the database
-        debug_query = f"""
-            SELECT DISTINCT tpa 
-            FROM {settings.SILVER_SCHEMA_NAME}.target_schemas 
-            WHERE active = TRUE
-        """
-        existing_tpas = self.execute_query_dict(debug_query)
-        logger.info(f"Available TPAs in database: {[t['TPA'] for t in existing_tpas]}")
+    def get_target_schemas(self, tpa: Optional[str] = None, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get target schemas (TPA-agnostic)"""
+        logger.info(f"Getting target schemas - table_name: '{table_name}'")
         
         query = f"""
             SELECT 
                 schema_id,
                 table_name,
                 column_name,
-                tpa,
                 data_type,
                 nullable,
                 default_value,
                 description,
                 active
             FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
-            WHERE tpa = '{tpa}' AND active = TRUE
+            WHERE active = TRUE
         """
         
         if table_name:
@@ -224,7 +214,7 @@ class SnowflakeService:
         
         logger.info(f"Executing query: {query}")
         result = self.execute_query_dict(query)
-        logger.info(f"Found {len(result)} schema records for TPA '{tpa}'")
+        logger.info(f"Found {len(result)} schema records")
         
         return result
     

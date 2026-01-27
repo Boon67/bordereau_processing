@@ -390,6 +390,7 @@ export DEPLOY_WAREHOUSE="$WAREHOUSE"
 export DEPLOY_BRONZE_SCHEMA="$BRONZE_SCHEMA"
 export DEPLOY_SILVER_SCHEMA="$SILVER_SCHEMA"
 export DEPLOY_DISCOVERY_SCHEDULE="$DISCOVERY_SCHEDULE"
+export DEPLOY_ROLE="$ROLE"
 
 log_message INFO "Account: $ACCOUNT"
 log_message INFO "Database: $DATABASE"
@@ -608,9 +609,9 @@ if [[ "${LOAD_SAMPLE_SCHEMAS}" == "true" ]]; then
 else
     echo "Would you like to load sample Silver target schemas?"
     echo "This will:"
-    echo "  • Generate schema definitions for 5 TPAs"
+    echo "  • Load TPA-agnostic schema definitions"
     echo "  • Create 4 table types (Medical, Dental, Pharmacy, Eligibility)"
-    echo "  • Load 310 column definitions"
+    echo "  • Load 62 column definitions (shared across all TPAs)"
     echo ""
 
     # Default to 'yes' if AUTO_APPROVE is enabled

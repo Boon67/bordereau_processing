@@ -16,10 +16,9 @@
 
 SET DATABASE_NAME = '$DATABASE_NAME';
 SET SILVER_SCHEMA_NAME = '$SILVER_SCHEMA_NAME';
+SET SNOWFLAKE_ROLE = '$SNOWFLAKE_ROLE';
 
-SET role_admin = $DATABASE_NAME || '_ADMIN';
-
-USE ROLE IDENTIFIER($role_admin);
+USE ROLE IDENTIFIER($SNOWFLAKE_ROLE);
 USE DATABASE IDENTIFIER($DATABASE_NAME);
 USE SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
 
@@ -42,7 +41,7 @@ def create_silver_table(session, table_name, tpa):
     tpa_upper = tpa.upper()
     full_table_name = f"{tpa_upper}_{table_name_upper}"
     
-    # Get column definitions from target_schemas
+    # Get column definitions from target_schemas (TPA-agnostic)
     query = f"""
         SELECT 
             COLUMN_NAME,
@@ -51,7 +50,6 @@ def create_silver_table(session, table_name, tpa):
             DEFAULT_VALUE
         FROM target_schemas
         WHERE table_name = '{table_name_upper}'
-          AND tpa = '{tpa}'
           AND active = TRUE
         ORDER BY schema_id
     """
@@ -59,7 +57,7 @@ def create_silver_table(session, table_name, tpa):
     columns = session.sql(query).collect()
     
     if not columns:
-        return f"ERROR: No columns defined for table {table_name} and TPA {tpa}"
+        return f"ERROR: No columns defined for table {table_name}"
     
     # Build column definitions
     column_defs = []
@@ -97,7 +95,7 @@ $$;
 -- PROCEDURE: Get Target Schema
 -- ============================================
 
-CREATE OR REPLACE PROCEDURE get_target_schema(table_name VARCHAR, tpa VARCHAR)
+CREATE OR REPLACE PROCEDURE get_target_schema(table_name VARCHAR)
 RETURNS TABLE (column_name VARCHAR, data_type VARCHAR, nullable BOOLEAN, description VARCHAR)
 LANGUAGE SQL
 AS
@@ -113,7 +111,6 @@ BEGIN
             description
         FROM target_schemas
         WHERE table_name = UPPER(:table_name)
-          AND tpa = :tpa
           AND active = TRUE
         ORDER BY schema_id
     );
@@ -155,6 +152,6 @@ $$;
 -- VERIFICATION
 -- ============================================
 
-SHOW PROCEDURES IN SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
+-- SHOW PROCEDURES IN SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
 
 SELECT 'Silver target schema procedures created successfully' AS status;

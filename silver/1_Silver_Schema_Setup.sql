@@ -20,11 +20,9 @@
 SET DATABASE_NAME = '$DATABASE_NAME';
 SET BRONZE_SCHEMA_NAME = '$BRONZE_SCHEMA_NAME';
 SET SILVER_SCHEMA_NAME = '$SILVER_SCHEMA_NAME';
+SET SNOWFLAKE_ROLE = '$SNOWFLAKE_ROLE';
 
--- Set role and context
-SET role_admin = $DATABASE_NAME || '_ADMIN';
-
-USE ROLE IDENTIFIER($role_admin);
+USE ROLE IDENTIFIER($SNOWFLAKE_ROLE);
 USE DATABASE IDENTIFIER($DATABASE_NAME);
 USE SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
 
@@ -50,7 +48,6 @@ CREATE HYBRID TABLE IF NOT EXISTS target_schemas (
     schema_id NUMBER(38,0) AUTOINCREMENT PRIMARY KEY,
     table_name VARCHAR(500) NOT NULL,
     column_name VARCHAR(500) NOT NULL,
-    tpa VARCHAR(500) NOT NULL,  -- REQUIRED
     data_type VARCHAR(200) NOT NULL,
     nullable BOOLEAN DEFAULT TRUE,
     default_value VARCHAR(1000),
@@ -59,11 +56,10 @@ CREATE HYBRID TABLE IF NOT EXISTS target_schemas (
     updated_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     created_by VARCHAR(500) DEFAULT CURRENT_USER(),
     active BOOLEAN DEFAULT TRUE,
-    CONSTRAINT uk_target_schemas UNIQUE (table_name, column_name, tpa),
-    INDEX idx_target_schemas_tpa (tpa),
+    CONSTRAINT uk_target_schemas UNIQUE (table_name, column_name),
     INDEX idx_target_schemas_table (table_name)
 )
-COMMENT = 'Dynamic target table definitions per TPA. Defines schema for Silver tables that will be created from Bronze data.';
+COMMENT = 'TPA-agnostic target table definitions. Schemas are shared across all TPAs. Tables are created per TPA (e.g., PROVIDER_A_DENTAL_CLAIMS).';
 
 -- ============================================
 -- METADATA TABLE 2: field_mappings (HYBRID TABLE)
