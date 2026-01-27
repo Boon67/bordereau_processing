@@ -120,6 +120,7 @@ $$;
 CREATE OR REPLACE PROCEDURE auto_map_fields_ml(
     source_table VARCHAR DEFAULT 'RAW_DATA_TABLE',
     target_table VARCHAR DEFAULT NULL,
+    tpa VARCHAR DEFAULT NULL,
     top_n INTEGER DEFAULT 3,
     min_confidence FLOAT DEFAULT 0.6
 )
@@ -178,16 +179,31 @@ def calculate_word_overlap(source, target):
     union = source_words.union(target_words)
     return len(intersection) / len(union) if union else 0.0
 
-def auto_map_fields_ml(session, source_table, target_table, top_n, min_confidence):
+def auto_map_fields_ml(session, source_table, target_table, tpa, top_n, min_confidence):
     """Main function for ML-based field mapping"""
     
+    if not tpa:
+        return "Error: TPA parameter is required"
+    
     # Get source fields from Bronze table (analyze VARIANT column structure)
+    bronze_schema = session.get_current_schema()
+    database = session.get_current_database()
+    
+    # Determine the full table path
+    if '.' in source_table:
+        # Already qualified
+        full_source_table = source_table
+    else:
+        # Need to qualify - assume BRONZE schema
+        full_source_table = f"{database}.BRONZE.{source_table}"
+    
     bronze_query = f"""
         SELECT DISTINCT 
             f.key as field_name
-        FROM {source_table},
+        FROM {full_source_table},
         LATERAL FLATTEN(input => RAW_DATA) f
         WHERE RAW_DATA IS NOT NULL
+          AND TPA = '{tpa}'
         LIMIT 1000
     """
     
@@ -296,7 +312,7 @@ def auto_map_fields_ml(session, source_table, target_table, top_n, min_confidenc
         
         insert_query = f"""
             INSERT INTO field_mappings (
-                source_field, source_table, target_table, target_column,
+                source_field, source_table, target_table, target_column, tpa,
                 mapping_method, confidence_score, approved,
                 transformation_logic
             )
@@ -305,6 +321,7 @@ def auto_map_fields_ml(session, source_table, target_table, top_n, min_confidenc
                 '{source_table}',
                 '{row['TARGET_TABLE']}',
                 '{row['TARGET_COLUMN']}',
+                '{tpa}',
                 'ML_AUTO',
                 {row['COMBINED_SCORE']},
                 FALSE,
@@ -335,6 +352,7 @@ $$;
 CREATE OR REPLACE PROCEDURE auto_map_fields_llm(
     source_table VARCHAR DEFAULT 'RAW_DATA_TABLE',
     target_table VARCHAR DEFAULT NULL,
+    tpa VARCHAR DEFAULT NULL,
     model_name VARCHAR DEFAULT 'llama3.1-70b',
     custom_prompt_id VARCHAR DEFAULT 'DEFAULT_FIELD_MAPPING'
 )
@@ -348,16 +366,30 @@ $$
 import json
 import re
 
-def auto_map_fields_llm(session, source_table, target_table, model_name, custom_prompt_id):
+def auto_map_fields_llm(session, source_table, target_table, tpa, model_name, custom_prompt_id):
     """Main function for LLM-based field mapping"""
     
+    if not tpa:
+        return "Error: TPA parameter is required"
+    
     # Get source fields from Bronze table
+    database = session.get_current_database()
+    
+    # Determine the full table path
+    if '.' in source_table:
+        # Already qualified
+        full_source_table = source_table
+    else:
+        # Need to qualify - assume BRONZE schema
+        full_source_table = f"{database}.BRONZE.{source_table}"
+    
     bronze_query = f"""
         SELECT DISTINCT 
             f.key as field_name
-        FROM {source_table},
+        FROM {full_source_table},
         LATERAL FLATTEN(input => RAW_DATA) f
         WHERE RAW_DATA IS NOT NULL
+          AND TPA = '{tpa}'
         LIMIT 1000
     """
     
@@ -508,7 +540,7 @@ def auto_map_fields_llm(session, source_table, target_table, model_name, custom_
             
             insert_query = f"""
                 INSERT INTO field_mappings (
-                    source_field, source_table, target_table, target_column,
+                    source_field, source_table, target_table, target_column, tpa,
                     mapping_method, confidence_score, approved,
                     description
                 )
@@ -517,6 +549,7 @@ def auto_map_fields_llm(session, source_table, target_table, model_name, custom_
                     '{source_table}',
                     '{target_table_name}',
                     '{target_column}',
+                    '{tpa}',
                     'LLM_CORTEX',
                     {confidence},
                     FALSE,

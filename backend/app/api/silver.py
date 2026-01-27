@@ -9,6 +9,7 @@ import logging
 
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
+from app.utils.cache import cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,10 +51,57 @@ async def get_target_schemas(tpa: Optional[str] = None, table_name: Optional[str
     """Get target schemas (TPA-agnostic)"""
     try:
         sf_service = SnowflakeService()
-        return sf_service.get_target_schemas(tpa, table_name)
+        return await sf_service.get_target_schemas(tpa, table_name)
     except Exception as e:
         logger.error(f"Failed to get target schemas: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/schemas/{table_name}/columns")
+async def get_target_columns(table_name: str):
+    """Get column names for a specific target table"""
+    try:
+        sf_service = SnowflakeService()
+        query = f"""
+            SELECT column_name
+            FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+            WHERE table_name = '{table_name.upper()}'
+              AND active = TRUE
+            ORDER BY schema_id
+        """
+        result = await sf_service.execute_query_dict(query)
+        return [row['COLUMN_NAME'] for row in result]
+    except Exception as e:
+        logger.error(f"Failed to get target columns: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/cortex-models")
+async def get_cortex_models():
+    """Get list of available Cortex LLM models"""
+    try:
+        sf_service = SnowflakeService()
+        
+        # First, show models to populate the result set
+        await sf_service.execute_query("SHOW MODELS IN SNOWFLAKE.MODELS")
+        
+        # Then query the result set for CORTEX_BASE models
+        query = """
+            SELECT "name" AS model_name
+            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+            WHERE "model_type" = 'CORTEX_BASE'
+            ORDER BY "name"
+        """
+        result = await sf_service.execute_query_dict(query)
+        return [row['MODEL_NAME'] for row in result]
+    except Exception as e:
+        logger.error(f"Failed to get Cortex models: {str(e)}")
+        # Return a default list if the query fails
+        return [
+            'llama3.1-70b',
+            'llama3.1-8b',
+            'mistral-large',
+            'mixtral-8x7b',
+            'gemma-7b'
+        ]
 
 @router.post("/schemas")
 async def create_target_schema(schema: TargetSchemaCreate):
@@ -68,7 +116,11 @@ async def create_target_schema(schema: TargetSchemaCreate):
                     {'NULL' if not schema.default_value else f"'{schema.default_value}'"},
                     {'NULL' if not schema.description else f"'{schema.description}'"})
         """
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
+        
+        # Invalidate schema cache
+        cache.clear("schemas")
+        
         return {"message": "Target schema created successfully"}
     except Exception as e:
         logger.error(f"Failed to create target schema: {str(e)}")
@@ -99,7 +151,11 @@ async def update_target_schema(schema_id: int, schema: TargetSchemaUpdate):
             SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP()
             WHERE schema_id = {schema_id}
         """
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
+        
+        # Invalidate schema cache
+        cache.clear("schemas")
+        
         return {"message": "Target schema updated successfully"}
     except HTTPException:
         raise
@@ -116,7 +172,11 @@ async def delete_target_schema(schema_id: int):
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
             WHERE schema_id = {schema_id}
         """
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
+        
+        # Invalidate schema cache
+        cache.clear("schemas")
+        
         return {"message": "Target schema column deleted successfully"}
     except Exception as e:
         logger.error(f"Failed to delete target schema: {str(e)}")
@@ -134,7 +194,7 @@ async def delete_table_schema(table_name: str, tpa: str):
             FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
             WHERE table_name = '{table_name.upper()}' AND tpa = '{tpa}' AND active = TRUE
         """
-        result = sf_service.execute_query_dict(check_query)
+        result = await sf_service.execute_query_dict(check_query)
         
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"Table schema '{table_name}' not found for TPA '{tpa}'")
@@ -144,7 +204,7 @@ async def delete_table_schema(table_name: str, tpa: str):
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
             WHERE table_name = '{table_name.upper()}' AND tpa = '{tpa}'
         """
-        sf_service.execute_query(delete_query)
+        await sf_service.execute_query(delete_query)
         
         logger.info(f"Deleted table schema '{table_name}' for TPA '{tpa}' ({result[0]['COUNT']} columns)")
         return {
@@ -155,6 +215,35 @@ async def delete_table_schema(table_name: str, tpa: str):
         raise
     except Exception as e:
         logger.error(f"Failed to delete table schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/tables")
+async def list_silver_tables():
+    """List all user-created Silver tables with metadata"""
+    try:
+        sf_service = SnowflakeService()
+        query = f"""
+            SELECT 
+                ct.physical_table_name as TABLE_NAME,
+                ct.schema_table_name as SCHEMA_TABLE,
+                ct.tpa as TPA,
+                ct.created_timestamp as CREATED_AT,
+                ct.created_by as CREATED_BY,
+                ct.description as DESCRIPTION,
+                COALESCE(ist.row_count, 0) as ROW_COUNT,
+                COALESCE(ist.bytes, 0) as BYTES,
+                ist.last_altered as LAST_UPDATED
+            FROM {settings.SILVER_SCHEMA_NAME}.created_tables ct
+            LEFT JOIN INFORMATION_SCHEMA.TABLES ist 
+                ON ist.table_schema = '{settings.SILVER_SCHEMA_NAME}'
+                AND ist.table_name = ct.physical_table_name
+            WHERE ct.active = TRUE
+            ORDER BY ct.created_timestamp DESC
+        """
+        result = await sf_service.execute_query_dict(query)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to list Silver tables: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/tables/exists")
@@ -173,7 +262,7 @@ async def check_table_exists(table_name: str, tpa: str):
             WHERE TABLE_SCHEMA = '{settings.SILVER_SCHEMA_NAME}'
               AND TABLE_NAME = '{physical_table_name}'
         """
-        result = sf_service.execute_query_dict(query)
+        result = await sf_service.execute_query_dict(query)
         exists = result[0]['COUNT'] > 0 if result else False
         
         return {
@@ -195,7 +284,7 @@ async def create_silver_table(table_name: str, tpa: str):
         sf_service = SnowflakeService()
         # Use fully qualified procedure name
         proc_name = f"{settings.SILVER_SCHEMA_NAME}.create_silver_table"
-        result = sf_service.execute_procedure(proc_name, table_name, tpa)
+        result = await sf_service.execute_procedure(proc_name, table_name, tpa)
         
         # Extract the actual table name from the result
         physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
@@ -214,7 +303,7 @@ async def get_field_mappings(tpa: str, target_table: Optional[str] = None):
     """Get field mappings"""
     try:
         sf_service = SnowflakeService()
-        return sf_service.get_field_mappings(tpa, target_table)
+        return await sf_service.get_field_mappings(tpa, target_table)
     except Exception as e:
         logger.error(f"Failed to get field mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -232,29 +321,37 @@ async def create_field_mapping(mapping: FieldMappingCreate):
                     {'NULL' if not mapping.transformation_logic else f"'{mapping.transformation_logic}'"},
                     {'NULL' if not mapping.description else f"'{mapping.description}'"}, TRUE)
         """
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
         return {"message": "Field mapping created successfully"}
     except Exception as e:
         logger.error(f"Failed to create field mapping: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/mappings/auto-ml")
-async def auto_map_fields_ml(
-    source_table: str,
-    target_table: str,
-    tpa: str,
-    top_n: int = 3,
+class AutoMapMLRequest(BaseModel):
+    source_table: str
+    target_table: str
+    tpa: str
+    top_n: int = 3
     min_confidence: float = 0.6
-):
+
+class AutoMapLLMRequest(BaseModel):
+    source_table: str
+    target_table: str
+    tpa: str
+    model_name: str = "llama3.1-70b"
+
+@router.post("/mappings/auto-ml")
+async def auto_map_fields_ml(request: AutoMapMLRequest):
     """Auto-map fields using ML"""
     try:
         sf_service = SnowflakeService()
-        result = sf_service.execute_procedure(
+        result = await sf_service.execute_procedure(
             "auto_map_fields_ml",
-            source_table,
-            target_table,
-            top_n,
-            min_confidence
+            request.source_table,
+            request.target_table,
+            request.tpa,
+            request.top_n,
+            request.min_confidence
         )
         return {"message": "ML auto-mapping completed", "result": result}
     except Exception as e:
@@ -262,20 +359,16 @@ async def auto_map_fields_ml(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/mappings/auto-llm")
-async def auto_map_fields_llm(
-    source_table: str,
-    target_table: str,
-    tpa: str,
-    model_name: str = "llama3.1-70b"
-):
+async def auto_map_fields_llm(request: AutoMapLLMRequest):
     """Auto-map fields using LLM"""
     try:
         sf_service = SnowflakeService()
-        result = sf_service.execute_procedure(
+        result = await sf_service.execute_procedure(
             "auto_map_fields_llm",
-            source_table,
-            target_table,
-            model_name,
+            request.source_table,
+            request.target_table,
+            request.tpa,
+            request.model_name,
             "DEFAULT_FIELD_MAPPING"
         )
         return {"message": "LLM auto-mapping completed", "result": result}
@@ -288,7 +381,7 @@ async def approve_mapping(mapping_id: int):
     """Approve a field mapping"""
     try:
         sf_service = SnowflakeService()
-        result = sf_service.execute_procedure("approve_field_mapping", mapping_id)
+        result = await sf_service.execute_procedure("approve_field_mapping", mapping_id)
         return {"message": "Mapping approved successfully", "result": result}
     except Exception as e:
         logger.error(f"Failed to approve mapping: {str(e)}")
@@ -299,7 +392,7 @@ async def transform_bronze_to_silver(request: TransformRequest):
     """Transform Bronze data to Silver"""
     try:
         sf_service = SnowflakeService()
-        result = sf_service.execute_procedure(
+        result = await sf_service.execute_procedure(
             "transform_bronze_to_silver",
             request.source_table,
             request.target_table,

@@ -32,11 +32,14 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
   const [createPhysicalTableForm] = Form.useForm()
   const [tpas, setTpas] = useState<Array<{ TPA_CODE: string; TPA_NAME: string }>>([])
   const [loadingTpas, setLoadingTpas] = useState(false)
+  const [createdTables, setCreatedTables] = useState<any[]>([])
+  const [loadingCreatedTables, setLoadingCreatedTables] = useState(false)
 
   useEffect(() => {
     // Load schemas once on mount (TPA-agnostic)
     loadSchemas()
     loadTpas()
+    loadCreatedTables()
   }, [])
 
   useEffect(() => {
@@ -77,6 +80,18 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
       message.error('Failed to load TPAs')
     } finally {
       setLoadingTpas(false)
+    }
+  }
+
+  const loadCreatedTables = async () => {
+    setLoadingCreatedTables(true)
+    try {
+      const data = await apiService.getSilverTables()
+      setCreatedTables(data)
+    } catch (error) {
+      message.error('Failed to load created tables')
+    } finally {
+      setLoadingCreatedTables(false)
     }
   }
 
@@ -226,6 +241,10 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
       
       // Update table existence state
       setTableExistence(prev => ({ ...prev, [selectedTableForCreation]: true }))
+      
+      // Reload created tables to show the new table
+      await loadCreatedTables()
+      
       setCreateTableModalVisible(false)
     } catch (error: any) {
       message.error(`Failed to create table: ${error.response?.data?.detail || error.message}`)
@@ -423,80 +442,93 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
         </Card>
       )}
 
-      <Card title="📋 Schema Information" style={{ marginTop: 16 }}>
-        <Table
-          columns={[
-            {
-              title: 'Table Name',
-              dataIndex: 'tableName',
-              key: 'tableName',
-              render: (text: string) => (
-                <Space>
-                  <TableOutlined />
-                  <strong>{text}</strong>
-                </Space>
-              ),
-            },
-            {
-              title: 'Columns',
-              dataIndex: 'columnCount',
-              key: 'columnCount',
-              width: 100,
-              render: (count: number) => <Tag color="purple">{count} columns</Tag>,
-            },
-            {
-              title: 'Schema Type',
-              key: 'schemaType',
-              width: 150,
-              render: () => <Tag color="green">TPA-Agnostic</Tag>,
-            },
-            {
-              title: 'Created By',
-              dataIndex: 'createdBy',
-              key: 'createdBy',
-              width: 150,
-            },
-            {
-              title: 'Created At',
-              dataIndex: 'createdAt',
-              key: 'createdAt',
-              width: 180,
-              render: (date: string) => {
-                if (!date) return <span style={{ color: '#999' }}>-</span>
-                const d = new Date(date)
-                return d.toLocaleString()
+      <Card title="📋 Created Tables" style={{ marginTop: 16 }}>
+        {createdTables.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            <p>No tables have been created yet.</p>
+            <p style={{ fontSize: '12px' }}>
+              Use the <strong>Create Table</strong> button above to create physical tables from schema definitions.
+            </p>
+          </div>
+        ) : (
+          <Table
+            columns={[
+              {
+                title: 'Table Name',
+                dataIndex: 'TABLE_NAME',
+                key: 'TABLE_NAME',
+                render: (text: string) => (
+                  <Space>
+                    <DatabaseOutlined />
+                    <strong>{text}</strong>
+                  </Space>
+                ),
               },
-            },
-            {
-              title: 'Last Updated',
-              dataIndex: 'updatedAt',
-              key: 'updatedAt',
-              width: 180,
-              render: (date: string) => {
-                if (!date) return <span style={{ color: '#999' }}>-</span>
-                const d = new Date(date)
-                return d.toLocaleString()
+              {
+                title: 'Schema',
+                dataIndex: 'SCHEMA_TABLE',
+                key: 'SCHEMA_TABLE',
+                width: 180,
+                render: (text: string) => <Tag color="blue">{text}</Tag>,
               },
-            },
-          ]}
-          dataSource={tables.map(tableName => {
-            const tableSchemas = schemasByTable[tableName] || []
-            const firstSchema = tableSchemas[0]
-            return {
-              key: tableName,
-              tableName,
-              columnCount: tableSchemas.length,
-              createdBy: firstSchema?.CREATED_BY || 'N/A',
-              createdAt: firstSchema?.CREATED_TIMESTAMP,
-              updatedAt: firstSchema?.UPDATED_TIMESTAMP,
-            }
-          })}
-          pagination={false}
-          size="small"
-        />
+              {
+                title: 'Provider',
+                dataIndex: 'TPA',
+                key: 'TPA',
+                width: 150,
+                render: (text: string) => <Tag color="green">{text}</Tag>,
+              },
+              {
+                title: 'Rows',
+                dataIndex: 'ROW_COUNT',
+                key: 'ROW_COUNT',
+                width: 100,
+                render: (count: number) => count?.toLocaleString() || '0',
+              },
+              {
+                title: 'Size',
+                dataIndex: 'BYTES',
+                key: 'BYTES',
+                width: 100,
+                render: (bytes: number) => {
+                  if (!bytes) return '0 B'
+                  const kb = bytes / 1024
+                  const mb = kb / 1024
+                  const gb = mb / 1024
+                  if (gb >= 1) return `${gb.toFixed(2)} GB`
+                  if (mb >= 1) return `${mb.toFixed(2)} MB`
+                  if (kb >= 1) return `${kb.toFixed(2)} KB`
+                  return `${bytes} B`
+                },
+              },
+              {
+                title: 'Created By',
+                dataIndex: 'CREATED_BY',
+                key: 'CREATED_BY',
+                width: 150,
+              },
+              {
+                title: 'Created At',
+                dataIndex: 'CREATED_AT',
+                key: 'CREATED_AT',
+                width: 180,
+                render: (date: string) => {
+                  if (!date) return <span style={{ color: '#999' }}>-</span>
+                  const d = new Date(date)
+                  return d.toLocaleString()
+                },
+              },
+            ]}
+            dataSource={createdTables}
+            rowKey="TABLE_NAME"
+            loading={loadingCreatedTables}
+            pagination={false}
+            size="small"
+          />
+        )}
         <div style={{ marginTop: 16, padding: '12px', backgroundColor: '#f0f7ff', borderRadius: '4px' }}>
           <p style={{ margin: 0, color: '#666' }}>
-            <strong>Note:</strong> Schemas are shared across all providers. When you create a table, it will be created for a specific provider (e.g., PROVIDER_A_DENTAL_CLAIMS).
+            <strong>Note:</strong> These are physical tables created from TPA-agnostic schemas. Each table is specific to a provider (e.g., PROVIDER_A_DENTAL_CLAIMS).
           </p>
         </div>
       </Card>

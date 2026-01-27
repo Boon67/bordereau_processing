@@ -241,6 +241,28 @@ export const apiService = {
     return response.data
   },
 
+  getSilverTables: async (): Promise<any[]> => {
+    const response = await api.get('/silver/tables')
+    return response.data
+  },
+
+  getSourceFields: async (tpa: string): Promise<string[]> => {
+    const response = await api.get('/bronze/source-fields', {
+      params: { tpa },
+    })
+    return response.data
+  },
+
+  getTargetColumns: async (tableName: string): Promise<string[]> => {
+    const response = await api.get(`/silver/schemas/${tableName}/columns`)
+    return response.data
+  },
+
+  getCortexModels: async (): Promise<string[]> => {
+    const response = await api.get('/silver/cortex-models')
+    return response.data
+  },
+
   checkTableExists: async (tableName: string, tpa: string): Promise<{ exists: boolean; physical_table_name: string }> => {
     const response = await api.get('/silver/tables/exists', {
       params: { table_name: tableName, tpa }

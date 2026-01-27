@@ -38,7 +38,7 @@ async def get_gold_table_data(table_name: str, tpa: str, limit: int = 100):
             LIMIT {limit}
         """
         
-        return sf_service.execute_query_dict(query)
+        return await sf_service.execute_query_dict(query)
     except HTTPException:
         raise
     except Exception as e:
@@ -67,7 +67,7 @@ async def get_gold_stats(table_name: str, tpa: str):
             FROM {settings.DATABASE_NAME}.GOLD.{full_table_name}
         """
         
-        result = sf_service.execute_query_dict(query)
+        result = await sf_service.execute_query_dict(query)
         if result and len(result) > 0:
             stats = result[0]
             stats['quality_score'] = 100  # Default quality score
@@ -104,7 +104,7 @@ async def get_business_metrics(tpa: str):
             ORDER BY METRIC_CATEGORY, METRIC_NAME
         """
         
-        return sf_service.execute_query_dict(query)
+        return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get business metrics: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -134,7 +134,7 @@ async def get_quality_check_results(tpa: str, limit: int = 100):
             LIMIT {limit}
         """
         
-        results = sf_service.execute_query_dict(query)
+        results = await sf_service.execute_query_dict(query)
         
         # Enrich with rule information
         for result in results:
@@ -144,7 +144,7 @@ async def get_quality_check_results(tpa: str, limit: int = 100):
                     FROM {settings.DATABASE_NAME}.GOLD.quality_rules
                     WHERE QUALITY_RULE_ID = {result['QUALITY_RULE_ID']}
                 """
-                rule_data = sf_service.execute_query_dict(rule_query)
+                rule_data = await sf_service.execute_query_dict(rule_query)
                 if rule_data and len(rule_data) > 0:
                     result.update(rule_data[0])
         
@@ -170,7 +170,7 @@ async def get_quality_stats(tpa: str):
             WHERE TPA = '{tpa}' OR TPA = 'ALL'
         """
         
-        result = sf_service.execute_query_dict(query)
+        result = await sf_service.execute_query_dict(query)
         return result[0] if result and len(result) > 0 else {}
     except Exception as e:
         logger.error(f"Failed to get quality stats: {str(e)}")
@@ -203,7 +203,7 @@ async def get_transformation_rules(tpa: str):
             ORDER BY EXECUTION_ORDER, PRIORITY
         """
         
-        return sf_service.execute_query_dict(query)
+        return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get transformation rules: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -236,7 +236,7 @@ async def get_quality_rules(tpa: str):
             ORDER BY SEVERITY DESC, RULE_NAME
         """
         
-        return sf_service.execute_query_dict(query)
+        return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get quality rules: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -253,7 +253,7 @@ async def update_transformation_rule_status(rule_id: int, status: RuleStatusUpda
             WHERE RULE_ID = {rule_id}
         """
         
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
         
         return {
             "message": f"Rule {'activated' if status.is_active else 'deactivated'} successfully",
@@ -276,7 +276,7 @@ async def update_quality_rule_status(rule_id: int, status: RuleStatusUpdate):
             WHERE QUALITY_RULE_ID = {rule_id}
         """
         
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
         
         return {
             "message": f"Rule {'activated' if status.is_active else 'deactivated'} successfully",

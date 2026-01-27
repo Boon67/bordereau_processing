@@ -15,7 +15,6 @@ interface SilverMappingsProps {
 const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [mappings, setMappings] = useState<FieldMapping[]>([])
-  const [selectedTable, setSelectedTable] = useState<string>('')
   const [tables, setTables] = useState<string[]>([])
   const [availableTargetTables, setAvailableTargetTables] = useState<any[]>([])
   const [isAutoMLDrawerVisible, setIsAutoMLDrawerVisible] = useState(false)
@@ -24,37 +23,83 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
   const [autoMLForm] = Form.useForm()
   const [autoLLMForm] = Form.useForm()
   const [manualForm] = Form.useForm()
+  const [sourceFields, setSourceFields] = useState<string[]>([])
+  const [targetColumns, setTargetColumns] = useState<string[]>([])
+  const [loadingSourceFields, setLoadingSourceFields] = useState(false)
+  const [loadingTargetColumns, setLoadingTargetColumns] = useState(false)
+  const [cortexModels, setCortexModels] = useState<string[]>([])
+  const [loadingCortexModels, setLoadingCortexModels] = useState(false)
 
   useEffect(() => {
-    // Load target tables once (TPA-agnostic)
-    loadTargetTables()
-  }, [])
-
-  useEffect(() => {
-    // Load mappings when TPA changes
+    // Load created tables when TPA changes
     if (selectedTpa) {
+      loadTargetTables()
       loadMappings()
     }
   }, [selectedTpa])
 
+  useEffect(() => {
+    // Set default values when availableTargetTables changes
+    if (availableTargetTables.length > 0) {
+      const defaultTargetTable = availableTargetTables.length === 1 ? availableTargetTables[0].name : undefined
+      
+      // Update Auto-Map ML form
+      autoMLForm.setFieldsValue({
+        source_table: 'RAW_DATA_TABLE',
+        target_table: defaultTargetTable
+      })
+      
+      // Update Auto-Map LLM form
+      autoLLMForm.setFieldsValue({
+        source_table: 'RAW_DATA_TABLE',
+        target_table: defaultTargetTable
+      })
+      
+      // Update Manual Mapping form
+      manualForm.setFieldsValue({
+        source_table: 'RAW_DATA_TABLE',
+        target_table: defaultTargetTable
+      })
+    }
+  }, [availableTargetTables])
+
+  useEffect(() => {
+    // Set default model when cortex models are loaded
+    if (cortexModels.length > 0) {
+      autoLLMForm.setFieldsValue({
+        model_name: cortexModels[0] // Use first model as default
+      })
+    }
+  }, [cortexModels])
+
   const loadTargetTables = async () => {
+    if (!selectedTpa) return
+    
     try {
-      // Load available target schemas (TPA-agnostic)
-      const schemas = await apiService.getTargetSchemas()
+      // Load created tables and schemas in parallel (only once each)
+      const [createdTables, schemas] = await Promise.all([
+        apiService.getSilverTables(),
+        apiService.getTargetSchemas()
+      ])
       
-      // Group by table name and count columns
-      const tableMap = schemas.reduce((acc: any, schema: any) => {
-        if (!acc[schema.TABLE_NAME]) {
-          acc[schema.TABLE_NAME] = {
-            name: schema.TABLE_NAME,
-            columns: 0,
-          }
+      // Filter to only tables for the selected TPA
+      const tpaCreatedTables = createdTables.filter(
+        (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
+      )
+      
+      // Map each created table with its column count from schemas
+      const tablesWithColumns = tpaCreatedTables.map((table: any) => {
+        const tableSchemas = schemas.filter(
+          (s: any) => s.TABLE_NAME === table.SCHEMA_TABLE
+        )
+        return {
+          name: table.SCHEMA_TABLE,
+          physicalName: table.TABLE_NAME,
+          columns: tableSchemas.length,
         }
-        acc[schema.TABLE_NAME].columns++
-        return acc
-      }, {})
+      })
       
-      setAvailableTargetTables(Object.values(tableMap))
+      setAvailableTargetTables(tablesWithColumns)
     } catch (error) {
       console.error('Failed to load target tables:', error)
     }
@@ -68,7 +113,8 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
 
     setLoading(true)
     try {
-      const data = await apiService.getFieldMappings(selectedTpa, selectedTable || undefined)
+      // Load all mappings for this TPA (no table filter)
+      const data = await apiService.getFieldMappings(selectedTpa, undefined)
       setMappings(data)
       
       // Extract unique target tables from mappings
@@ -82,6 +128,51 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
       message.error('Failed to load field mappings')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadSourceFields = async () => {
+    if (!selectedTpa) return
+    
+    setLoadingSourceFields(true)
+    try {
+      const fields = await apiService.getSourceFields(selectedTpa)
+      setSourceFields(fields)
+    } catch (error) {
+      console.error('Failed to load source fields:', error)
+      message.error('Failed to load source fields')
+    } finally {
+      setLoadingSourceFields(false)
+    }
+  }
+
+  const loadTargetColumns = async (tableName: string) => {
+    if (!tableName) return
+    
+    setLoadingTargetColumns(true)
+    try {
+      const columns = await apiService.getTargetColumns(tableName)
+      setTargetColumns(columns)
+    } catch (error) {
+      console.error('Failed to load target columns:', error)
+      message.error('Failed to load target columns')
+    } finally {
+      setLoadingTargetColumns(false)
+    }
+  }
+
+  const loadCortexModels = async () => {
+    setLoadingCortexModels(true)
+    try {
+      const models = await apiService.getCortexModels()
+      setCortexModels(models)
+    } catch (error) {
+      console.error('Failed to load Cortex models:', error)
+      message.error('Failed to load Cortex models')
+      // Set default models on error
+      setCortexModels(['llama3.1-70b', 'llama3.1-8b', 'mistral-large', 'mixtral-8x7b', 'gemma-7b'])
+    } finally {
+      setLoadingCortexModels(false)
     }
   }
 
@@ -305,7 +396,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           </Button>
           <Button 
             icon={<ThunderboltOutlined />} 
-            onClick={() => setIsAutoLLMDrawerVisible(true)}
+            onClick={() => {
+              setIsAutoLLMDrawerVisible(true)
+              loadCortexModels() // Load models when drawer opens
+            }}
           >
             Auto-Map (LLM)
           </Button>
@@ -314,6 +408,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
             onClick={() => {
               manualForm.resetFields()
               setIsManualModalVisible(true)
+              loadSourceFields() // Load source fields when modal opens
             }}
           >
             Manual Mapping
@@ -332,35 +427,26 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
         View field mappings from Bronze (raw data) to Silver (target tables). TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-              Filter by Target Table (optional)
-            </label>
-            <Select
-              value={selectedTable}
-              onChange={(value) => {
-                setSelectedTable(value)
-                loadMappings()
-              }}
-              style={{ width: '100%' }}
-              placeholder="All tables"
-              allowClear
-              options={availableTargetTables.map(table => ({
-                label: `${table.name} (${table.columns} columns)`,
-                value: table.name,
-              }))}
-            />
-          </div>
-        </Space>
-      </Card>
-
       {allTargetTablesWithStatus.length === 0 ? (
         <Card>
-          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            No target tables found for this TPA. Please create target schemas first.
-          </p>
+          <Alert
+            message="No Tables Created Yet"
+            description={
+              <div>
+                <p>No physical tables have been created for <strong>{selectedTpaName || selectedTpa}</strong> yet.</p>
+                <p>To create field mappings, you must first:</p>
+                <ol>
+                  <li>Go to <strong>Schemas and Tables</strong> page</li>
+                  <li>Select a schema definition (e.g., DENTAL_CLAIMS, MEDICAL_CLAIMS)</li>
+                  <li>Click <strong>Create Table</strong> and select <strong>{selectedTpaName || selectedTpa}</strong> as the provider</li>
+                  <li>Return here to create field mappings for the created table</li>
+                </ol>
+              </div>
+            }
+            type="info"
+            showIcon
+            style={{ margin: '20px 0' }}
+          />
         </Card>
       ) : (
         allTargetTablesWithStatus.map((tableInfo) => {
@@ -452,7 +538,12 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           form={autoMLForm}
           layout="vertical"
           onFinish={handleAutoMapML}
-          initialValues={{ top_n: 3, min_confidence: 60 }}
+          initialValues={{ 
+            source_table: 'RAW_DATA_TABLE',
+            target_table: availableTargetTables.length === 1 ? availableTargetTables[0].name : undefined,
+            top_n: 3, 
+            min_confidence: 60 
+          }}
         >
           <Form.Item
             name="source_table"
@@ -526,7 +617,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           form={autoLLMForm}
           layout="vertical"
           onFinish={handleAutoMapLLM}
-          initialValues={{ model_name: 'llama3.1-70b' }}
+          initialValues={{ 
+            source_table: 'RAW_DATA_TABLE',
+            target_table: availableTargetTables.length === 1 ? availableTargetTables[0].name : undefined
+          }}
         >
           <Form.Item
             name="source_table"
@@ -554,14 +648,17 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           <Form.Item
             name="model_name"
             label="LLM Model"
+            rules={[{ required: true, message: 'Please select a model' }]}
           >
             <Select
-              options={[
-                { label: 'Llama 3.1 70B (Recommended)', value: 'llama3.1-70b' },
-                { label: 'Llama 3.1 8B', value: 'llama3.1-8b' },
-                { label: 'Mistral Large', value: 'mistral-large' },
-                { label: 'Mixtral 8x7B', value: 'mixtral-8x7b' },
-              ]}
+              placeholder="Select Cortex LLM model"
+              options={cortexModels.map(model => ({ 
+                label: model, 
+                value: model 
+              }))}
+              showSearch
+              loading={loadingCortexModels}
+              notFoundContent={loadingCortexModels ? 'Loading models...' : 'No models available'}
             />
           </Form.Item>
 
@@ -590,7 +687,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           form={manualForm}
           layout="vertical"
           onFinish={handleManualMapping}
-          initialValues={{ source_table: 'RAW_DATA_TABLE' }}
+          initialValues={{ 
+            source_table: 'RAW_DATA_TABLE',
+            target_table: availableTargetTables.length === 1 ? availableTargetTables[0].name : undefined
+          }}
         >
           <Form.Item
             name="source_table"
@@ -603,9 +703,18 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           <Form.Item
             name="source_field"
             label="Source Field"
-            rules={[{ required: true, message: 'Please enter source field name' }]}
+            rules={[{ required: true, message: 'Please select source field' }]}
           >
-            <Input placeholder="e.g., customer_id" />
+            <Select
+              placeholder="Select source field"
+              options={sourceFields.map(field => ({ 
+                label: field, 
+                value: field 
+              }))}
+              showSearch
+              loading={loadingSourceFields}
+              notFoundContent={loadingSourceFields ? 'Loading...' : 'No source fields found. Upload data first.'}
+            />
           </Form.Item>
 
           <Form.Item
@@ -620,15 +729,31 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
                 value: t.name 
               }))}
               showSearch
+              onChange={(value) => {
+                // Load target columns when table is selected
+                loadTargetColumns(value)
+                // Reset target column field
+                manualForm.setFieldsValue({ target_column: undefined })
+              }}
             />
           </Form.Item>
 
           <Form.Item
             name="target_column"
             label="Target Column"
-            rules={[{ required: true, message: 'Please enter target column name' }]}
+            rules={[{ required: true, message: 'Please select target column' }]}
           >
-            <Input placeholder="e.g., CUSTOMER_ID" />
+            <Select
+              placeholder="Select target column"
+              options={targetColumns.map(column => ({ 
+                label: column, 
+                value: column 
+              }))}
+              showSearch
+              loading={loadingTargetColumns}
+              notFoundContent={loadingTargetColumns ? 'Loading...' : 'Select a target table first'}
+              disabled={targetColumns.length === 0}
+            />
           </Form.Item>
 
           <Form.Item

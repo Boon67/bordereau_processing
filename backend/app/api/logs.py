@@ -53,7 +53,7 @@ async def get_application_logs(
             LIMIT {limit}
         """
         
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         return result
         
     except Exception as e:
@@ -103,7 +103,7 @@ async def get_task_execution_logs(
             LIMIT {limit}
         """
         
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         return result
         
     except Exception as e:
@@ -159,7 +159,7 @@ async def get_file_processing_logs(
             LIMIT {limit}
         """
         
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         return result
         
     except Exception as e:
@@ -212,7 +212,7 @@ async def get_error_logs(
             LIMIT {limit}
         """
         
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         return result
         
     except Exception as e:
@@ -267,7 +267,7 @@ async def get_api_request_logs(
             LIMIT {limit}
         """
         
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         return result
         
     except Exception as e:
@@ -311,7 +311,7 @@ async def get_log_statistics(days: int = Query(7, le=30)):
             WHERE ERROR_TIMESTAMP >= DATEADD(DAY, -{days}, CURRENT_TIMESTAMP())
         """
         
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         return result
         
     except Exception as e:

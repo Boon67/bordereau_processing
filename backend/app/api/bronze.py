@@ -17,6 +17,27 @@ from app.utils.logging_utils import SnowflakeLogger, log_exception
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+@router.get("/source-fields")
+async def get_source_fields(tpa: str):
+    """Get distinct source field names from RAW_DATA_TABLE for a TPA"""
+    try:
+        sf_service = SnowflakeService()
+        query = f"""
+            SELECT DISTINCT 
+                f.key as field_name
+            FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE,
+            LATERAL FLATTEN(input => RAW_DATA) f
+            WHERE TPA = '{tpa}'
+              AND RAW_DATA IS NOT NULL
+            ORDER BY f.key
+            LIMIT 1000
+        """
+        result = await sf_service.execute_query_dict(query)
+        return [row['FIELD_NAME'] for row in result]
+    except Exception as e:
+        logger.error(f"Failed to get source fields: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -54,7 +75,7 @@ async def upload_file(
             # Upload to Snowflake stage
             sf_service = SnowflakeService()
             stage_path = f"@{settings.BRONZE_SCHEMA_NAME}.SRC/{tpa}/"
-            sf_service.upload_file_to_stage(tmp_path, stage_path)
+            await sf_service.upload_file_to_stage(tmp_path, stage_path)
             
             # Log successful upload
             SnowflakeLogger.log_application_event(
@@ -110,7 +131,7 @@ async def get_processing_queue(tpa: Optional[str] = None):
     """Get file processing queue"""
     try:
         sf_service = SnowflakeService()
-        return sf_service.get_processing_queue(tpa)
+        return await sf_service.get_processing_queue(tpa)
     except Exception as e:
         logger.error(f"Failed to get processing queue: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -124,7 +145,7 @@ async def get_processing_status():
             SELECT * FROM {settings.BRONZE_SCHEMA_NAME}.v_processing_status_summary
             ORDER BY tpa, status
         """
-        return sf_service.execute_query_dict(query)
+        return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get processing status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -144,7 +165,7 @@ async def get_bronze_stats(tpa: Optional[str] = None):
             FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE
             {tpa_filter}
         """
-        row_count_result = sf_service.execute_query(row_count_query)
+        row_count_result = await sf_service.execute_query(row_count_query)
         total_rows = row_count_result[0][0] if row_count_result else 0
         
         # Get file statistics
@@ -157,7 +178,7 @@ async def get_bronze_stats(tpa: Optional[str] = None):
             FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE
             {tpa_filter}
         """
-        file_stats_result = sf_service.execute_query_dict(file_stats_query)
+        file_stats_result = await sf_service.execute_query_dict(file_stats_query)
         file_stats = file_stats_result[0] if file_stats_result else {}
         
         return {
@@ -180,7 +201,7 @@ async def get_raw_data(
     """Get raw data records"""
     try:
         sf_service = SnowflakeService()
-        return sf_service.get_raw_data(tpa, file_name, limit)
+        return await sf_service.get_raw_data(tpa, file_name, limit)
     except Exception as e:
         logger.error(f"Failed to get raw data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -191,7 +212,7 @@ async def list_stage_files(stage_name: str):
     try:
         sf_service = SnowflakeService()
         stage_path = f"@{settings.BRONZE_SCHEMA_NAME}.{stage_name.upper()}"
-        return sf_service.list_stage_files(stage_path)
+        return await sf_service.list_stage_files(stage_path)
     except Exception as e:
         logger.error(f"Failed to list stage files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -208,7 +229,7 @@ async def delete_stage_file(stage_name: str, file_path: str):
         stage_file_path = f"@{settings.BRONZE_SCHEMA_NAME}.{stage_name.upper()}/{'/'.join(file_path.split('/')[1:])}"
         
         remove_query = f"REMOVE {stage_file_path}"
-        sf_service.execute_query(remove_query)
+        await sf_service.execute_query(remove_query)
         logger.info(f"Removed file from stage: {stage_file_path}")
         
         # Update or remove the file from the processing queue
@@ -218,7 +239,7 @@ async def delete_stage_file(stage_name: str, file_path: str):
             FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
             WHERE file_name = '{file_path}'
         """
-        queue_result = sf_service.execute_query_dict(check_query)
+        queue_result = await sf_service.execute_query_dict(check_query)
         
         if queue_result:
             queue_id = queue_result[0]['QUEUE_ID']
@@ -230,7 +251,7 @@ async def delete_stage_file(stage_name: str, file_path: str):
                     DELETE FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
                     WHERE queue_id = {queue_id}
                 """
-                sf_service.execute_query(delete_query)
+                await sf_service.execute_query(delete_query)
                 logger.info(f"Deleted queue entry for {file_path} (queue_id={queue_id})")
                 queue_action = "deleted"
             else:
@@ -241,7 +262,7 @@ async def delete_stage_file(stage_name: str, file_path: str):
                         processed_timestamp = CURRENT_TIMESTAMP()
                     WHERE queue_id = {queue_id}
                 """
-                sf_service.execute_query(update_query)
+                await sf_service.execute_query(update_query)
                 logger.info(f"Updated queue entry to DELETED for {file_path} (queue_id={queue_id})")
                 queue_action = "marked_deleted"
         else:
@@ -275,7 +296,7 @@ async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
                 stage_file_path = f"@{settings.BRONZE_SCHEMA_NAME}.{stage_name.upper()}/{'/'.join(file_path.split('/')[1:])}"
                 
                 remove_query = f"REMOVE {stage_file_path}"
-                sf_service.execute_query(remove_query)
+                await sf_service.execute_query(remove_query)
                 logger.info(f"Removed file from stage: {stage_file_path}")
                 
                 # Update or remove from processing queue
@@ -284,7 +305,7 @@ async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
                     FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
                     WHERE file_name = '{file_path}'
                 """
-                queue_result = sf_service.execute_query_dict(check_query)
+                queue_result = await sf_service.execute_query_dict(check_query)
                 
                 if queue_result:
                     queue_id = queue_result[0]['QUEUE_ID']
@@ -295,7 +316,7 @@ async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
                             DELETE FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
                             WHERE queue_id = {queue_id}
                         """
-                        sf_service.execute_query(delete_query)
+                        await sf_service.execute_query(delete_query)
                     else:
                         update_query = f"""
                             UPDATE {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
@@ -304,7 +325,7 @@ async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
                                 processed_timestamp = CURRENT_TIMESTAMP()
                             WHERE queue_id = {queue_id}
                         """
-                        sf_service.execute_query(update_query)
+                        await sf_service.execute_query(update_query)
                 
                 results["success"].append(file_path)
                 
@@ -333,7 +354,7 @@ async def discover_files():
         
         # First, get a quick count of files in the stage
         try:
-            stage_files = sf_service.list_stage_files(f"@{settings.BRONZE_SCHEMA_NAME}.SRC", timeout=10)
+            stage_files = await sf_service.list_stage_files(f"@{settings.BRONZE_SCHEMA_NAME}.SRC", timeout=10)
             file_count = len(stage_files)
         except Exception as e:
             # If listing times out, just proceed with task execution
@@ -346,7 +367,7 @@ async def discover_files():
             execute_task_query = f"""
                 EXECUTE TASK {settings.BRONZE_SCHEMA_NAME}.discover_files_task
             """
-            sf_service.execute_query(execute_task_query, timeout=10)
+            await sf_service.execute_query(execute_task_query, timeout=10)
             logger.info(f"Triggered discover_files_task for {file_count} files in stage")
             
             return {
@@ -362,7 +383,7 @@ async def discover_files():
             try:
                 # Call the discover_files procedure directly (with timeout)
                 proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.discover_files()"
-                result = sf_service.execute_query(proc_query, timeout=30)
+                result = await sf_service.execute_query(proc_query, timeout=30)
                 result_msg = result[0][0] if result and len(result) > 0 else "Discovery completed"
                 
                 return {
@@ -397,7 +418,7 @@ async def reset_stuck_files():
             WHERE status = 'PROCESSING'
             AND (processed_timestamp IS NULL OR processed_timestamp < DATEADD(minute, -5, CURRENT_TIMESTAMP()))
         """
-        sf_service.execute_query(reset_query)
+        await sf_service.execute_query(reset_query)
         
         # Get count of reset files
         count_query = f"""
@@ -406,7 +427,7 @@ async def reset_stuck_files():
             WHERE status = 'PENDING' 
             AND error_message = 'Reset from stuck PROCESSING status'
         """
-        result = sf_service.execute_query(count_query)
+        result = await sf_service.execute_query(count_query)
         reset_count = result[0][0] if result else 0
         
         return {"message": f"Reset {reset_count} stuck files to PENDING status", "files_reset": reset_count}
@@ -426,7 +447,7 @@ async def reprocess_file(queue_id: int):
             FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
             WHERE queue_id = {queue_id}
         """
-        result = sf_service.execute_query_dict(check_query)
+        result = await sf_service.execute_query_dict(check_query)
         
         if not result:
             raise HTTPException(status_code=404, detail=f"File with queue_id {queue_id} not found")
@@ -451,7 +472,7 @@ async def reprocess_file(queue_id: int):
                 processed_timestamp = NULL
             WHERE queue_id = {queue_id}
         """
-        sf_service.execute_query(reset_query)
+        await sf_service.execute_query(reset_query)
         
         logger.info(f"Reset file {file_name} (queue_id={queue_id}) from {current_status} to PENDING for reprocessing")
         
@@ -490,7 +511,7 @@ async def process_queue():
                 FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
                 WHERE status = 'PENDING'
             """
-            result = sf_service.execute_query_dict(check_query, timeout=10)
+            result = await sf_service.execute_query_dict(check_query, timeout=10)
             pending_count = result[0]['PENDING_COUNT'] if result else 0
             processing_count = result[0]['PROCESSING_COUNT'] if result else 0
         except Exception as e:
@@ -504,7 +525,7 @@ async def process_queue():
             execute_task_query = f"""
                 EXECUTE TASK {settings.BRONZE_SCHEMA_NAME}.discover_files_task
             """
-            sf_service.execute_query(execute_task_query, timeout=10)
+            await sf_service.execute_query(execute_task_query, timeout=10)
             logger.info(f"Triggered discover_files_task (which triggers process_files_task). Pending: {pending_count}, Processing: {processing_count}")
             
             return {
@@ -521,7 +542,7 @@ async def process_queue():
             try:
                 # Call discover procedure directly (with timeout)
                 proc_query = f"CALL {settings.BRONZE_SCHEMA_NAME}.discover_files()"
-                result = sf_service.execute_query(proc_query, timeout=30)
+                result = await sf_service.execute_query(proc_query, timeout=30)
                 result_msg = result[0][0] if result and len(result) > 0 else "Discovery completed"
                 
                 return {
@@ -549,7 +570,7 @@ async def get_tasks():
     try:
         sf_service = SnowflakeService()
         query = f"SHOW TASKS IN SCHEMA {settings.BRONZE_SCHEMA_NAME}"
-        tasks = sf_service.execute_query_dict(query, timeout=30)
+        tasks = await sf_service.execute_query_dict(query, timeout=30)
         
         # Add predecessor information to each task
         for task in tasks:
@@ -557,7 +578,7 @@ async def get_tasks():
             # Get task details including predecessors
             desc_query = f"DESC TASK {settings.BRONZE_SCHEMA_NAME}.{task_name}"
             try:
-                desc_result = sf_service.execute_query_dict(desc_query, timeout=30)
+                desc_result = await sf_service.execute_query_dict(desc_query, timeout=30)
                 # Find predecessor info in description
                 for row in desc_result:
                     if row.get('property', '').upper() == 'PREDECESSORS':
@@ -579,7 +600,7 @@ async def resume_task(task_name: str):
     try:
         sf_service = SnowflakeService()
         query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} RESUME"
-        sf_service.execute_query(query)
+        await sf_service.execute_query(query)
         return {"message": f"Task {task_name} resumed successfully"}
     except Exception as e:
         logger.error(f"Failed to resume task: {str(e)}")
@@ -591,7 +612,7 @@ async def suspend_task(task_name: str):
     try:
         sf_service = SnowflakeService()
         query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} SUSPEND"
-        sf_service.execute_query(query, timeout=30)
+        await sf_service.execute_query(query, timeout=30)
         return {"message": f"Task {task_name} suspended successfully"}
     except Exception as e:
         logger.error(f"Failed to suspend task: {str(e)}")
@@ -609,7 +630,7 @@ async def update_task_schedule(task_name: str, schedule_update: ScheduleUpdate):
         
         # Check if task has predecessors
         desc_query = f"DESC TASK {settings.BRONZE_SCHEMA_NAME}.{task_name}"
-        desc_result = sf_service.execute_query_dict(desc_query, timeout=30)
+        desc_result = await sf_service.execute_query_dict(desc_query, timeout=30)
         
         has_predecessors = False
         for row in desc_result:
@@ -627,7 +648,7 @@ async def update_task_schedule(task_name: str, schedule_update: ScheduleUpdate):
         
         # Update the schedule
         alter_query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} SET SCHEDULE = '{schedule}'"
-        sf_service.execute_query(alter_query, timeout=30)
+        await sf_service.execute_query(alter_query, timeout=30)
         
         return {"message": f"Task {task_name} schedule updated successfully", "new_schedule": schedule}
     except HTTPException:
@@ -661,7 +682,7 @@ async def clear_all_data():
         for stage in stages:
             try:
                 remove_query = f"REMOVE @{settings.BRONZE_SCHEMA_NAME}.{stage}"
-                sf_service.execute_query(remove_query)
+                await sf_service.execute_query(remove_query)
                 results["stages_cleared"].append(stage)
                 logger.info(f"Cleared stage: @{stage}")
             except Exception as e:
@@ -674,7 +695,7 @@ async def clear_all_data():
         for table in tables:
             try:
                 truncate_query = f"TRUNCATE TABLE IF EXISTS {settings.BRONZE_SCHEMA_NAME}.{table}"
-                sf_service.execute_query(truncate_query)
+                await sf_service.execute_query(truncate_query)
                 results["tables_truncated"].append(table)
                 logger.info(f"Truncated table: {table}")
             except Exception as e:
@@ -718,7 +739,7 @@ async def delete_file_data(file_name: str):
         
         # Call the stored procedure to delete file data
         query = f"CALL {settings.BRONZE_SCHEMA_NAME}.delete_file_data('{file_name}')"
-        result = sf_service.execute_query(query)
+        result = await sf_service.execute_query(query)
         
         result_message = result[0][0] if result and len(result) > 0 else "File data deleted"
         

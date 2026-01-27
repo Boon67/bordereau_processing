@@ -28,7 +28,7 @@ async def get_current_user():
                 CURRENT_REGION() as region
         """
         
-        result = sf_service.execute_query_dict(query)
+        result = await sf_service.execute_query_dict(query)
         
         if result and len(result) > 0:
             user_info = result[0]

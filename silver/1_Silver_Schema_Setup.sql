@@ -118,7 +118,27 @@ CREATE HYBRID TABLE IF NOT EXISTS transformation_rules (
 COMMENT = 'Data quality and business rules per TPA. Five rule types: DATA_QUALITY, BUSINESS_LOGIC, STANDARDIZATION, DEDUPLICATION, REFERENTIAL_INTEGRITY.';
 
 -- ============================================
--- METADATA TABLE 4: silver_processing_log
+-- METADATA TABLE 4: created_tables (HYBRID TABLE)
+-- ============================================
+-- Tracks user-created data tables (not system tables)
+
+CREATE HYBRID TABLE IF NOT EXISTS created_tables (
+    table_id NUMBER(38,0) AUTOINCREMENT PRIMARY KEY,
+    physical_table_name VARCHAR(500) NOT NULL UNIQUE,
+    schema_table_name VARCHAR(500) NOT NULL,
+    tpa VARCHAR(500) NOT NULL,
+    created_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    created_by VARCHAR(500) DEFAULT CURRENT_USER(),
+    description VARCHAR(5000),
+    active BOOLEAN DEFAULT TRUE,
+    INDEX idx_created_tables_tpa (tpa),
+    INDEX idx_created_tables_schema (schema_table_name),
+    INDEX idx_created_tables_active (active)
+)
+COMMENT = 'Tracks user-created Silver data tables. Used to distinguish data tables from system tables.';
+
+-- ============================================
+-- METADATA TABLE 5: silver_processing_log
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS silver_processing_log (
@@ -251,9 +271,15 @@ WHEN NOT MATCHED THEN INSERT (template_id, template_name, template_text, model_n
 
 CREATE OR REPLACE VIEW v_silver_summary AS
 SELECT 
-    'Target Schemas' AS object_type,
-    COUNT(DISTINCT table_name || '_' || tpa) AS count
+    'Target Schema Definitions' AS object_type,
+    COUNT(DISTINCT table_name) AS count
 FROM target_schemas
+WHERE active = TRUE
+UNION ALL
+SELECT 
+    'Created Tables',
+    COUNT(*)
+FROM created_tables
 WHERE active = TRUE
 UNION ALL
 SELECT 
@@ -273,7 +299,7 @@ SELECT
     COUNT(DISTINCT batch_id)
 FROM silver_processing_log;
 
-COMMENT ON VIEW v_silver_summary IS 'Summary of Silver layer metadata objects.';
+COMMENT ON VIEW v_silver_summary IS 'Summary of Silver layer metadata objects. Shows counts of schema definitions, created tables, mappings, rules, and processing batches.';
 
 -- ============================================
 -- VERIFICATION

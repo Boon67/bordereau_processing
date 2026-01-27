@@ -43,7 +43,7 @@ async def get_tpas():
             FROM BRONZE.TPA_MASTER
             ORDER BY CREATED_TIMESTAMP DESC
         """
-        return sf_service.execute_query_dict(query)
+        return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get TPAs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -56,12 +56,12 @@ async def create_tpa(tpa: TPACreate):
         
         # Check if TPA already exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa.tpa_code}'"
-        result = sf_service.execute_query_dict(check_query)
+        result = await sf_service.execute_query_dict(check_query)
         if result and result[0]['COUNT'] > 0:
             raise HTTPException(status_code=400, detail=f"TPA with code '{tpa.tpa_code}' already exists")
         
         # Call the add_tpa procedure
-        result = sf_service.execute_procedure(
+        result = await sf_service.execute_procedure(
             "add_tpa",
             tpa.tpa_code,
             tpa.tpa_name,
@@ -75,7 +75,7 @@ async def create_tpa(tpa: TPACreate):
                 SET ACTIVE = FALSE 
                 WHERE TPA_CODE = '{tpa.tpa_code}'
             """
-            sf_service.execute_query(update_query)
+            await sf_service.execute_query(update_query)
         
         return {"message": "TPA created successfully", "tpa_code": tpa.tpa_code}
     except HTTPException:
@@ -92,7 +92,7 @@ async def update_tpa(tpa_code: str, tpa: TPAUpdate):
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
-        result = sf_service.execute_query_dict(check_query)
+        result = await sf_service.execute_query_dict(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
@@ -112,7 +112,7 @@ async def update_tpa(tpa_code: str, tpa: TPAUpdate):
                 SET {', '.join(updates)}
                 WHERE TPA_CODE = '{tpa_code}'
             """
-            sf_service.execute_query(update_query)
+            await sf_service.execute_query(update_query)
         
         return {"message": "TPA updated successfully", "tpa_code": tpa_code}
     except HTTPException:
@@ -129,7 +129,7 @@ async def delete_tpa(tpa_code: str):
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
-        result = sf_service.execute_query_dict(check_query)
+        result = await sf_service.execute_query_dict(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
@@ -139,7 +139,7 @@ async def delete_tpa(tpa_code: str):
             SET ACTIVE = FALSE, UPDATED_TIMESTAMP = CURRENT_TIMESTAMP()
             WHERE TPA_CODE = '{tpa_code}'
         """
-        sf_service.execute_query(delete_query)
+        await sf_service.execute_query(delete_query)
         
         return {"message": "TPA deleted successfully", "tpa_code": tpa_code}
     except HTTPException:
@@ -156,7 +156,7 @@ async def update_tpa_status(tpa_code: str, status: TPAStatusUpdate):
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
-        result = sf_service.execute_query_dict(check_query)
+        result = await sf_service.execute_query_dict(check_query)
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"TPA with code '{tpa_code}' not found")
         
@@ -166,7 +166,7 @@ async def update_tpa_status(tpa_code: str, status: TPAStatusUpdate):
             SET ACTIVE = {status.active}, UPDATED_TIMESTAMP = CURRENT_TIMESTAMP()
             WHERE TPA_CODE = '{tpa_code}'
         """
-        sf_service.execute_query(update_query)
+        await sf_service.execute_query(update_query)
         
         return {
             "message": f"TPA {'activated' if status.active else 'deactivated'} successfully",

@@ -88,6 +88,17 @@ def create_silver_table(session, table_name, tpa):
     create_sql = f"CREATE TABLE IF NOT EXISTS {full_table_name} ({', '.join(column_defs)})"
     session.sql(create_sql).collect()
     
+    # Track the created table
+    tracking_sql = f"""
+        INSERT INTO created_tables (physical_table_name, schema_table_name, tpa, description)
+        SELECT '{full_table_name}', '{table_name_upper}', '{tpa}', 
+               'Created from schema: {table_name_upper} for TPA: {tpa}'
+        WHERE NOT EXISTS (
+            SELECT 1 FROM created_tables WHERE physical_table_name = '{full_table_name}'
+        )
+    """
+    session.sql(tracking_sql).collect()
+    
     return f"Successfully created table: {full_table_name} ({len(columns)} columns + 4 metadata columns)"
 $$;
 

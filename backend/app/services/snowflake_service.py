@@ -7,10 +7,33 @@ import snowflake.connector
 from snowflake.connector import DictCursor
 from typing import List, Dict, Any, Optional
 import logging
+import asyncio
+from functools import wraps
 
 from app.config import settings
+from app.utils.cache import cached, cache
 
 logger = logging.getLogger(__name__)
+
+def async_cached(ttl_seconds: int = 300, key_prefix: str = ""):
+    """Async version of cached decorator"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Generate cache key
+            cache_key = f"{key_prefix}:{str(args)}:{str(kwargs)}"
+            
+            # Try to get from cache
+            cached_value = cache.get(cache_key)
+            if cached_value is not None:
+                return cached_value
+            
+            # Execute function and cache result
+            result = await func(*args, **kwargs)
+            cache.set(cache_key, result, ttl_seconds)
+            return result
+        return wrapper
+    return decorator
 
 class SnowflakeService:
     """Service for interacting with Snowflake"""
@@ -59,8 +82,8 @@ class SnowflakeService:
             logger.error(f"Failed to connect to Snowflake: {str(e)}")
             raise
     
-    def execute_query(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[tuple]:
-        """Execute a query and return results with timeout"""
+    def _execute_query_sync(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[tuple]:
+        """Synchronous query execution (internal use)"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -76,8 +99,12 @@ class SnowflakeService:
             logger.error(f"Query execution failed: {str(e)}")
             raise
     
-    def execute_query_dict(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[Dict[str, Any]]:
-        """Execute a query and return results as list of dictionaries with timeout"""
+    async def execute_query(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[tuple]:
+        """Execute a query asynchronously and return results with timeout"""
+        return await asyncio.to_thread(self._execute_query_sync, query, params, timeout)
+    
+    def _execute_query_dict_sync(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[Dict[str, Any]]:
+        """Synchronous query execution returning dicts (internal use)"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor(DictCursor) as cursor:
@@ -93,8 +120,12 @@ class SnowflakeService:
             logger.error(f"Query execution failed: {str(e)}")
             raise
     
-    def execute_procedure(self, procedure_name: str, *args) -> Any:
-        """Execute a stored procedure"""
+    async def execute_query_dict(self, query: str, params: Optional[Dict] = None, timeout: int = 300) -> List[Dict[str, Any]]:
+        """Execute a query asynchronously and return results as list of dictionaries with timeout"""
+        return await asyncio.to_thread(self._execute_query_dict_sync, query, params, timeout)
+    
+    def _execute_procedure_sync(self, procedure_name: str, *args) -> Any:
+        """Execute a stored procedure synchronously (internal use)"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -104,8 +135,12 @@ class SnowflakeService:
             logger.error(f"Procedure execution failed: {str(e)}")
             raise
     
-    def upload_file_to_stage(self, local_path: str, stage_path: str) -> bool:
-        """Upload file to Snowflake stage"""
+    async def execute_procedure(self, procedure_name: str, *args) -> Any:
+        """Execute a stored procedure asynchronously"""
+        return await asyncio.to_thread(self._execute_procedure_sync, procedure_name, *args)
+    
+    def _upload_file_to_stage_sync(self, local_path: str, stage_path: str) -> bool:
+        """Upload file to Snowflake stage synchronously (internal use)"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -116,17 +151,22 @@ class SnowflakeService:
             logger.error(f"File upload failed: {str(e)}")
             raise
     
-    def list_stage_files(self, stage_name: str) -> List[Dict[str, Any]]:
-        """List files in a stage"""
+    async def upload_file_to_stage(self, local_path: str, stage_path: str) -> bool:
+        """Upload file to Snowflake stage asynchronously"""
+        return await asyncio.to_thread(self._upload_file_to_stage_sync, local_path, stage_path)
+    
+    async def list_stage_files(self, stage_name: str) -> List[Dict[str, Any]]:
+        """List files in a stage asynchronously"""
         try:
             query = f"LIST {stage_name}"
-            return self.execute_query_dict(query)
+            return await self.execute_query_dict(query)
         except Exception as e:
             logger.error(f"Failed to list stage files: {str(e)}")
             raise
     
-    def get_tpas(self) -> List[Dict[str, Any]]:
-        """Get all TPAs"""
+    @async_cached(ttl_seconds=300, key_prefix="tpas")  # Cache for 5 minutes
+    async def get_tpas(self) -> List[Dict[str, Any]]:
+        """Get all TPAs asynchronously"""
         query = f"""
             SELECT 
                 TPA_CODE,
@@ -139,10 +179,10 @@ class SnowflakeService:
             WHERE ACTIVE = TRUE
             ORDER BY TPA_CODE
         """
-        return self.execute_query_dict(query)
+        return await self.execute_query_dict(query)
     
-    def get_processing_queue(self, tpa: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get file processing queue with timeout"""
+    async def get_processing_queue(self, tpa: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get file processing queue with timeout asynchronously"""
         query = f"""
             SELECT 
                 queue_id,
@@ -164,10 +204,10 @@ class SnowflakeService:
         
         query += " ORDER BY discovered_timestamp DESC LIMIT 100"
         
-        return self.execute_query_dict(query, timeout=30)
+        return await self.execute_query_dict(query, timeout=30)
     
-    def get_raw_data(self, tpa: str, file_name: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get raw data records"""
+    async def get_raw_data(self, tpa: str, file_name: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get raw data records asynchronously"""
         query = f"""
             SELECT 
                 RECORD_ID,
@@ -187,10 +227,11 @@ class SnowflakeService:
         
         query += f" ORDER BY FILE_ROW_NUMBER LIMIT {limit}"
         
-        return self.execute_query_dict(query)
+        return await self.execute_query_dict(query)
     
-    def get_target_schemas(self, tpa: Optional[str] = None, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get target schemas (TPA-agnostic)"""
+    @async_cached(ttl_seconds=180, key_prefix="schemas")  # Cache for 3 minutes
+    async def get_target_schemas(self, tpa: Optional[str] = None, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get target schemas asynchronously (TPA-agnostic)"""
         logger.info(f"Getting target schemas - table_name: '{table_name}'")
         
         query = f"""
@@ -213,13 +254,13 @@ class SnowflakeService:
         query += " ORDER BY table_name, schema_id"
         
         logger.info(f"Executing query: {query}")
-        result = self.execute_query_dict(query)
+        result = await self.execute_query_dict(query)
         logger.info(f"Found {len(result)} schema records")
         
         return result
     
-    def get_field_mappings(self, tpa: str, target_table: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get field mappings"""
+    async def get_field_mappings(self, tpa: str, target_table: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get field mappings asynchronously"""
         query = f"""
             SELECT 
                 mapping_id,
@@ -245,4 +286,4 @@ class SnowflakeService:
         
         query += " ORDER BY target_table, mapping_id"
         
-        return self.execute_query_dict(query)
+        return await self.execute_query_dict(query)
