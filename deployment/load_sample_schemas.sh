@@ -69,7 +69,39 @@ echo ""
 
 # Step 3: Load into target_schemas table
 echo -e "${YELLOW}[3/3]${NC} Loading schemas into database..."
-LOAD_OUTPUT=$(snow sql -f "${PROJECT_ROOT}/sample_data/config/load_sample_schemas.sql" --connection "$CONNECTION_NAME" 2>&1)
+LOAD_OUTPUT=$(snow sql --connection "$CONNECTION_NAME" -q "
+USE DATABASE ${DATABASE_NAME};
+USE SCHEMA ${SILVER_SCHEMA_NAME};
+
+-- Load schemas from CSV (TPA-agnostic)
+COPY INTO target_schemas (
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NULLABLE,
+    DEFAULT_VALUE,
+    DESCRIPTION
+)
+FROM (
+    SELECT 
+        \$1::VARCHAR as TABLE_NAME,
+        \$2::VARCHAR as COLUMN_NAME,
+        \$3::VARCHAR as DATA_TYPE,
+        CASE WHEN \$4 = 'Y' THEN TRUE ELSE FALSE END as NULLABLE,
+        NULLIF(\$5, '')::VARCHAR as DEFAULT_VALUE,
+        \$6::VARCHAR as DESCRIPTION
+    FROM @SILVER_CONFIG/silver_target_schemas.csv
+)
+FILE_FORMAT = (
+    TYPE = CSV
+    FIELD_DELIMITER = ','
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '\"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+)
+ON_ERROR = ABORT_STATEMENT;
+" 2>&1)
 LOAD_EXIT_CODE=$?
 
 if [[ $LOAD_EXIT_CODE -eq 0 ]]; then

@@ -36,6 +36,7 @@ BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-BRONZE}"
 SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-SILVER}"
 BRONZE_DISCOVERY_SCHEDULE="${DEPLOY_DISCOVERY_SCHEDULE:-60 MINUTE}"
 ROLE="${DEPLOY_ROLE:-SYSADMIN}"
+AUTO_RESUME_TASKS="${DEPLOY_AUTO_RESUME_TASKS:-true}"
 
 echo -e "${CYAN}  Database: ${DATABASE}${NC}"
 echo -e "${CYAN}  Bronze Schema: ${BRONZE_SCHEMA}${NC}"
@@ -84,5 +85,16 @@ execute_sql "${PROJECT_ROOT}/bronze/0_Setup_Logging.sql"
 execute_sql "${PROJECT_ROOT}/bronze/2_Bronze_Schema_Tables.sql"
 execute_sql "${PROJECT_ROOT}/bronze/3_Bronze_Setup_Logic.sql"
 execute_sql "${PROJECT_ROOT}/bronze/4_Bronze_Tasks.sql"
+
+# Resume tasks automatically after deployment (if enabled)
+if [[ "$AUTO_RESUME_TASKS" == "true" ]]; then
+    echo "Resuming Bronze tasks..."
+    execute_sql "${SCRIPT_DIR}/resume_tasks.sql"
+    echo -e "${GREEN}✓ Bronze tasks resumed automatically${NC}"
+else
+    echo -e "${YELLOW}⚠ Bronze tasks created in SUSPENDED state${NC}"
+    echo -e "${YELLOW}  To resume tasks manually, run:${NC}"
+    echo -e "${CYAN}  snow sql -f deployment/resume_tasks.sql --connection $CONNECTION_NAME${NC}"
+fi
 
 echo -e "${GREEN}✓ Bronze layer deployed successfully${NC}"

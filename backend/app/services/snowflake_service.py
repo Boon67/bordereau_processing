@@ -124,13 +124,63 @@ class SnowflakeService:
         """Execute a query asynchronously and return results as list of dictionaries with timeout"""
         return await asyncio.to_thread(self._execute_query_dict_sync, query, params, timeout)
     
+    def _execute_queries_same_session_sync(self, queries: List[str], timeout: int = 300) -> List[Dict[str, Any]]:
+        """Execute multiple queries in the same session and return the last result (internal use)"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(DictCursor) as cursor:
+                    # Set statement timeout (in seconds)
+                    cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout}")
+                    
+                    result = []
+                    for query in queries:
+                        cursor.execute(query)
+                        result = cursor.fetchall()
+                    
+                    # Return the result of the last query
+                    return result
+        except Exception as e:
+            logger.error(f"Query execution failed: {str(e)}")
+            raise
+    
+    async def execute_queries_same_session(self, queries: List[str], timeout: int = 300) -> List[Dict[str, Any]]:
+        """Execute multiple queries in the same session asynchronously and return the last result"""
+        return await asyncio.to_thread(self._execute_queries_same_session_sync, queries, timeout)
+    
     def _execute_procedure_sync(self, procedure_name: str, *args) -> Any:
         """Execute a stored procedure synchronously (internal use)"""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    result = cursor.callproc(procedure_name, args)
-                    return result
+                    # Ensure we're using the SILVER schema for procedures
+                    cursor.execute(f"USE SCHEMA {settings.SILVER_SCHEMA_NAME}")
+                    
+                    # Build CALL statement with proper parameter formatting
+                    # Format parameters: strings get quotes, numbers/booleans don't
+                    formatted_args = []
+                    for arg in args:
+                        if arg is None:
+                            formatted_args.append('NULL')
+                        elif isinstance(arg, str):
+                            # Escape single quotes in strings
+                            escaped = arg.replace("'", "''")
+                            formatted_args.append(f"'{escaped}'")
+                        elif isinstance(arg, bool):
+                            formatted_args.append('TRUE' if arg else 'FALSE')
+                        else:
+                            formatted_args.append(str(arg))
+                    
+                    params_str = ', '.join(formatted_args)
+                    call_stmt = f"CALL {procedure_name}({params_str})"
+                    
+                    logger.info(f"Executing procedure: {call_stmt}")
+                    cursor.execute(call_stmt)
+                    
+                    # Fetch the result
+                    result = cursor.fetchone()
+                    if result:
+                        return result[0] if len(result) == 1 else result
+                    return None
         except Exception as e:
             logger.error(f"Procedure execution failed: {str(e)}")
             raise

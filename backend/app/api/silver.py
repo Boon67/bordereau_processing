@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
+import asyncio
 
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
@@ -80,17 +81,16 @@ async def get_cortex_models():
     try:
         sf_service = SnowflakeService()
         
-        # First, show models to populate the result set
-        await sf_service.execute_query("SHOW MODELS IN SNOWFLAKE.MODELS")
-        
-        # Then query the result set for CORTEX_BASE models
-        query = """
-            SELECT "name" AS model_name
-            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
-            WHERE "model_type" = 'CORTEX_BASE'
-            ORDER BY "name"
-        """
-        result = await sf_service.execute_query_dict(query)
+        # Execute both queries in the same session
+        # This is necessary because RESULT_SCAN(LAST_QUERY_ID()) requires the same session
+        queries = [
+            "SHOW MODELS IN SNOWFLAKE.MODELS",
+            """SELECT "name" AS model_name
+               FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+               WHERE "model_type" = 'CORTEX_BASE'
+               ORDER BY "name" """
+        ]
+        result = await sf_service.execute_queries_same_session(queries)
         return [row['MODEL_NAME'] for row in result]
     except Exception as e:
         logger.error(f"Failed to get Cortex models: {str(e)}")
@@ -342,8 +342,14 @@ class AutoMapLLMRequest(BaseModel):
 
 @router.post("/mappings/auto-ml")
 async def auto_map_fields_ml(request: AutoMapMLRequest):
-    """Auto-map fields using ML"""
+    """Auto-map fields using ML
+    
+    Note: This operation can take 30-60 seconds depending on data volume.
+    The procedure analyzes source fields and calculates similarity scores
+    using multiple algorithms (TF-IDF, sequence matching, word overlap).
+    """
     try:
+        logger.info(f"Starting ML auto-mapping: source={request.source_table}, target={request.target_table}, tpa={request.tpa}")
         sf_service = SnowflakeService()
         result = await sf_service.execute_procedure(
             "auto_map_fields_ml",
@@ -353,15 +359,28 @@ async def auto_map_fields_ml(request: AutoMapMLRequest):
             request.top_n,
             request.min_confidence
         )
+        logger.info(f"ML auto-mapping completed: {result}")
         return {"message": "ML auto-mapping completed", "result": result}
+    except asyncio.TimeoutError:
+        logger.error(f"ML auto-mapping timed out for TPA {request.tpa}")
+        raise HTTPException(
+            status_code=504,
+            detail="Procedure execution timed out. Try reducing the data volume or increasing timeout."
+        )
     except Exception as e:
-        logger.error(f"ML auto-mapping failed: {str(e)}")
+        logger.error(f"ML auto-mapping failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/mappings/auto-llm")
 async def auto_map_fields_llm(request: AutoMapLLMRequest):
-    """Auto-map fields using LLM"""
+    """Auto-map fields using LLM
+    
+    Note: This operation can take 30-90 seconds depending on data volume
+    and LLM model response time. The procedure uses Snowflake Cortex AI
+    to semantically understand field relationships.
+    """
     try:
+        logger.info(f"Starting LLM auto-mapping: source={request.source_table}, target={request.target_table}, tpa={request.tpa}, model={request.model_name}")
         sf_service = SnowflakeService()
         result = await sf_service.execute_procedure(
             "auto_map_fields_llm",
@@ -371,9 +390,16 @@ async def auto_map_fields_llm(request: AutoMapLLMRequest):
             request.model_name,
             "DEFAULT_FIELD_MAPPING"
         )
+        logger.info(f"LLM auto-mapping completed: {result}")
         return {"message": "LLM auto-mapping completed", "result": result}
+    except asyncio.TimeoutError:
+        logger.error(f"LLM auto-mapping timed out for TPA {request.tpa}")
+        raise HTTPException(
+            status_code=504,
+            detail="Procedure execution timed out. LLM processing can take longer for large datasets."
+        )
     except Exception as e:
-        logger.error(f"LLM auto-mapping failed: {str(e)}")
+        logger.error(f"LLM auto-mapping failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/mappings/{mapping_id}/approve")

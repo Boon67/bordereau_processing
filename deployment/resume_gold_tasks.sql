@@ -1,7 +1,7 @@
 -- ============================================
--- RESUME BRONZE LAYER TASKS
+-- RESUME GOLD LAYER TASKS
 -- ============================================
--- Purpose: Resume all Bronze layer tasks after deployment
+-- Purpose: Resume all Gold layer tasks after deployment
 -- 
 -- IMPORTANT: Tasks must be resumed in the correct order:
 --   1. Resume child tasks first (bottom-up)
@@ -16,33 +16,33 @@
 -- ============================================
 
 SET DATABASE_NAME = '$DATABASE_NAME';
-SET BRONZE_SCHEMA_NAME = '$BRONZE_SCHEMA_NAME';
+SET GOLD_SCHEMA_NAME = '$GOLD_SCHEMA_NAME';
 SET WAREHOUSE_NAME = '$SNOWFLAKE_WAREHOUSE';
 SET SNOWFLAKE_ROLE = '$SNOWFLAKE_ROLE';
 
 USE ROLE IDENTIFIER($SNOWFLAKE_ROLE);
 USE DATABASE IDENTIFIER($DATABASE_NAME);
 USE WAREHOUSE IDENTIFIER($WAREHOUSE_NAME);
-USE SCHEMA IDENTIFIER($BRONZE_SCHEMA_NAME);
+USE SCHEMA IDENTIFIER($GOLD_SCHEMA_NAME);
 
 -- ============================================
 -- RESUME TASKS (BOTTOM-UP ORDER)
 -- ============================================
 
--- Resume child tasks first
-ALTER TASK move_successful_files_task RESUME;
-ALTER TASK move_failed_files_task RESUME;
-ALTER TASK process_files_task RESUME;
-ALTER TASK archive_old_files_task RESUME;
+-- Resume child tasks first (if they exist)
+ALTER TASK IF EXISTS task_refresh_member_360 RESUME;
+ALTER TASK IF EXISTS task_refresh_provider_performance RESUME;
+ALTER TASK IF EXISTS task_refresh_financial_summary RESUME;
+ALTER TASK IF EXISTS task_run_quality_checks RESUME;
 
 -- Resume root task last
-ALTER TASK discover_files_task RESUME;
+ALTER TASK IF EXISTS task_refresh_claims_analytics RESUME;
 
 -- ============================================
 -- VERIFICATION
 -- ============================================
 
 -- Verify tasks are now started
-SHOW TASKS IN SCHEMA IDENTIFIER($BRONZE_SCHEMA_NAME);
+SHOW TASKS IN SCHEMA IDENTIFIER($GOLD_SCHEMA_NAME);
 
-SELECT 'All Bronze layer tasks have been resumed!' AS status;
+SELECT 'All Gold layer tasks have been resumed!' AS status;

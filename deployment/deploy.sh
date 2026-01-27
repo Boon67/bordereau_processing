@@ -391,6 +391,7 @@ export DEPLOY_BRONZE_SCHEMA="$BRONZE_SCHEMA"
 export DEPLOY_SILVER_SCHEMA="$SILVER_SCHEMA"
 export DEPLOY_DISCOVERY_SCHEDULE="$DISCOVERY_SCHEDULE"
 export DEPLOY_ROLE="$ROLE"
+export DEPLOY_AUTO_RESUME_TASKS="${AUTO_RESUME_TASKS:-true}"
 
 log_message INFO "Account: $ACCOUNT"
 log_message INFO "Database: $DATABASE"
@@ -719,6 +720,11 @@ echo "║  Bronze Schema: $BRONZE_SCHEMA"
 echo "║  Silver Schema: $SILVER_SCHEMA"
 echo "║  Gold Schema: GOLD"
 echo "║  Bronze Layer: ✓ Deployed"
+if [[ "$AUTO_RESUME_TASKS" == "true" ]]; then
+echo "║  Bronze Tasks: ✓ Resumed (auto-processing enabled)"
+else
+echo "║  Bronze Tasks: ⊘ Suspended (manual resume required)"
+fi
 echo "║  Silver Layer: ✓ Deployed"
 if [[ "$SCHEMAS_LOADED" == "true" ]]; then
 echo "║  Sample Schemas: ✓ Loaded (310 definitions)"
@@ -763,7 +769,9 @@ else
     echo "2. Upload sample data:"
     echo "   snow stage put sample_data/claims_data/provider_a/*.csv @BRONZE.SRC/provider_a/ --connection $CONNECTION_NAME"
     echo ""
-    echo "3. Resume tasks (optional - tasks are created in SUSPENDED state):"
-    echo "   snow sql --connection $CONNECTION_NAME -q \"USE DATABASE $DATABASE; USE SCHEMA $BRONZE_SCHEMA; ALTER TASK discover_files_task RESUME;\""
+    if [[ "$AUTO_RESUME_TASKS" != "true" ]]; then
+    echo "3. Resume Bronze tasks to enable automatic file processing:"
+    echo "   snow sql -f deployment/resume_tasks.sql --connection $CONNECTION_NAME"
     echo ""
+    fi
 fi

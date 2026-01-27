@@ -105,13 +105,18 @@ CALL archive_old_files();
 -- ============================================
 
 -- Note: Tasks are created in SUSPENDED state by default
--- Uncomment the following lines to auto-start tasks after deployment
-
--- ALTER TASK discover_files_task RESUME;
--- ALTER TASK process_files_task RESUME;
--- ALTER TASK move_successful_files_task RESUME;
--- ALTER TASK move_failed_files_task RESUME;
--- ALTER TASK archive_old_files_task RESUME;
+-- The deployment script (deploy_bronze.sh) will automatically resume
+-- these tasks after deployment by running deployment/resume_tasks.sql
+--
+-- To manually resume tasks, run:
+--   snow sql -f deployment/resume_tasks.sql --connection <CONNECTION_NAME>
+--
+-- Or manually resume in correct order (child tasks first, then root):
+--   ALTER TASK move_successful_files_task RESUME;
+--   ALTER TASK move_failed_files_task RESUME;
+--   ALTER TASK process_files_task RESUME;
+--   ALTER TASK archive_old_files_task RESUME;
+--   ALTER TASK discover_files_task RESUME;
 
 -- ============================================
 -- VERIFICATION

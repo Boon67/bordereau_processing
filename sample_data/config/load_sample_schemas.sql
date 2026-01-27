@@ -1,11 +1,8 @@
 -- Load Sample Silver Target Schemas (TPA-Agnostic)
 -- This script loads TPA-agnostic schema definitions
-
-SET DATABASE_NAME = '$DATABASE_NAME';
-SET SILVER_SCHEMA_NAME = '$SILVER_SCHEMA_NAME';
-
-USE DATABASE IDENTIFIER($DATABASE_NAME);
-USE SCHEMA IDENTIFIER($SILVER_SCHEMA_NAME);
+--
+-- Note: This script expects to be run with variable substitution
+-- or with the database/schema already set in the session
 
 -- Create stage for config files if not exists
 CREATE STAGE IF NOT EXISTS SILVER_CONFIG;
