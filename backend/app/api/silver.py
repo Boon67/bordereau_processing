@@ -413,6 +413,22 @@ async def approve_mapping(mapping_id: int):
         logger.error(f"Failed to approve mapping: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/mappings/{mapping_id}")
+async def decline_mapping(mapping_id: int):
+    """Decline and delete a field mapping"""
+    try:
+        sf_service = SnowflakeService()
+        query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
+            WHERE mapping_id = {mapping_id}
+        """
+        await sf_service.execute_query(query)
+        logger.info(f"Deleted mapping {mapping_id}")
+        return {"message": "Mapping declined and deleted successfully"}
+    except Exception as e:
+        logger.error(f"Failed to decline mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/transform")
 async def transform_bronze_to_silver(request: TransformRequest):
     """Transform Bronze data to Silver"""

@@ -152,7 +152,10 @@ class SnowflakeService:
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Ensure we're using the SILVER schema for procedures
+                    # Set database and schema context first (critical for SPCS OAuth)
+                    logger.info(f"Setting database context to: {settings.DATABASE_NAME}")
+                    cursor.execute(f"USE DATABASE {settings.DATABASE_NAME}")
+                    logger.info(f"Setting schema context to: {settings.SILVER_SCHEMA_NAME}")
                     cursor.execute(f"USE SCHEMA {settings.SILVER_SCHEMA_NAME}")
                     
                     # Build CALL statement with proper parameter formatting
@@ -182,7 +185,7 @@ class SnowflakeService:
                         return result[0] if len(result) == 1 else result
                     return None
         except Exception as e:
-            logger.error(f"Procedure execution failed: {str(e)}")
+            logger.error(f"Procedure execution failed: {str(e)}", exc_info=True)
             raise
     
     async def execute_procedure(self, procedure_name: str, *args) -> Any:

@@ -186,6 +186,16 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
     }
   }
 
+  const handleDeclineMapping = async (mappingId: number) => {
+    try {
+      await apiService.declineMapping(mappingId)
+      message.success('Mapping declined and deleted')
+      loadMappings()
+    } catch (error: any) {
+      message.error(`Failed to decline mapping: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
   const handleAutoMapML = async (values: any) => {
     setLoading(true)
     try {
@@ -318,21 +328,35 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
       title: 'Status',
       dataIndex: 'APPROVED',
       key: 'APPROVED',
-      width: 120,
+      width: 180,
       render: (approved: boolean, record: FieldMapping) => (
         approved ? (
           <Tag color="success" icon={<CheckCircleOutlined />}>Approved</Tag>
         ) : (
-          <Popconfirm
-            title="Approve this mapping?"
-            onConfirm={() => handleApproveMapping(record.MAPPING_ID)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Tag color="warning" icon={<CloseCircleOutlined />} style={{ cursor: 'pointer' }}>
-              Pending
-            </Tag>
-          </Popconfirm>
+          <Space size="small">
+            <Popconfirm
+              title="Approve this mapping?"
+              onConfirm={() => handleApproveMapping(record.MAPPING_ID)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Button type="primary" size="small" icon={<CheckCircleOutlined />}>
+                Approve
+              </Button>
+            </Popconfirm>
+            <Popconfirm
+              title="Decline and delete this mapping?"
+              description="This action cannot be undone."
+              onConfirm={() => handleDeclineMapping(record.MAPPING_ID)}
+              okText="Yes"
+              cancelText="No"
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger size="small" icon={<CloseCircleOutlined />}>
+                Decline
+              </Button>
+            </Popconfirm>
+          </Space>
         )
       ),
     },
@@ -400,6 +424,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
               setIsAutoLLMDrawerVisible(true)
               loadCortexModels() // Load models when drawer opens
             }}
+            type="primary"
           >
             Auto-Map (LLM)
           </Button>
@@ -410,6 +435,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
               setIsManualModalVisible(true)
               loadSourceFields() // Load source fields when modal opens
             }}
+            type="primary"
           >
             Manual Mapping
           </Button>
@@ -417,6 +443,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
             icon={<ReloadOutlined />} 
             onClick={loadMappings}
             loading={loading}
+            type="primary"
           >
             Refresh
           </Button>

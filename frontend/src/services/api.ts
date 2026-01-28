@@ -335,6 +335,11 @@ export const apiService = {
     return response.data
   },
 
+  declineMapping: async (mappingId: number): Promise<any> => {
+    const response = await api.delete(`/silver/mappings/${mappingId}`)
+    return response.data
+  },
+
   transformBronzeToSilver: async (
     sourceTable: string,
     targetTable: string,
