@@ -328,36 +328,61 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
       title: 'Status',
       dataIndex: 'APPROVED',
       key: 'APPROVED',
-      width: 180,
+      width: 150,
       render: (approved: boolean, record: FieldMapping) => (
-        approved ? (
-          <Tag color="success" icon={<CheckCircleOutlined />}>Approved</Tag>
-        ) : (
-          <Space size="small">
-            <Popconfirm
-              title="Approve this mapping?"
-              onConfirm={() => handleApproveMapping(record.MAPPING_ID)}
-              okText="Yes"
-              cancelText="No"
-            >
-              <Button type="primary" size="small" icon={<CheckCircleOutlined />}>
-                Approve
-              </Button>
-            </Popconfirm>
-            <Popconfirm
-              title="Decline and delete this mapping?"
-              description="This action cannot be undone."
-              onConfirm={() => handleDeclineMapping(record.MAPPING_ID)}
-              okText="Yes"
-              cancelText="No"
-              okButtonProps={{ danger: true }}
-            >
-              <Button danger size="small" icon={<CloseCircleOutlined />}>
-                Decline
-              </Button>
-            </Popconfirm>
-          </Space>
-        )
+        <Space size="small">
+          {approved ? (
+            <>
+              <Tag color="success" icon={<CheckCircleOutlined />}>Approved</Tag>
+              <Popconfirm
+                title="Delete this approved mapping?"
+                description="This action cannot be undone."
+                onConfirm={() => handleDeclineMapping(record.MAPPING_ID)}
+                okText="Yes"
+                cancelText="No"
+                okButtonProps={{ danger: true }}
+              >
+                <Button 
+                  danger 
+                  size="small" 
+                  icon={<CloseCircleOutlined />}
+                  title="Delete"
+                />
+              </Popconfirm>
+            </>
+          ) : (
+            <>
+              <Popconfirm
+                title="Approve this mapping?"
+                onConfirm={() => handleApproveMapping(record.MAPPING_ID)}
+                okText="Yes"
+                cancelText="No"
+              >
+                <Button 
+                  type="primary" 
+                  size="small" 
+                  icon={<CheckCircleOutlined />}
+                  title="Approve"
+                />
+              </Popconfirm>
+              <Popconfirm
+                title="Decline and delete this mapping?"
+                description="This action cannot be undone."
+                onConfirm={() => handleDeclineMapping(record.MAPPING_ID)}
+                okText="Yes"
+                cancelText="No"
+                okButtonProps={{ danger: true }}
+              >
+                <Button 
+                  danger 
+                  size="small" 
+                  icon={<CloseCircleOutlined />}
+                  title="Decline"
+                />
+              </Popconfirm>
+            </>
+          )}
+        </Space>
       ),
     },
     {
