@@ -17,7 +17,16 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-# Configuration
+# Script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Load configuration
+source "$SCRIPT_DIR/default.config" 2>/dev/null || true
+[ -f "$SCRIPT_DIR/custom.config" ] && source "$SCRIPT_DIR/custom.config"
+
+# Configuration defaults (can be overridden by config files or env vars)
+SNOWFLAKE_CONNECTION="${SNOWFLAKE_CONNECTION:-}"
+USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
 SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-SFSENORTHAMERICA-TBOON_AWS2}"
 SNOWFLAKE_USER="${SNOWFLAKE_USER:-DEMO_SVC}"
 SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-BORDEREAU_PROCESSING_PIPELINE_ADMIN}"
@@ -41,11 +50,17 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 execute_sql() {
-    snow sql -q "
+    local sql_cmd="snow sql -q \"
         USE DATABASE ${DATABASE_NAME};
         USE SCHEMA ${SCHEMA_NAME};
         $1
-    " --connection DEPLOYMENT
+    \""
+    
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        sql_cmd="$sql_cmd --connection $SNOWFLAKE_CONNECTION"
+    fi
+    
+    eval $sql_cmd
 }
 
 # Detect which service model is deployed

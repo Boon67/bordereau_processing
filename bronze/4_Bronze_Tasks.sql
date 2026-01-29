@@ -38,12 +38,14 @@ USE SCHEMA IDENTIFIER($BRONZE_SCHEMA_NAME);
 -- SUSPEND EXISTING TASKS (if any)
 -- ============================================
 
--- Suspend tasks in reverse dependency order
+-- Suspend root tasks first (required before modifying child tasks)
+ALTER TASK IF EXISTS discover_files_task SUSPEND;
+ALTER TASK IF EXISTS archive_old_files_task SUSPEND;
+
+-- Then suspend child tasks
 ALTER TASK IF EXISTS move_successful_files_task SUSPEND;
 ALTER TASK IF EXISTS move_failed_files_task SUSPEND;
 ALTER TASK IF EXISTS process_files_task SUSPEND;
-ALTER TASK IF EXISTS discover_files_task SUSPEND;
-ALTER TASK IF EXISTS archive_old_files_task SUSPEND;
 
 -- ============================================
 -- TASK 1: Discover Files (Root Task)

@@ -544,15 +544,94 @@ The main `deploy.sh` script includes optional container deployment:
 - Fully automated with `AUTO_APPROVE=true`
 - See [DEPLOY_SCRIPT_IMPROVEMENTS.md](DEPLOY_SCRIPT_IMPROVEMENTS.md) for details
 
+## Task Management
+
+### Automatic Task Resumption
+
+By default, tasks are **automatically resumed** after deployment. This is controlled by the `AUTO_RESUME_TASKS` configuration variable in `default.config`.
+
+### Bronze Layer Tasks
+
+The Bronze layer includes 5 automated tasks:
+
+1. **discover_files_task** (root) - Scans `@SRC` stage every 60 minutes
+2. **process_files_task** - Processes pending files (batch of 10)
+3. **move_successful_files_task** - Moves completed files to `@COMPLETED`
+4. **move_failed_files_task** - Moves failed files to `@ERROR` (after 3 retries)
+5. **archive_old_files_task** - Archives files older than 30 days (daily at 2 AM)
+
+### Manual Task Control
+
+**Resume Bronze Tasks:**
+```bash
+snow sql -f deployment/resume_tasks.sql --connection <CONNECTION_NAME>
+```
+
+**Suspend Bronze Tasks:**
+```sql
+USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
+USE SCHEMA BRONZE;
+
+-- Suspend in reverse order (root first, then children)
+ALTER TASK discover_files_task SUSPEND;
+ALTER TASK process_files_task SUSPEND;
+ALTER TASK move_successful_files_task SUSPEND;
+ALTER TASK move_failed_files_task SUSPEND;
+ALTER TASK archive_old_files_task SUSPEND;
+```
+
+**Check Task Status:**
+```sql
+SHOW TASKS IN SCHEMA BRONZE;
+```
+
+**Manually Trigger Processing:**
+```sql
+CALL BRONZE.process_queued_files();
+```
+
+### Gold Layer Tasks
+
+Resume Gold tasks after deployment:
+```bash
+snow sql -f deployment/resume_gold_tasks.sql --connection <CONNECTION_NAME>
+```
+
+### Important Notes
+
+⚠️ **Task Resumption Order**: When resuming tasks with dependencies, you MUST resume them in the correct order:
+1. Resume child tasks first (bottom-up)
+2. Resume root task last
+
+This is because Snowflake requires all child tasks to be in a consistent state before resuming the root task.
+
+### Troubleshooting Tasks
+
+**Files Stuck in PENDING:**
+```bash
+# Resume tasks
+snow sql -f deployment/resume_tasks.sql --connection <CONNECTION_NAME>
+
+# Manually process
+snow sql -q "CALL BRONZE.process_queued_files();" --connection <CONNECTION_NAME>
+```
+
+**View Task History:**
+```sql
+SELECT * FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
+WHERE SCHEMA_NAME = 'BRONZE'
+ORDER BY SCHEDULED_TIME DESC
+LIMIT 10;
+```
+
 ## Related Documentation
 
 - [Documentation Hub](../docs/README.md) - Complete documentation index
 - [Quick Start Guide](../QUICK_START.md) - Get running in 10 minutes
 - [Backend README](../backend/README.md) - Backend API documentation
 - [User Guide](../docs/USER_GUIDE.md) - Usage instructions
-- [Bulk Load Optimization](../gold/BULK_LOAD_OPTIMIZATION.md) - Gold layer performance
-- [Deploy Script Improvements](DEPLOY_SCRIPT_IMPROVEMENTS.md) - Latest deployment enhancements
+- [Gold Layer README](../gold/README.md) - Gold layer and performance optimization
 
 ---
 
-**Version**: 2.0 | **Last Updated**: January 22, 2026 | **Status**: ✅ Production Ready
+**Version**: 2.1 | **Last Updated**: January 27, 2026 | **Status**: ✅ Production Ready

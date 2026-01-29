@@ -13,9 +13,9 @@ interface SilverTransformProps {
 
 const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
-  const [sourceTable, setSourceTable] = useState<string>('')
+  const [sourceTable, setSourceTable] = useState<string>('RAW_DATA_TABLE')
   const [targetTable, setTargetTable] = useState<string>('')
-  const [sourceTables, setSourceTables] = useState<string[]>([])
+  const [sourceTables, setSourceTables] = useState<string[]>(['RAW_DATA_TABLE'])
   const [targetTables, setTargetTables] = useState<string[]>([])
   const [currentStep, setCurrentStep] = useState(0)
   const [transformResult, setTransformResult] = useState<any>(null)
@@ -31,13 +31,20 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
     if (!selectedTpa) return
 
     try {
-      // Load target schemas to get target tables
-      const schemas = await apiService.getTargetSchemas(selectedTpa)
-      const uniqueTargets = Array.from(new Set(schemas.map(s => s.TABLE_NAME)))
-      setTargetTables(uniqueTargets)
-
-      // For source tables, we'll use RAW_DATA_TABLE as the source
-      setSourceTables(['RAW_DATA_TABLE'])
+      // Load created tables for this TPA
+      const createdTables = await apiService.getSilverTables()
+      
+      // Filter to only tables for the selected TPA
+      const tpaCreatedTables = createdTables.filter(
+        (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
+      )
+      
+      // Extract unique schema table names
+      const uniqueTargets = Array.from(
+        new Set(tpaCreatedTables.map((table: any) => table.SCHEMA_TABLE))
+      )
+      
+      setTargetTables(uniqueTargets as string[])
     } catch (error) {
       message.error('Failed to load tables')
     }
@@ -140,10 +147,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
               </label>
               <Select
                 value={sourceTable}
-                onChange={(value) => {
-                  setSourceTable(value)
-                  setCurrentStep(1)
-                }}
+                onChange={setSourceTable}
                 style={{ width: '100%' }}
                 placeholder="Select source table"
                 options={sourceTables.map(table => ({
@@ -162,10 +166,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
               </label>
               <Select
                 value={targetTable}
-                onChange={(value) => {
-                  setTargetTable(value)
-                  setCurrentStep(1)
-                }}
+                onChange={setTargetTable}
                 style={{ width: '100%' }}
                 placeholder="Select target table"
                 options={targetTables.map(table => ({
@@ -177,6 +178,16 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
               <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
                 Structured table where transformed data will be stored
               </div>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <Button
+                type="primary"
+                onClick={() => setCurrentStep(1)}
+                disabled={!sourceTable || !targetTable}
+              >
+                Next: Verify Configuration
+              </Button>
             </div>
           </Space>
         </Card>

@@ -25,6 +25,18 @@ USE DATABASE &{DATABASE_NAME};
 USE SCHEMA &{GOLD_SCHEMA_NAME};
 
 -- ============================================
+-- SUSPEND EXISTING TASKS (if any)
+-- ============================================
+
+-- Suspend root tasks first (required before modifying child tasks)
+ALTER TASK IF EXISTS task_refresh_claims_analytics SUSPEND;
+ALTER TASK IF EXISTS task_master_gold_refresh SUSPEND;
+
+-- Then suspend child tasks
+ALTER TASK IF EXISTS task_quality_checks SUSPEND;
+ALTER TASK IF EXISTS task_refresh_member_360 SUSPEND;
+
+-- ============================================
 -- TASK 1: Daily Claims Analytics Refresh
 -- ============================================
 

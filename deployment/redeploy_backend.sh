@@ -22,7 +22,21 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 echo -e "${YELLOW}[1/6]${NC} Logging into Snowflake image registry..."
-snow spcs image-registry login --connection DEPLOYMENT
+
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/default.config" 2>/dev/null || true
+[ -f "$SCRIPT_DIR/custom.config" ] && source "$SCRIPT_DIR/custom.config"
+
+SNOWFLAKE_CONNECTION="${SNOWFLAKE_CONNECTION:-}"
+USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
+
+login_cmd="snow spcs image-registry login"
+if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+    login_cmd="$login_cmd --connection $SNOWFLAKE_CONNECTION"
+fi
+
+$login_cmd
 
 echo
 echo -e "${YELLOW}[2/6]${NC} Building backend Docker image..."

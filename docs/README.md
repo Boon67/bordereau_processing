@@ -1,10 +1,8 @@
 # Bordereau Processing Pipeline - Documentation Hub
 
-**Last Updated**: January 22, 2026
+**Last Updated**: January 27, 2026
 
 Welcome to the complete documentation for the Bordereau Processing Pipeline, a modern healthcare claims data processing system built with FastAPI, React, and Snowflake.
-
-> **📖 Quick Navigation**: See [DOCS.md](../DOCS.md) for a complete documentation map
 
 ## 📚 Table of Contents
 
@@ -22,19 +20,8 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
 |----------|-------------|
 | [Main README](../README.md) | Project overview and quick start |
 | [Quick Start Guide](../QUICK_START.md) | Get running in 10 minutes |
-| [Implementation Log](IMPLEMENTATION_LOG.md) | ⭐ Complete implementation history |
 | [User Guide](USER_GUIDE.md) | Complete usage instructions |
 | [Deployment Guide](../deployment/README.md) | Deployment to Snowflake and Snowpark |
-| [Quick Reference](../deployment/QUICK_REFERENCE.md) | Quick deployment commands |
-| [Migration Guide](../MIGRATION_GUIDE.md) | Streamlit to React migration notes |
-| [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Documentation organization (v4.0) |
-| [Documentation Structure](../DOCUMENTATION_STRUCTURE.md) | Complete documentation map |
-
-### Visual Documentation (with Mermaid Diagrams) 📊
-
-| Document | Description |
-|----------|-------------|
-| [Diagrams Guide](DIAGRAMS_GUIDE.md) | How to use Mermaid diagrams |
 | [Data Flow Diagrams](DATA_FLOW_DIAGRAMS.md) | Data flow visualizations |
 | [Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md) | System architecture diagrams |
 
@@ -53,10 +40,6 @@ Welcome to the complete documentation for the Bordereau Processing Pipeline, a m
    - File organization
    - Data isolation
 
-3. **[TPA Upload Guide](../bronze/TPA_UPLOAD_GUIDE.md)** - File upload conventions
-   - File naming standards
-   - Directory structure
-   - Supported formats
 
 ### For Developers
 
@@ -107,11 +90,6 @@ graph TD
   - Task automation
   - TPA isolation
 
-- **[TPA Upload Guide](../bronze/TPA_UPLOAD_GUIDE.md)** - File upload guide
-  - File naming conventions
-  - TPA directory structure
-  - Upload methods
-
 ### Silver Layer (Data Transformation)
 
 - **[Silver README](../silver/README.md)** - Silver layer architecture
@@ -160,17 +138,8 @@ graph TD
   - All deployment scripts
   - Configuration options
   - Service management
+  - Task management
   - Troubleshooting
-
-- **[Deployment & Operations](DEPLOYMENT_AND_OPERATIONS.md)** - Operations guide
-  - Verification procedures
-  - Monitoring
-  - Common issues
-
-- **[Authentication Setup](../deployment/AUTHENTICATION_SETUP.md)** - Auth configuration
-  - Snow CLI setup
-  - PAT generation
-  - Keypair authentication
 
 ### Deployment Scripts
 
@@ -255,14 +224,6 @@ bordereau/
 
 ## 📋 Reference
 
-### Implementation History
-
-- **[Implementation Log](IMPLEMENTATION_LOG.md)** - Complete implementation history
-  - Initial deployment summary
-  - Hybrid tables implementation
-  - Gold layer implementation
-  - Frontend features added
-  - Documentation consolidation
 
 ### Sample Data
 
@@ -289,11 +250,7 @@ bordereau/
   - Business metrics
   - Quality rules
   - Transformation procedures
-
-- **[Hybrid Tables Guide](../gold/HYBRID_TABLES_GUIDE.md)**
-  - Hybrid vs standard tables
-  - Performance optimization
-  - Best practices
+  - Performance optimization (bulk load)
 
 ### Configuration
 
@@ -417,14 +374,13 @@ snow connection test
 ### For DevOps
 
 1. Review [Deployment Guide](../deployment/README.md)
-2. Study [Deployment & Operations](DEPLOYMENT_AND_OPERATIONS.md)
-3. Test with [Test Plan](testing/TEST_PLAN_DEPLOYMENT_SCRIPTS.md)
-4. Configure authentication per [Auth Setup](../deployment/AUTHENTICATION_SETUP.md)
+2. Test with [Test Plan](testing/TEST_PLAN_DEPLOYMENT_SCRIPTS.md)
+3. Configure authentication (see deployment guide)
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: January 19, 2026  
+**Version**: 2.0  
+**Last Updated**: January 27, 2026  
 **Status**: ✅ Production Ready
 
 For the latest updates and changes, see the main [README](../README.md).

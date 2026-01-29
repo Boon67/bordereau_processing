@@ -23,7 +23,13 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 cd "$PROJECT_ROOT"
 
-# Configuration
+# Load configuration
+source "$SCRIPT_DIR/default.config" 2>/dev/null || true
+[ -f "$SCRIPT_DIR/custom.config" ] && source "$SCRIPT_DIR/custom.config"
+
+# Configuration defaults (can be overridden by config files or env vars)
+SNOWFLAKE_CONNECTION="${SNOWFLAKE_CONNECTION:-}"
+USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
 SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-SFSENORTHAMERICA-TBOON_AWS2}"
 SNOWFLAKE_USER="${SNOWFLAKE_USER:-DEMO_SVC}"
 SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-BORDEREAU_PROCESSING_PIPELINE_ADMIN}"
@@ -54,12 +60,24 @@ command_exists() {
 
 execute_sql() {
     local sql="$1"
-    snow sql -q "$sql" --connection DEPLOYMENT 2>/dev/null
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        snow sql -q "$sql" --connection "$SNOWFLAKE_CONNECTION" 2>/dev/null
+    elif [ "$USE_DEFAULT_CONNECTION" = "true" ]; then
+        snow sql -q "$sql" 2>/dev/null
+    else
+        snow sql -q "$sql" 2>/dev/null
+    fi
 }
 
 execute_sql_file() {
     local file="$1"
-    snow sql -f "$file" --connection DEPLOYMENT 2>/dev/null
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        snow sql -f "$file" --connection "$SNOWFLAKE_CONNECTION" 2>/dev/null
+    elif [ "$USE_DEFAULT_CONNECTION" = "true" ]; then
+        snow sql -f "$file" 2>/dev/null
+    else
+        snow sql -f "$file" 2>/dev/null
+    fi
 }
 
 # ============================================
@@ -118,7 +136,12 @@ validate_prerequisites() {
     fi
     
     # Test Snowflake connection
-    if ! snow connection test --connection DEPLOYMENT >/dev/null 2>&1; then
+    local test_cmd="snow connection test"
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        test_cmd="$test_cmd --connection $SNOWFLAKE_CONNECTION"
+    fi
+    
+    if ! $test_cmd >/dev/null 2>&1; then
         log_error "Snowflake connection test failed"
         exit 1
     fi
@@ -161,8 +184,15 @@ create_compute_pool() {
     log_step "3/11: Creating compute pool..."
     
     # Check if compute pool exists
-    local pool_exists=$(snow sql -q "SHOW COMPUTE POOLS LIKE '${COMPUTE_POOL_NAME}'" \
-        --connection DEPLOYMENT --format json 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    local pool_exists
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        pool_exists=$(snow sql -q "SHOW COMPUTE POOLS LIKE '${COMPUTE_POOL_NAME}'" --format json --connection "$SNOWFLAKE_CONNECTION" 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    else
+        pool_exists=$(snow sql -q "SHOW COMPUTE POOLS LIKE '${COMPUTE_POOL_NAME}'" --format json 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    fi
+    
+    # Ensure pool_exists is a number
+    pool_exists=${pool_exists:-0}
     
     if [ "$pool_exists" -gt 0 ]; then
         log_info "Compute pool already exists: $COMPUTE_POOL_NAME"
@@ -225,8 +255,15 @@ create_image_repository() {
     log_step "4/11: Creating image repository..."
     
     # Check if repository exists
-    local repo_exists=$(snow sql -q "SHOW IMAGE REPOSITORIES LIKE '${REPOSITORY_NAME}'" \
-        --connection DEPLOYMENT --format json 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    local repo_exists
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        repo_exists=$(snow sql -q "SHOW IMAGE REPOSITORIES LIKE '${REPOSITORY_NAME}'" --format json --connection "$SNOWFLAKE_CONNECTION" 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    else
+        repo_exists=$(snow sql -q "SHOW IMAGE REPOSITORIES LIKE '${REPOSITORY_NAME}'" --format json 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+    fi
+    
+    # Ensure repo_exists is a number
+    repo_exists=${repo_exists:-0}
     
     if [ "$repo_exists" -gt 0 ]; then
         log_info "Image repository already exists: $REPOSITORY_NAME"
@@ -281,10 +318,12 @@ EOF
 get_repository_url() {
     log_step "5/11: Getting repository URL..."
     
-    local repo_url=$(snow spcs image-repository url "${REPOSITORY_NAME}" \
-        --connection DEPLOYMENT \
-        --database "${DATABASE_NAME}" \
-        --schema "${SCHEMA_NAME}" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    local url_cmd="snow spcs image-repository url \"${REPOSITORY_NAME}\" --database \"${DATABASE_NAME}\" --schema \"${SCHEMA_NAME}\""
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        url_cmd="$url_cmd --connection $SNOWFLAKE_CONNECTION"
+    fi
+    
+    local repo_url=$(eval $url_cmd 2>/dev/null | tr '[:upper:]' '[:lower:]')
     
     if [ -z "$repo_url" ]; then
         log_error "Failed to get repository URL"
@@ -302,7 +341,12 @@ get_repository_url() {
 docker_login() {
     log_step "6/11: Logging into Docker registry..."
     
-    snow spcs image-registry login --connection DEPLOYMENT || {
+    local login_cmd="snow spcs image-registry login"
+    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+        login_cmd="$login_cmd --connection $SNOWFLAKE_CONNECTION"
+    fi
+    
+    $login_cmd || {
         log_error "Docker login failed"
         exit 1
     }
@@ -639,7 +683,12 @@ CREATE SERVICE ${SERVICE_NAME}
 EOF
         
         # Execute with error output visible
-        if ! snow sql -f /tmp/create_service.sql --connection DEPLOYMENT 2>&1 | tee /tmp/create_service_error.log; then
+        local create_cmd="snow sql -f /tmp/create_service.sql"
+        if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+            create_cmd="$create_cmd --connection $SNOWFLAKE_CONNECTION"
+        fi
+        
+        if ! $create_cmd 2>&1 | tee /tmp/create_service_error.log; then
             log_error "Failed to create service. Error details:"
             cat /tmp/create_service_error.log | grep -i "error\|failed" || cat /tmp/create_service_error.log | tail -20
             exit 1

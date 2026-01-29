@@ -36,15 +36,28 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName })
     if (!selectedTpa) return
 
     try {
-      const schemas = await apiService.getTargetSchemas(selectedTpa)
-      const uniqueTables = Array.from(new Set(schemas.map(s => s.TABLE_NAME)))
-      setTables(uniqueTables)
+      // Get all created tables
+      const allTables = await apiService.getSilverTables()
       
+      // Filter tables for the selected TPA
+      const tpaCreatedTables = allTables.filter(
+        (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
+      )
+      
+      // Extract unique schema table names
+      const uniqueTables = Array.from(
+        new Set(tpaCreatedTables.map((table: any) => table.SCHEMA_TABLE))
+      )
+      
+      setTables(uniqueTables as string[])
+      
+      // Auto-select the first table if available and no table is currently selected
       if (uniqueTables.length > 0 && !selectedTable) {
-        setSelectedTable(uniqueTables[0])
+        setSelectedTable(uniqueTables[0] as string)
       }
     } catch (error) {
       message.error('Failed to load tables')
+      console.error('Error loading tables:', error)
     }
   }
 
