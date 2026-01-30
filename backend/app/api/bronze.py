@@ -2,7 +2,7 @@
 Bronze Layer API Endpoints
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 import tempfile
@@ -13,15 +13,16 @@ import traceback
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
 from app.utils.logging_utils import SnowflakeLogger, log_exception
+from app.utils.auth_utils import get_caller_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/source-fields")
-async def get_source_fields(tpa: str):
+async def get_source_fields(request: Request, tpa: str):
     """Get distinct source field names from RAW_DATA_TABLE for a TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             SELECT DISTINCT 
                 f.key as field_name
@@ -40,6 +41,7 @@ async def get_source_fields(tpa: str):
 
 @router.post("/upload")
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     tpa: str = Form(...)
 ):
@@ -73,7 +75,7 @@ async def upload_file(
         
         try:
             # Upload to Snowflake stage
-            sf_service = SnowflakeService()
+            sf_service = SnowflakeService(caller_token=get_caller_token(request))
             stage_path = f"@{settings.BRONZE_SCHEMA_NAME}.SRC/{tpa}/"
             await sf_service.upload_file_to_stage(tmp_path, stage_path)
             
@@ -127,20 +129,20 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/queue")
-async def get_processing_queue(tpa: Optional[str] = None):
+async def get_processing_queue(request: Request, tpa: Optional[str] = None):
     """Get file processing queue"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         return await sf_service.get_processing_queue(tpa)
     except Exception as e:
         logger.error(f"Failed to get processing queue: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/status")
-async def get_processing_status():
+async def get_processing_status(request: Request):
     """Get processing status summary"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             SELECT * FROM {settings.BRONZE_SCHEMA_NAME}.v_processing_status_summary
             ORDER BY tpa, status
@@ -151,10 +153,10 @@ async def get_processing_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stats")
-async def get_bronze_stats(tpa: Optional[str] = None):
+async def get_bronze_stats(request: Request, tpa: Optional[str] = None):
     """Get Bronze layer statistics including total row count"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Build WHERE clause for TPA filter
         tpa_filter = f"WHERE TPA = '{tpa}'" if tpa else ""
@@ -193,24 +195,22 @@ async def get_bronze_stats(tpa: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/raw-data")
-async def get_raw_data(
-    tpa: str,
+async def get_raw_data(request: Request, tpa: str,
     file_name: Optional[str] = None,
-    limit: int = 100
-):
+    limit: int = 100):
     """Get raw data records"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         return await sf_service.get_raw_data(tpa, file_name, limit)
     except Exception as e:
         logger.error(f"Failed to get raw data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stages/{stage_name}")
-async def list_stage_files(stage_name: str):
+async def list_stage_files(request: Request, stage_name: str):
     """List files in a stage"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         stage_path = f"@{settings.BRONZE_SCHEMA_NAME}.{stage_name.upper()}"
         return await sf_service.list_stage_files(stage_path)
     except Exception as e:
@@ -218,10 +218,10 @@ async def list_stage_files(stage_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/stages/{stage_name}/files")
-async def delete_stage_file(stage_name: str, file_path: str):
+async def delete_stage_file(request: Request, stage_name: str, file_path: str):
     """Delete a file from a stage and update the processing queue"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Remove the file from the stage
         # file_path format: src/provider_a/file.csv
@@ -279,10 +279,10 @@ async def delete_stage_file(stage_name: str, file_path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/stages/{stage_name}/files/bulk-delete")
-async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
+async def bulk_delete_stage_files(request: Request, stage_name: str, file_paths: List[str]):
     """Delete multiple files from a stage at once"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         results = {
             "success": [],
@@ -342,7 +342,7 @@ async def bulk_delete_stage_files(stage_name: str, file_paths: List[str]):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/discover")
-async def discover_files():
+async def discover_files(request: Request):
     """Manually trigger file discovery
     
     This endpoint triggers the Snowflake task to discover files asynchronously.
@@ -350,7 +350,7 @@ async def discover_files():
     Use the /queue endpoint to check for newly discovered files.
     """
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # First, get a quick count of files in the stage
         try:
@@ -405,10 +405,10 @@ async def discover_files():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reset-stuck")
-async def reset_stuck_files():
+async def reset_stuck_files(request: Request):
     """Reset stuck files in PROCESSING status back to PENDING"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Reset files that have been in PROCESSING status for more than 5 minutes
         reset_query = f"""
@@ -436,10 +436,10 @@ async def reset_stuck_files():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reprocess/{queue_id}")
-async def reprocess_file(queue_id: int):
+async def reprocess_file(request: Request, queue_id: int):
     """Reprocess a failed file by resetting it to PENDING status"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Check if file exists and get its current status
         check_query = f"""
@@ -489,7 +489,7 @@ async def reprocess_file(queue_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/process")
-async def process_queue():
+async def process_queue(request: Request):
     """Manually trigger file discovery and processing
     
     This endpoint triggers the discover_files_task which automatically triggers
@@ -500,7 +500,7 @@ async def process_queue():
     Use the /queue endpoint to check processing status.
     """
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Get quick counts for informational purposes
         try:
@@ -565,10 +565,10 @@ async def process_queue():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/tasks")
-async def get_tasks():
+async def get_tasks(request: Request):
     """Get Bronze tasks status with predecessor information"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"SHOW TASKS IN SCHEMA {settings.BRONZE_SCHEMA_NAME}"
         tasks = await sf_service.execute_query_dict(query, timeout=30)
         
@@ -595,10 +595,10 @@ async def get_tasks():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/tasks/{task_name}/resume")
-async def resume_task(task_name: str):
+async def resume_task(request: Request, task_name: str):
     """Resume a task"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} RESUME"
         await sf_service.execute_query(query)
         return {"message": f"Task {task_name} resumed successfully"}
@@ -607,10 +607,10 @@ async def resume_task(task_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/tasks/{task_name}/suspend")
-async def suspend_task(task_name: str):
+async def suspend_task(request: Request, task_name: str):
     """Suspend a task"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"ALTER TASK {settings.BRONZE_SCHEMA_NAME}.{task_name} SUSPEND"
         await sf_service.execute_query(query, timeout=30)
         return {"message": f"Task {task_name} suspended successfully"}
@@ -622,10 +622,10 @@ class ScheduleUpdate(BaseModel):
     schedule: str
 
 @router.put("/tasks/{task_name}/schedule")
-async def update_task_schedule(task_name: str, schedule_update: ScheduleUpdate):
+async def update_task_schedule(request: Request, task_name: str, schedule_update: ScheduleUpdate):
     """Update task schedule (only for root tasks without predecessors)"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         schedule = schedule_update.schedule
         
         # Check if task has predecessors
@@ -658,7 +658,7 @@ async def update_task_schedule(task_name: str, schedule_update: ScheduleUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/clear-all-data")
-async def clear_all_data():
+async def clear_all_data(request: Request):
     """
     Clear all data from Bronze layer including:
     - All files from all stages (@SRC, @COMPLETED, @ERROR, @ARCHIVE)
@@ -668,7 +668,7 @@ async def clear_all_data():
     WARNING: This is a destructive operation that cannot be undone!
     """
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         results = {
             "stages_cleared": [],
             "tables_truncated": [],
@@ -723,7 +723,7 @@ async def clear_all_data():
 
 
 @router.delete("/data/file/{file_name}")
-async def delete_file_data(file_name: str):
+async def delete_file_data(request: Request, file_name: str):
     """
     Delete all data records for a specific file from RAW_DATA_TABLE.
     Updates the queue status to 'DELETED'.
@@ -735,7 +735,7 @@ async def delete_file_data(file_name: str):
         Success message with number of rows deleted
     """
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Call the stored procedure to delete file data
         query = f"CALL {settings.BRONZE_SCHEMA_NAME}.delete_file_data('{file_name}')"

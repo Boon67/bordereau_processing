@@ -2,13 +2,14 @@
 Gold Layer API Endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import logging
 
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
+from app.utils.auth_utils import get_caller_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -17,10 +18,10 @@ class RuleStatusUpdate(BaseModel):
     is_active: bool
 
 @router.get("/analytics/{table_name}")
-async def get_gold_table_data(table_name: str, tpa: str, limit: int = 100):
+async def get_gold_table_data(request: Request, table_name: str, tpa: str, limit: int = 100):
     """Get data from Gold analytics tables"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Validate table name to prevent SQL injection
         valid_tables = ['CLAIMS_ANALYTICS', 'MEMBER_360', 'PROVIDER_PERFORMANCE', 'FINANCIAL_SUMMARY']
@@ -46,10 +47,10 @@ async def get_gold_table_data(table_name: str, tpa: str, limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analytics/{table_name}/stats")
-async def get_gold_stats(table_name: str, tpa: str):
+async def get_gold_stats(request: Request, table_name: str, tpa: str):
     """Get statistics for Gold analytics table"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Validate table name
         valid_tables = ['CLAIMS_ANALYTICS', 'MEMBER_360', 'PROVIDER_PERFORMANCE', 'FINANCIAL_SUMMARY']
@@ -80,10 +81,10 @@ async def get_gold_stats(table_name: str, tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/metrics")
-async def get_business_metrics(tpa: str):
+async def get_business_metrics(request: Request, tpa: str):
     """Get business metrics for TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             SELECT 
@@ -110,10 +111,10 @@ async def get_business_metrics(tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/quality/results")
-async def get_quality_check_results(tpa: str, limit: int = 100):
+async def get_quality_check_results(request: Request, tpa: str, limit: int = 100):
     """Get quality check results for TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             SELECT 
@@ -154,10 +155,10 @@ async def get_quality_check_results(tpa: str, limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/quality/stats")
-async def get_quality_stats(tpa: str):
+async def get_quality_stats(request: Request, tpa: str):
     """Get quality statistics for TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             SELECT 
@@ -177,10 +178,10 @@ async def get_quality_stats(tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/rules/transformation")
-async def get_transformation_rules(tpa: str):
+async def get_transformation_rules(request: Request, tpa: str):
     """Get transformation rules for TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             SELECT 
@@ -209,10 +210,10 @@ async def get_transformation_rules(tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/rules/quality")
-async def get_quality_rules(tpa: str):
+async def get_quality_rules(request: Request, tpa: str):
     """Get quality rules for TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             SELECT 
@@ -242,10 +243,10 @@ async def get_quality_rules(tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/rules/transformation/{rule_id}/status")
-async def update_transformation_rule_status(rule_id: int, status: RuleStatusUpdate):
+async def update_transformation_rule_status(request: Request, rule_id: int, status: RuleStatusUpdate):
     """Update transformation rule active status"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             UPDATE {settings.DATABASE_NAME}.GOLD.transformation_rules
@@ -265,10 +266,10 @@ async def update_transformation_rule_status(rule_id: int, status: RuleStatusUpda
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/rules/quality/{rule_id}/status")
-async def update_quality_rule_status(rule_id: int, status: RuleStatusUpdate):
+async def update_quality_rule_status(request: Request, rule_id: int, status: RuleStatusUpdate):
     """Update quality rule active status"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             UPDATE {settings.DATABASE_NAME}.GOLD.quality_rules

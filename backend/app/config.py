@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
     
+    # Caller's Rights Mode
+    # When enabled, the backend will use the caller's Snowflake token (from ingress auth cookie)
+    # instead of the service token. This allows operations to run with the caller's permissions.
+    USE_CALLERS_RIGHTS: bool = True
+    
     # Snow CLI connection (preferred method)
     SNOW_CONNECTION_NAME: Optional[str] = None
     

@@ -38,10 +38,25 @@ def async_cached(ttl_seconds: int = 300, key_prefix: str = ""):
 class SnowflakeService:
     """Service for interacting with Snowflake"""
     
-    def __init__(self):
+    def __init__(self, caller_token: Optional[str] = None):
+        """
+        Initialize Snowflake service.
+        
+        Args:
+            caller_token: Optional OAuth token from the caller (for caller's rights execution).
+                         If provided, this token will be used instead of the service token.
+        """
         # Get connection parameters from settings (handles both snow CLI and direct)
         self.connection_params = settings.get_snowflake_config()
-        logger.info(f"Initialized Snowflake service for account: {self.connection_params.get('account')}")
+        
+        # If caller token is provided, override the service token
+        if caller_token:
+            self.connection_params = self.connection_params.copy()
+            self.connection_params['token'] = caller_token
+            self.connection_params['authenticator'] = 'oauth'
+            logger.info(f"Initialized Snowflake service with caller's token for account: {self.connection_params.get('account')}")
+        else:
+            logger.info(f"Initialized Snowflake service for account: {self.connection_params.get('account')}")
     
     def get_connection(self):
         """Get Snowflake connection with timeout settings"""

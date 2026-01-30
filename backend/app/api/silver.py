@@ -2,7 +2,7 @@
 Silver Layer API Endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
@@ -11,6 +11,7 @@ import asyncio
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
 from app.utils.cache import cache
+from app.utils.auth_utils import get_caller_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -48,20 +49,20 @@ class TransformRequest(BaseModel):
     incremental: bool = False
 
 @router.get("/schemas")
-async def get_target_schemas(tpa: Optional[str] = None, table_name: Optional[str] = None):
+async def get_target_schemas(request: Request, tpa: Optional[str] = None, table_name: Optional[str] = None):
     """Get target schemas (TPA-agnostic)"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         return await sf_service.get_target_schemas(tpa, table_name)
     except Exception as e:
         logger.error(f"Failed to get target schemas: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/schemas/{table_name}/columns")
-async def get_target_columns(table_name: str):
+async def get_target_columns(request: Request, table_name: str):
     """Get column names for a specific target table"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             SELECT column_name
             FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
@@ -76,10 +77,10 @@ async def get_target_columns(table_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/cortex-models")
-async def get_cortex_models():
+async def get_cortex_models(request: Request):
     """Get list of available Cortex LLM models"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Execute both queries in the same session
         # This is necessary because RESULT_SCAN(LAST_QUERY_ID()) requires the same session
@@ -104,10 +105,10 @@ async def get_cortex_models():
         ]
 
 @router.post("/schemas")
-async def create_target_schema(schema: TargetSchemaCreate):
+async def create_target_schema(request: Request, schema: TargetSchemaCreate):
     """Create target schema definition (TPA-agnostic)"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             INSERT INTO {settings.SILVER_SCHEMA_NAME}.target_schemas
             (table_name, column_name, data_type, nullable, default_value, description)
@@ -127,10 +128,10 @@ async def create_target_schema(schema: TargetSchemaCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/schemas/{schema_id}")
-async def update_target_schema(schema_id: int, schema: TargetSchemaUpdate):
+async def update_target_schema(request: Request, schema_id: int, schema: TargetSchemaUpdate):
     """Update target schema definition"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Build update query dynamically based on provided fields
         update_fields = []
@@ -164,10 +165,10 @@ async def update_target_schema(schema_id: int, schema: TargetSchemaUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/schemas/{schema_id}")
-async def delete_target_schema(schema_id: int):
+async def delete_target_schema(request: Request, schema_id: int):
     """Delete target schema column definition"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
             WHERE schema_id = {schema_id}
@@ -183,10 +184,10 @@ async def delete_target_schema(schema_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/schemas/table/{table_name}")
-async def delete_table_schema(table_name: str, tpa: str):
+async def delete_table_schema(request: Request, table_name: str, tpa: str):
     """Delete entire table schema (all columns for a table)"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # First check if table exists
         check_query = f"""
@@ -218,10 +219,10 @@ async def delete_table_schema(table_name: str, tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/tables")
-async def list_silver_tables():
+async def list_silver_tables(request: Request):
     """List all user-created Silver tables with metadata"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             SELECT 
                 ct.physical_table_name as TABLE_NAME,
@@ -247,13 +248,13 @@ async def list_silver_tables():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/tables/exists")
-async def check_table_exists(table_name: str, tpa: str):
+async def check_table_exists(request: Request, table_name: str, tpa: str):
     """Check if a physical Silver table exists
     
     Checks for table with name format: {TPA}_{TABLE_NAME}
     """
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
         
         query = f"""
@@ -274,14 +275,14 @@ async def check_table_exists(table_name: str, tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/tables/create")
-async def create_silver_table(table_name: str, tpa: str):
+async def create_silver_table(request: Request, table_name: str, tpa: str):
     """Create physical Silver table from schema metadata
     
     Creates a table with name format: {TPA}_{TABLE_NAME}
     Example: PROVIDER_A_MEDICAL_CLAIMS
     """
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         # Use fully qualified procedure name
         proc_name = f"{settings.SILVER_SCHEMA_NAME}.create_silver_table"
         result = await sf_service.execute_procedure(proc_name, table_name, tpa)
@@ -299,20 +300,20 @@ async def create_silver_table(table_name: str, tpa: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/mappings")
-async def get_field_mappings(tpa: str, target_table: Optional[str] = None):
+async def get_field_mappings(request: Request, tpa: str, target_table: Optional[str] = None):
     """Get field mappings"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         return await sf_service.get_field_mappings(tpa, target_table)
     except Exception as e:
         logger.error(f"Failed to get field mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/mappings")
-async def create_field_mapping(mapping: FieldMappingCreate):
+async def create_field_mapping(request: Request, mapping: FieldMappingCreate):
     """Create field mapping"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             INSERT INTO {settings.SILVER_SCHEMA_NAME}.field_mappings
             (source_field, target_table, target_column, tpa, mapping_method, transformation_logic, description, approved)
@@ -341,7 +342,7 @@ class AutoMapLLMRequest(BaseModel):
     model_name: str = "llama3.1-70b"
 
 @router.post("/mappings/auto-ml")
-async def auto_map_fields_ml(request: AutoMapMLRequest):
+async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest):
     """Auto-map fields using ML
     
     Note: This operation can take 30-60 seconds depending on data volume.
@@ -349,20 +350,20 @@ async def auto_map_fields_ml(request: AutoMapMLRequest):
     using multiple algorithms (TF-IDF, sequence matching, word overlap).
     """
     try:
-        logger.info(f"Starting ML auto-mapping: source={request.source_table}, target={request.target_table}, tpa={request.tpa}")
-        sf_service = SnowflakeService()
+        logger.info(f"Starting ML auto-mapping: source={mapping_request.source_table}, target={mapping_request.target_table}, tpa={mapping_request.tpa}")
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         result = await sf_service.execute_procedure(
             "auto_map_fields_ml",
-            request.source_table,
-            request.target_table,
-            request.tpa,
-            request.top_n,
-            request.min_confidence
+            mapping_request.source_table,
+            mapping_request.target_table,
+            mapping_request.tpa,
+            mapping_request.top_n,
+            mapping_request.min_confidence
         )
         logger.info(f"ML auto-mapping completed: {result}")
         return {"message": "ML auto-mapping completed", "result": result}
     except asyncio.TimeoutError:
-        logger.error(f"ML auto-mapping timed out for TPA {request.tpa}")
+        logger.error(f"ML auto-mapping timed out for TPA {mapping_request.tpa}")
         raise HTTPException(
             status_code=504,
             detail="Procedure execution timed out. Try reducing the data volume or increasing timeout."
@@ -372,7 +373,7 @@ async def auto_map_fields_ml(request: AutoMapMLRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/mappings/auto-llm")
-async def auto_map_fields_llm(request: AutoMapLLMRequest):
+async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMRequest):
     """Auto-map fields using LLM
     
     Note: This operation can take 30-90 seconds depending on data volume
@@ -380,20 +381,20 @@ async def auto_map_fields_llm(request: AutoMapLLMRequest):
     to semantically understand field relationships.
     """
     try:
-        logger.info(f"Starting LLM auto-mapping: source={request.source_table}, target={request.target_table}, tpa={request.tpa}, model={request.model_name}")
-        sf_service = SnowflakeService()
+        logger.info(f"Starting LLM auto-mapping: source={mapping_request.source_table}, target={mapping_request.target_table}, tpa={mapping_request.tpa}, model={mapping_request.model_name}")
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         result = await sf_service.execute_procedure(
             "auto_map_fields_llm",
-            request.source_table,
-            request.target_table,
-            request.tpa,
-            request.model_name,
+            mapping_request.source_table,
+            mapping_request.target_table,
+            mapping_request.tpa,
+            mapping_request.model_name,
             "DEFAULT_FIELD_MAPPING"
         )
         logger.info(f"LLM auto-mapping completed: {result}")
         return {"message": "LLM auto-mapping completed", "result": result}
     except asyncio.TimeoutError:
-        logger.error(f"LLM auto-mapping timed out for TPA {request.tpa}")
+        logger.error(f"LLM auto-mapping timed out for TPA {mapping_request.tpa}")
         raise HTTPException(
             status_code=504,
             detail="Procedure execution timed out. LLM processing can take longer for large datasets."
@@ -403,10 +404,10 @@ async def auto_map_fields_llm(request: AutoMapLLMRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/mappings/{mapping_id}/approve")
-async def approve_mapping(mapping_id: int):
+async def approve_mapping(request: Request, mapping_id: int):
     """Approve a field mapping"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         result = await sf_service.execute_procedure("approve_field_mapping", mapping_id)
         return {"message": "Mapping approved successfully", "result": result}
     except Exception as e:
@@ -414,10 +415,10 @@ async def approve_mapping(mapping_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/mappings/{mapping_id}")
-async def decline_mapping(mapping_id: int):
+async def decline_mapping(request: Request, mapping_id: int):
     """Decline and delete a field mapping"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         query = f"""
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
             WHERE mapping_id = {mapping_id}
@@ -430,19 +431,19 @@ async def decline_mapping(mapping_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/transform")
-async def transform_bronze_to_silver(request: TransformRequest):
+async def transform_bronze_to_silver(request: Request, transform_request: TransformRequest):
     """Transform Bronze data to Silver"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         result = await sf_service.execute_procedure(
             "transform_bronze_to_silver",
-            request.source_table,
-            request.target_table,
-            request.tpa,
-            request.source_schema,
-            request.batch_size,
-            request.apply_rules,
-            request.incremental
+            transform_request.source_table,
+            transform_request.target_table,
+            transform_request.tpa,
+            transform_request.source_schema,
+            transform_request.batch_size,
+            transform_request.apply_rules,
+            transform_request.incremental
         )
         return {"message": "Transformation completed", "result": result}
     except Exception as e:

@@ -2,12 +2,13 @@
 TPA Management API Endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 import logging
 
 from app.services.snowflake_service import SnowflakeService
+from app.utils.auth_utils import get_caller_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -27,10 +28,13 @@ class TPAStatusUpdate(BaseModel):
     active: bool
 
 @router.get("")
-async def get_tpas():
+async def get_tpas(request: Request):
     """Get all TPAs (active and inactive)"""
     try:
-        sf_service = SnowflakeService()
+        # Use caller's token if available (caller's rights)
+        caller_token = get_caller_token(request)
+        sf_service = SnowflakeService(caller_token=caller_token)
+        
         # Get all TPAs, not just active ones
         query = """
             SELECT 
@@ -49,10 +53,10 @@ async def get_tpas():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("")
-async def create_tpa(tpa: TPACreate):
+async def create_tpa(request: Request, tpa: TPACreate):
     """Create new TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Check if TPA already exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa.tpa_code}'"
@@ -85,10 +89,10 @@ async def create_tpa(tpa: TPACreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{tpa_code}")
-async def update_tpa(tpa_code: str, tpa: TPAUpdate):
+async def update_tpa(request: Request, tpa_code: str, tpa: TPAUpdate):
     """Update existing TPA"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
@@ -122,10 +126,10 @@ async def update_tpa(tpa_code: str, tpa: TPAUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{tpa_code}")
-async def delete_tpa(tpa_code: str):
+async def delete_tpa(request: Request, tpa_code: str):
     """Delete TPA (soft delete by setting ACTIVE = FALSE)"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"
@@ -149,10 +153,10 @@ async def delete_tpa(tpa_code: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/{tpa_code}/status")
-async def update_tpa_status(tpa_code: str, status: TPAStatusUpdate):
+async def update_tpa_status(request: Request, tpa_code: str, status: TPAStatusUpdate):
     """Update TPA active status"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Check if TPA exists
         check_query = f"SELECT COUNT(*) as count FROM BRONZE.TPA_MASTER WHERE TPA_CODE = '{tpa_code}'"

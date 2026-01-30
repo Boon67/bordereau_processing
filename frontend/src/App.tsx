@@ -337,8 +337,8 @@ function App() {
                 {userInfo && (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <UserOutlined style={{ color: '#1890ff' }} />
-                      <span style={{ fontWeight: 500 }}>User:</span>
+                      <CloudServerOutlined style={{ color: '#1890ff' }} />
+                      <span style={{ fontWeight: 500 }}>Service:</span>
                       <span>{userInfo.username}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -347,14 +347,14 @@ function App() {
                       <span>{userInfo.role}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <CloudServerOutlined style={{ color: '#722ed1' }} />
+                      <DatabaseOutlined style={{ color: '#722ed1' }} />
                       <span style={{ fontWeight: 500 }}>Warehouse:</span>
                       <span>{userInfo.warehouse}</span>
                     </div>
                   </>
                 )}
                 {!userInfo && (
-                  <span style={{ color: '#999' }}>Loading user information...</span>
+                  <span style={{ color: '#999' }}>Loading service information...</span>
                 )}
               </div>
               <div style={{ color: '#999', fontSize: '12px' }}>

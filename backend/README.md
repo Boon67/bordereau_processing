@@ -321,6 +321,17 @@ docker run -p 8000:8000 \
   bordereau-backend
 ```
 
+## Caller's Rights
+
+The application uses **Caller's Rights** execution mode where all Snowflake operations execute using the authenticated user's credentials. This provides enterprise-grade security with user-level permissions and audit trails.
+
+**See [CALLERS_RIGHTS_GUIDE.md](CALLERS_RIGHTS_GUIDE.md) for complete documentation on:**
+- How caller's rights works
+- Developer guide for adding new endpoints
+- Security and permissions
+- Testing and troubleshooting
+- Best practices
+
 ## License
 
 See LICENSE file in the root directory.

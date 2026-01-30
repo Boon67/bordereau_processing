@@ -2,13 +2,14 @@
 Logging API Endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query
 from typing import List, Optional
 from datetime import datetime, timedelta
 import logging
 
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
+from app.utils.auth_utils import get_caller_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -16,6 +17,7 @@ router = APIRouter()
 
 @router.get("/application")
 async def get_application_logs(
+    request: Request,
     limit: int = Query(100, le=1000),
     level: Optional[str] = None,
     source: Optional[str] = None,
@@ -23,7 +25,7 @@ async def get_application_logs(
 ):
     """Get application logs"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         where_clauses = [
             f"LOG_TIMESTAMP >= DATEADD(DAY, -{days}, CURRENT_TIMESTAMP())"
@@ -63,6 +65,7 @@ async def get_application_logs(
 
 @router.get("/tasks")
 async def get_task_execution_logs(
+    request: Request,
     limit: int = Query(100, le=1000),
     task_name: Optional[str] = None,
     status: Optional[str] = None,
@@ -70,7 +73,7 @@ async def get_task_execution_logs(
 ):
     """Get task execution logs"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         where_clauses = [
             f"EXECUTION_START >= DATEADD(DAY, -{days}, CURRENT_TIMESTAMP())"
@@ -113,6 +116,7 @@ async def get_task_execution_logs(
 
 @router.get("/file-processing")
 async def get_file_processing_logs(
+    request: Request,
     limit: int = Query(100, le=1000),
     file_name: Optional[str] = None,
     stage: Optional[str] = None,
@@ -121,7 +125,7 @@ async def get_file_processing_logs(
 ):
     """Get file processing logs"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         where_clauses = [
             f"STAGE_START >= DATEADD(DAY, -{days}, CURRENT_TIMESTAMP())"
@@ -169,6 +173,7 @@ async def get_file_processing_logs(
 
 @router.get("/errors")
 async def get_error_logs(
+    request: Request,
     limit: int = Query(100, le=1000),
     source: Optional[str] = None,
     resolution_status: Optional[str] = None,
@@ -176,7 +181,7 @@ async def get_error_logs(
 ):
     """Get error logs"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         where_clauses = [
             f"ERROR_TIMESTAMP >= DATEADD(DAY, -{days}, CURRENT_TIMESTAMP())"
@@ -222,6 +227,7 @@ async def get_error_logs(
 
 @router.get("/api-requests")
 async def get_api_request_logs(
+    request: Request,
     limit: int = Query(100, le=1000),
     method: Optional[str] = None,
     path: Optional[str] = None,
@@ -230,7 +236,7 @@ async def get_api_request_logs(
 ):
     """Get API request logs"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         where_clauses = [
             f"REQUEST_TIMESTAMP >= DATEADD(DAY, -{days}, CURRENT_TIMESTAMP())"
@@ -276,10 +282,10 @@ async def get_api_request_logs(
 
 
 @router.get("/stats")
-async def get_log_statistics(days: int = Query(7, le=30)):
+async def get_log_statistics(request: Request, days: int = Query(7, le=30)):
     """Get logging statistics"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         query = f"""
             SELECT 

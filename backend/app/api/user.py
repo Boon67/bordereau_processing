@@ -2,19 +2,20 @@
 User Information API Endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 import logging
 
 from app.services.snowflake_service import SnowflakeService
+from app.utils.auth_utils import get_caller_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/current")
-async def get_current_user():
+async def get_current_user(request: Request):
     """Get current user information from Snowflake session"""
     try:
-        sf_service = SnowflakeService()
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Get current user and role information
         query = """

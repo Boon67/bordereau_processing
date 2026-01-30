@@ -13,6 +13,7 @@ from app.api import bronze, silver, gold, tpa, user, logs
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
 from app.middleware.logging_middleware import LoggingMiddleware
+from app.middleware.auth_middleware import SnowflakeAuthMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -42,6 +43,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],  # Expose all headers including Set-Cookie
 )
+
+# Add authentication middleware (extracts caller's token from cookies)
+app.add_middleware(SnowflakeAuthMiddleware)
 
 # Add logging middleware
 app.add_middleware(LoggingMiddleware)
