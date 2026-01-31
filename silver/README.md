@@ -1,58 +1,123 @@
-# Silver Layer - Transformation & Quality
+# Silver Layer
 
-**Transform Bronze raw data into clean, standardized Silver tables using TPA-specific mappings and rules.**
-
-## Overview
-
-The Silver layer provides:
-- Dynamic schema management (create tables from metadata)
-- Three mapping methods: Manual CSV, ML Pattern Matching, LLM Cortex AI
-- Comprehensive rules engine with 5 rule types
-- Quality tracking and quarantine system
-- Incremental processing with watermarks
-
-## Architecture
-
-### Metadata Tables (8)
-
-1. **`target_schemas`** - Dynamic target table definitions per TPA
-2. **`field_mappings`** - Bronze → Silver field mappings per TPA
-3. **`transformation_rules`** - Data quality and business rules per TPA
-4. **`silver_processing_log`** - Transformation batch audit trail
-5. **`data_quality_metrics`** - Quality tracking per TPA and batch
-6. **`quarantine_records`** - Failed validation records
-7. **`processing_watermarks`** - Incremental processing state per TPA
-8. **`llm_prompt_templates`** - LLM prompt templates for field mapping
-
-### Field Mapping Methods
-
-1. **Manual CSV**: User-defined mappings loaded from CSV files
-2. **ML Pattern Matching**: Auto-suggest using similarity algorithms (exact, substring, TF-IDF)
-3. **LLM Cortex AI**: Semantic understanding using Snowflake Cortex AI models
-
-### Rule Types
-
-1. **DATA_QUALITY**: Null checks, format validation, range checks
-2. **BUSINESS_LOGIC**: Calculations, lookups, conditional transformations
-3. **STANDARDIZATION**: Date normalization, name casing, code mapping
-4. **DEDUPLICATION**: Exact/fuzzy matching with conflict resolution
-5. **REFERENTIAL_INTEGRITY**: Foreign key validation, lookup validation
-
-## Deployment
-
-```bash
-# Deploy Silver layer only
-./deploy_silver.sh
-
-# Or deploy entire pipeline
-./deploy.sh
-```
-
-## Usage
-
-See [User Guide](../docs/USER_GUIDE.md) and [TPA Mapping Guide](TPA_MAPPING_GUIDE.md) for detailed instructions.
+**Data transformation and field mapping**
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: January 15, 2026
+## Overview
+
+The Silver layer handles:
+- Target schema definition
+- Field mapping (Manual, ML, LLM)
+- Data transformation from Bronze
+- Mapping validation
+- MERGE-based idempotent transformations
+
+---
+
+## Quick Start
+
+### Deploy Silver Layer
+
+```bash
+cd deployment
+./deploy_silver.sh
+```
+
+### Create Mappings
+
+1. Open UI → Silver → Field Mappings
+2. Select TPA and target table
+3. Choose mapping method:
+   - **Manual**: CSV upload or one-by-one
+   - **ML**: Pattern matching
+   - **LLM**: Cortex AI suggestions
+4. Approve mappings
+5. Validate before transforming
+
+### Run Transformation
+
+```bash
+# Via UI
+Silver → Transform → Execute
+
+# Via SQL
+CALL SILVER.transform_bronze_to_silver(
+  'CLAIMS',           -- target_table
+  'provider_a',       -- tpa
+  'RAW_DATA_TABLE',   -- source_table
+  'BRONZE',           -- source_schema
+  10000,              -- batch_size
+  TRUE,               -- apply_rules
+  FALSE               -- incremental
+);
+```
+
+---
+
+## Key Tables
+
+| Table | Purpose |
+|-------|---------|
+| `TARGET_SCHEMAS` | Column definitions for target tables |
+| `FIELD_MAPPINGS` | Source → Target field mappings |
+| `TRANSFORMATION_RULES` | Data transformation rules |
+| `SILVER_PROCESSING_LOG` | Transformation execution log |
+| `{TPA}_{TABLE}` | Actual Silver data tables |
+
+---
+
+## Metadata Columns
+
+Every Silver table includes 7 metadata columns for data lineage:
+- `_RECORD_ID` - Links to Bronze, merge key
+- `_FILE_NAME` - Source file
+- `_FILE_ROW_NUMBER` - Row in source file
+- `_TPA` - TPA code
+- `_BATCH_ID` - Transformation batch
+- `_LOAD_TIMESTAMP` - When processed
+- `_LOADED_BY` - Who processed
+
+See [docs/guides/SILVER_METADATA_COLUMNS.md](../docs/guides/SILVER_METADATA_COLUMNS.md) for details.
+
+---
+
+## SQL Files
+
+| File | Purpose |
+|------|---------|
+| `1_Silver_Schema_Setup.sql` | Create Silver schema |
+| `2_Silver_Target_Schemas.sql` | Target schema tables and procedures |
+| `3_Silver_Field_Mappings.sql` | Field mapping tables |
+| `4_Silver_Transformation_Rules.sql` | Transformation rules |
+| `5_Silver_Transformation_Logic.sql` | MERGE-based transformation |
+
+---
+
+## Validation System (v3.1)
+
+**Before creating mappings:**
+- Checks for duplicate target columns
+- Validates columns exist in physical table
+
+**Before transformations:**
+- Auto-validates all approved mappings
+- Fails fast with clear error messages
+
+**Manual validation:**
+```bash
+GET /api/silver/mappings/validate?tpa=provider_a&target_table=CLAIMS
+```
+
+---
+
+## Documentation
+
+**Quick Reference**: [docs/QUICK_REFERENCE.md](../docs/QUICK_REFERENCE.md)  
+**Architecture**: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)  
+**Metadata Guide**: [docs/guides/SILVER_METADATA_COLUMNS.md](../docs/guides/SILVER_METADATA_COLUMNS.md)  
+**Auto-Transform**: [docs/guides/SILVER_AUTO_TRANSFORM_TASK.md](../docs/guides/SILVER_AUTO_TRANSFORM_TASK.md)
+
+---
+
+**Version**: 3.1 | **Status**: ✅ Production Ready
