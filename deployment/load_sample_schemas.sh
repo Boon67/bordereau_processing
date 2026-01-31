@@ -17,8 +17,17 @@ NC='\033[0m'
 
 # Configuration
 CONNECTION_NAME="${1:-DEPLOYMENT}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Handle Windows paths in Git Bash
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ -n "$WINDIR" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -W 2>/dev/null || pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -W 2>/dev/null || pwd)"
+    SCRIPT_DIR="${SCRIPT_DIR//\\//}"
+    PROJECT_ROOT="${PROJECT_ROOT//\\//}"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 
 # Load config if available
 if [[ -f "${SCRIPT_DIR}/custom.config" ]]; then

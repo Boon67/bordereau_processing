@@ -23,8 +23,19 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Get script directory and project root
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Handle Windows paths in Git Bash
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ -n "$WINDIR" ]]; then
+    # Running in Git Bash on Windows
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -W 2>/dev/null || pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -W 2>/dev/null || pwd)"
+    # Convert to Unix-style paths for consistency
+    SCRIPT_DIR="${SCRIPT_DIR//\\//}"
+    PROJECT_ROOT="${PROJECT_ROOT//\\//}"
+else
+    # Unix/Linux/Mac
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 
 # Function to show help
 show_help() {
@@ -178,6 +189,11 @@ mkdir -p "${PROJECT_ROOT}/logs"
 
 # Log file
 LOG_FILE="${PROJECT_ROOT}/logs/deployment_$(date +%Y%m%d_%H%M%S).log"
+
+# Normalize log file path for Windows
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ -n "$WINDIR" ]]; then
+    LOG_FILE="${LOG_FILE//\\//}"
+fi
 
 # Function to print header
 print_header() {
