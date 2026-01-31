@@ -200,13 +200,16 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
   const handleSubmitColumn = async (values: any) => {
     try {
       if (editingSchema) {
-        // Update existing schema
-        await apiService.updateTargetSchema(editingSchema.SCHEMA_ID, {
-          DATA_TYPE: values.data_type,
-          NULLABLE: values.nullable,
-          DEFAULT_VALUE: values.default_value,
-          DESCRIPTION: values.description,
-        })
+        // Update existing schema - only send fields that have values
+        const updatePayload: any = {}
+        if (values.data_type !== undefined) updatePayload.DATA_TYPE = values.data_type
+        if (values.nullable !== undefined) updatePayload.NULLABLE = values.nullable
+        if (values.default_value !== undefined && values.default_value !== null) {
+          updatePayload.DEFAULT_VALUE = values.default_value
+        }
+        if (values.description !== undefined) updatePayload.DESCRIPTION = values.description
+        
+        await apiService.updateTargetSchema(editingSchema.SCHEMA_ID, updatePayload)
         message.success('Schema column updated successfully')
       } else {
         // Create new schema

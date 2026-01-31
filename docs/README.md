@@ -1,8 +1,7 @@
-# Bordereau Processing Pipeline - Documentation Hub
+# Documentation Hub
 
-**Version**: 4.0 (Aggressively Consolidated)  
-**Last Updated**: January 31, 2026  
-**Status**: ✅ Production Ready
+**Version**: 5.0 (Extremely Consolidated)  
+**Last Updated**: January 31, 2026
 
 ---
 
@@ -10,65 +9,33 @@
 
 | Document | Description |
 |----------|-------------|
-| [Main README](../README.md) | Project overview and quick start |
-| [Quick Start](../QUICK_START.md) | Get running in 10 minutes |
-| [Architecture](ARCHITECTURE.md) | System design, patterns, data flow, and logging |
-| [User Guide](USER_GUIDE.md) | Complete usage guide with TPA multi-tenancy |
-| [Testing](TESTING.md) | Test plans and validation |
+| [README](../README.md) | Project overview |
+| [Quick Start](../QUICK_START.md) | 10-minute setup |
+| [Architecture](ARCHITECTURE.md) | System design, patterns, logging, and testing |
+| [User Guide](USER_GUIDE.md) | Complete usage guide with TPA |
 
 ---
 
-## 🎯 Quick Navigation
+## 🎯 By Role
 
-### For End Users
-**[User Guide](USER_GUIDE.md)** - Everything you need to use the application
-
-### For Developers
-- **[Quick Start](../QUICK_START.md)** - Setup in 10 minutes
-- **[Architecture](ARCHITECTURE.md)** - System design and patterns
-- **[Backend README](../backend/README.md)** - API documentation
-
-### For DevOps
-- **[Deployment Guide](../deployment/README.md)** - Complete deployment
-- **[Testing](TESTING.md)** - Validation procedures
+**End Users**: [User Guide](USER_GUIDE.md)  
+**Developers**: [Architecture](ARCHITECTURE.md) + [Backend](../backend/README.md)  
+**DevOps**: [Deployment](../deployment/README.md)
 
 ---
 
-## 📁 Layer Documentation
+## 📁 Layer Docs
 
-- **[Bronze Layer](../bronze/README.md)** - Raw data ingestion
-- **[Silver Layer](../silver/README.md)** - Data transformation and AI mapping
-- **[Gold Layer](../gold/README.md)** - Analytics aggregation
-- **[Backend](../backend/README.md)** - FastAPI backend and caller's rights
-- **[Docker](../docker/README.md)** - Container configuration
-- **[Sample Data](../sample_data/README.md)** - Data generation
+[Bronze](../bronze/README.md) | [Silver](../silver/README.md) | [Gold](../gold/README.md)
 
 ---
 
-## 🚀 Quick Links
+## 🚀 Quick Commands
 
-**Local Development**:
-```bash
-./start.sh  # Start backend + frontend
-```
-
-**Deploy to Snowflake**:
-```bash
-cd deployment && ./deploy.sh
-```
-
-**API Documentation**: http://localhost:8000/api/docs  
-**Frontend**: http://localhost:3000
+**Local**: `./start.sh`  
+**Deploy**: `cd deployment && ./deploy.sh`  
+**API Docs**: http://localhost:8000/api/docs
 
 ---
 
-## 📊 Documentation Stats
-
-- **15 essential files** (down from 50+ originally)
-- **70% reduction** in documentation
-- **100% information preserved**
-- **Single source of truth** for each topic
-
----
-
-**For the latest updates, see the main [README](../README.md)**
+**12 essential files** | **75% reduction** | **100% information preserved**

@@ -439,12 +439,43 @@ The system includes comprehensive logging using Snowflake hybrid tables:
 
 ---
 
+## Testing
+
+### Deployment Testing
+
+**Full Deployment**:
+```bash
+cd deployment && ./deploy.sh
+```
+Expected: Bronze, Silver, Gold layers deployed successfully (< 10 minutes)
+
+**Container Deployment**:
+```bash
+cd deployment && ./deploy_container.sh
+```
+Expected: Backend and frontend services running in SPCS
+
+**Validation**:
+```sql
+SHOW DATABASES LIKE 'BORDEREAU_PROCESSING_PIPELINE';
+SHOW SCHEMAS IN DATABASE BORDEREAU_PROCESSING_PIPELINE;
+SELECT COUNT(*) FROM BRONZE.RAW_DATA_TABLE;
+```
+
+### Feature Testing
+
+**File Upload**: Upload CSV → Process → Verify in RAW_DATA_TABLE  
+**Field Mapping**: Create mapping → Approve → Verify in FIELD_MAPPINGS  
+**Transformation**: Execute transform → Verify in target table  
+**API Health**: `curl http://localhost:8000/api/health`
+
+---
+
 ## Related Documentation
 
 - [User Guide](USER_GUIDE.md) - How to use the application
 - [Deployment Guide](../deployment/README.md) - Deployment instructions
-- [Backend README](../backend/README.md) - Backend API documentation
-- [Testing](TESTING.md) - Test plans and validation
+- [Backend README](../backend/README.md) - Backend API and caller's rights
 
 **Layer Documentation**:
 - [Bronze Layer README](../bronze/README.md)

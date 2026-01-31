@@ -148,34 +148,23 @@ async def create_target_schema(request: Request, schema: TargetSchemaCreate):
 async def update_target_schema(request: Request, schema_id: int, schema: TargetSchemaUpdate):
     """Update target schema definition"""
     try:
+        logger.info(f"Update schema request: schema_id={schema_id}, data_type={schema.data_type}, nullable={schema.nullable}, default_value={schema.default_value}, description={schema.description}")
+        
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
-        # If making column non-nullable, check if default value exists
-        if schema.nullable is False:
-            # Get current schema to check if default value exists
-            check_query = f"""
-                SELECT default_value
-                FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
-                WHERE schema_id = {schema_id}
-            """
-            result = await sf_service.execute_query_dict(check_query)
-            
-            if result and not result[0].get('DEFAULT_VALUE') and not schema.default_value:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot make column non-nullable without a default value. Please provide a default value."
-                )
-        
         # Build update query dynamically based on provided fields
+        # Since frontend now filters out undefined/null values, we can trust what's sent
         update_fields = []
         if schema.data_type is not None:
+            logger.info(f"Adding data_type update: {schema.data_type}")
             # Escape single quotes by doubling them for SQL
             escaped_data_type = schema.data_type.replace("'", "''")
             update_fields.append(f"data_type = '{escaped_data_type}'")
         if schema.nullable is not None:
+            logger.info(f"Adding nullable update: {schema.nullable}")
             update_fields.append(f"nullable = {schema.nullable}")
         if schema.default_value is not None:
-            # Handle empty string or null default value
+            logger.info(f"Adding default_value update: {schema.default_value}")
             if schema.default_value == "":
                 update_fields.append(f"default_value = NULL")
             else:
@@ -183,28 +172,32 @@ async def update_target_schema(request: Request, schema_id: int, schema: TargetS
                 escaped_default = schema.default_value.replace("'", "''")
                 update_fields.append(f"default_value = '{escaped_default}'")
         if schema.description is not None:
+            logger.info(f"Adding description update: {schema.description}")
             # Escape single quotes by doubling them for SQL
             escaped_description = schema.description.replace("'", "''")
             update_fields.append(f"description = '{escaped_description}'")
         
         if not update_fields:
+            logger.error("No fields to update")
             raise HTTPException(status_code=400, detail="No fields to update")
         
         query = f"""
             UPDATE {settings.SILVER_SCHEMA_NAME}.target_schemas
-            SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP()
+            SET {', '.join(update_fields)}, updated_timestamp = CURRENT_TIMESTAMP()
             WHERE schema_id = {schema_id}
         """
+        logger.info(f"Executing query: {query}")
         await sf_service.execute_query(query)
         
         # Invalidate schema cache
         cache.clear("schemas")
         
+        logger.info("Schema updated successfully")
         return {"message": "Target schema updated successfully"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update target schema: {str(e)}")
+        logger.error(f"Failed to update target schema: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/schemas/{schema_id}")

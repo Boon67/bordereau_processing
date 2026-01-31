@@ -222,12 +222,14 @@ export const apiService = {
   },
 
   updateTargetSchema: async (schemaId: number, schema: Partial<TargetSchema>): Promise<any> => {
-    const response = await api.put(`/silver/schemas/${schemaId}`, {
-      data_type: schema.DATA_TYPE,
-      nullable: schema.NULLABLE,
-      default_value: schema.DEFAULT_VALUE,
-      description: schema.DESCRIPTION,
-    })
+    // Only send fields that are actually defined
+    const payload: any = {}
+    if (schema.DATA_TYPE !== undefined) payload.data_type = schema.DATA_TYPE
+    if (schema.NULLABLE !== undefined) payload.nullable = schema.NULLABLE
+    if (schema.DEFAULT_VALUE !== undefined) payload.default_value = schema.DEFAULT_VALUE
+    if (schema.DESCRIPTION !== undefined) payload.description = schema.DESCRIPTION
+    
+    const response = await api.put(`/silver/schemas/${schemaId}`, payload)
     return response.data
   },
 

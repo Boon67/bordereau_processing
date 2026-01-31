@@ -323,14 +323,52 @@ docker run -p 8000:8000 \
 
 ## Caller's Rights
 
-The application uses **Caller's Rights** execution mode where all Snowflake operations execute using the authenticated user's credentials. This provides enterprise-grade security with user-level permissions and audit trails.
+The application uses **Caller's Rights** execution mode where all Snowflake operations execute using the authenticated user's credentials.
 
-**See [CALLERS_RIGHTS_GUIDE.md](CALLERS_RIGHTS_GUIDE.md) for complete documentation on:**
-- How caller's rights works
-- Developer guide for adding new endpoints
-- Security and permissions
-- Testing and troubleshooting
-- Best practices
+### How It Works
+
+1. User accesses app via Snowflake URL
+2. Snowflake ingress authenticates and sets auth cookie
+3. Middleware extracts token from cookie
+4. All Snowflake operations execute as the user
+5. Query history shows actual user, not service account
+
+### Configuration
+
+**SPCS Service** (`docker/snowpark-spec.yaml`):
+```yaml
+capabilities:
+  securityContext:
+    executeAsCaller: true
+```
+
+**Application** (`app/config.py`):
+```python
+USE_CALLERS_RIGHTS = True
+```
+
+### Developer Guide
+
+**Adding New Endpoints**:
+```python
+@router.get("/endpoint")
+async def my_endpoint(request: Request):  # Add Request parameter
+    sf_service = SnowflakeService(
+        caller_token=get_caller_token(request)  # Pass caller token
+    )
+    return await sf_service.execute_query(query)
+```
+
+**Key Points**:
+- Always add `request: Request` as first parameter
+- Always call `get_caller_token(request)`
+- Graceful fallback if token unavailable
+
+### Benefits
+
+✅ User-level permissions and audit trails  
+✅ Meets compliance requirements  
+✅ Centralized permission management in Snowflake
 
 ## License
 
