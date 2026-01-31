@@ -14,7 +14,7 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName })
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<any[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
-  const [tables, setTables] = useState<string[]>([])
+  const [tables, setTables] = useState<Array<{ physicalName: string; schemaName: string }>>([])
   const [limit, setLimit] = useState(100)
   const [searchText, setSearchText] = useState('')
   const [statistics, setStatistics] = useState<any>(null)
@@ -44,16 +44,17 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName })
         (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
       )
       
-      // Extract unique schema table names
-      const uniqueTables = Array.from(
-        new Set(tpaCreatedTables.map((table: any) => table.SCHEMA_TABLE))
-      )
+      // Map to include both physical and schema names
+      const tableList = tpaCreatedTables.map((table: any) => ({
+        physicalName: table.TABLE_NAME,
+        schemaName: table.SCHEMA_TABLE
+      }))
       
-      setTables(uniqueTables as string[])
+      setTables(tableList)
       
       // Auto-select the first table if available and no table is currently selected
-      if (uniqueTables.length > 0 && !selectedTable) {
-        setSelectedTable(uniqueTables[0] as string)
+      if (tableList.length > 0 && !selectedTable) {
+        setSelectedTable(tableList[0].physicalName)
       }
     } catch (error) {
       message.error('Failed to load tables')
@@ -66,12 +67,19 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName })
 
     setLoading(true)
     try {
-      // This would call a backend endpoint to fetch Silver layer data
-      // For now, we'll show a placeholder
-      message.info('Silver data viewer ready')
+      // Find the schema name for the selected physical table
+      const tableInfo = tables.find(t => t.physicalName === selectedTable)
+      const schemaName = tableInfo?.schemaName || selectedTable
+      
+      const result = await apiService.getSilverData(selectedTpa, schemaName, limit)
+      setData(result.data || [])
+      
+      if (result.total_count === 0) {
+        message.info('No data found in this table')
+      }
+    } catch (error: any) {
+      message.error(`Failed to load Silver data: ${error.response?.data?.detail || error.message}`)
       setData([])
-    } catch (error) {
-      message.error('Failed to load Silver data')
     } finally {
       setLoading(false)
     }
@@ -81,14 +89,23 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName })
     if (!selectedTpa || !selectedTable) return
 
     try {
-      // Placeholder for statistics
+      // Find the schema name for the selected physical table
+      const tableInfo = tables.find(t => t.physicalName === selectedTable)
+      const schemaName = tableInfo?.schemaName || selectedTable
+      
+      const stats = await apiService.getSilverDataStats(selectedTpa, schemaName)
+      setStatistics({
+        totalRecords: stats.total_records || 0,
+        lastUpdated: stats.last_updated,
+        dataQualityScore: stats.data_quality_score || 0,
+      })
+    } catch (error: any) {
+      console.error('Failed to load statistics:', error)
       setStatistics({
         totalRecords: 0,
-        lastUpdated: new Date().toISOString(),
-        dataQualityScore: 95,
+        lastUpdated: null,
+        dataQualityScore: 0,
       })
-    } catch (error) {
-      console.error('Failed to load statistics:', error)
     }
   }
 
@@ -189,8 +206,8 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, selectedTpaName })
               style={{ width: '100%' }}
               placeholder="Select a table"
               options={tables.map(table => ({
-                label: table,
-                value: table,
+                label: table.physicalName,
+                value: table.physicalName,
               }))}
             />
           </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Typography, Table, Button, Select, Space, message, Tag, Descriptions, Modal, Form, Input, Switch, Drawer, Alert, Popconfirm, Collapse, Spin } from 'antd'
-import { ReloadOutlined, TableOutlined, PlusOutlined, EditOutlined, DatabaseOutlined, DeleteOutlined, DownOutlined } from '@ant-design/icons'
+import { ReloadOutlined, TableOutlined, PlusOutlined, EditOutlined, DatabaseOutlined, DeleteOutlined, DownOutlined, EyeOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { TargetSchema } from '../services/api'
 
@@ -34,6 +34,9 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
   const [loadingTpas, setLoadingTpas] = useState(false)
   const [createdTables, setCreatedTables] = useState<any[]>([])
   const [loadingCreatedTables, setLoadingCreatedTables] = useState(false)
+  const [viewSchemaModalVisible, setViewSchemaModalVisible] = useState(false)
+  const [selectedTableSchema, setSelectedTableSchema] = useState<TargetSchema[]>([])
+  const [selectedTableName, setSelectedTableName] = useState<string>('')
 
   useEffect(() => {
     // Load schemas once on mount (TPA-agnostic)
@@ -126,6 +129,15 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
         }, {} as Record<string, boolean>)
         
         setTableExistence(existenceMap)
+      }
+      
+      // Check for schema validation issues
+      const invalidColumns = data.filter(s => !s.NULLABLE && !s.DEFAULT_VALUE)
+      if (invalidColumns.length > 0) {
+        message.warning({
+          content: `Found ${invalidColumns.length} non-nullable column${invalidColumns.length !== 1 ? 's' : ''} without default values. These should be fixed to ensure data integrity.`,
+          duration: 5
+        })
       }
       
       const schemaCount = uniqueTables.length
@@ -251,6 +263,27 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
     }
   }
 
+  const handleViewTableSchema = (schemaTableName: string, physicalTableName: string) => {
+    // Find the schema definition for this table
+    const tableSchema = allSchemas.filter(s => s.TABLE_NAME === schemaTableName)
+    setSelectedTableSchema(tableSchema)
+    setSelectedTableName(physicalTableName)
+    setViewSchemaModalVisible(true)
+  }
+
+  const handleDeletePhysicalTable = async (tableName: string, tpa: string) => {
+    try {
+      await apiService.deletePhysicalTable(tableName, tpa)
+      message.success(`Table ${tableName} deleted successfully`)
+      // Reload the created tables list to reflect the deletion
+      await loadCreatedTables()
+      // Also reload schemas in case the schema definition was affected
+      await loadSchemas()
+    } catch (error: any) {
+      message.error(`Failed to delete table: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
   // Group schemas by table
   const schemasByTable = schemas.reduce((acc, schema) => {
     if (!acc[schema.TABLE_NAME]) {
@@ -266,7 +299,18 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
       dataIndex: 'COLUMN_NAME',
       key: 'COLUMN_NAME',
       width: 200,
-      render: (text: string) => <strong>{text}</strong>,
+      render: (text: string, record: TargetSchema) => {
+        // Highlight columns that are non-nullable without default value
+        const hasIssue = !record.NULLABLE && !record.DEFAULT_VALUE
+        return (
+          <Space>
+            <strong>{text}</strong>
+            {hasIssue && (
+              <Tag color="red" style={{ fontSize: '10px' }}>⚠️ Missing Default</Tag>
+            )}
+          </Space>
+        )
+      },
     },
     {
       title: 'Data Type',
@@ -309,9 +353,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEditColumn(record)}
-          >
-            Edit
-          </Button>
+          />
           <Popconfirm
             title="Delete column"
             description={`Are you sure you want to delete ${record.COLUMN_NAME}?`}
@@ -319,9 +361,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
             okText="Yes"
             cancelText="No"
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              Delete
-            </Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
@@ -411,9 +451,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
                           size="small"
                           icon={<DeleteOutlined />}
                           onClick={(e) => e.stopPropagation()}
-                        >
-                          Delete Schema
-                        </Button>
+                        />
                       </Popconfirm>
                     </Space>
                   </div>
@@ -518,6 +556,45 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
                   return d.toLocaleString()
                 },
               },
+              {
+                title: 'Actions',
+                key: 'actions',
+                width: 200,
+                render: (_: any, record: any) => (
+                  <Space size="small">
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={() => handleViewTableSchema(record.SCHEMA_TABLE, record.TABLE_NAME)}
+                    >
+                      View Schema
+                    </Button>
+                    <Popconfirm
+                      title="Delete Physical Table"
+                      description={
+                        <div>
+                          <p>Are you sure you want to delete <strong>{record.TABLE_NAME}</strong>?</p>
+                          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+                            ⚠️ This will permanently delete the table and all its data ({record.ROW_COUNT?.toLocaleString() || 0} rows).
+                          </p>
+                        </div>
+                      }
+                      onConfirm={() => handleDeletePhysicalTable(record.SCHEMA_TABLE, record.TPA)}
+                      okText="Yes, Delete"
+                      cancelText="Cancel"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                      />
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
             ]}
             dataSource={createdTables}
             rowKey="TABLE_NAME"
@@ -604,11 +681,37 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
             <Switch />
           </Form.Item>
 
-          <Form.Item
-            name="default_value"
-            label="Default Value (Optional)"
-          >
-            <Input placeholder="e.g., NULL, 0, 'N/A'" />
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.nullable !== currentValues.nullable}>
+            {({ getFieldValue }) => {
+              const isNullable = getFieldValue('nullable')
+              return (
+                <>
+                  <Form.Item
+                    name="default_value"
+                    label="Default Value"
+                    rules={[
+                      {
+                        required: !isNullable,
+                        message: 'Default value is required for non-nullable columns'
+                      }
+                    ]}
+                  >
+                    <Input 
+                      placeholder={isNullable ? "e.g., NULL, 0, 'N/A' (Optional)" : "e.g., 0, 'N/A', CURRENT_TIMESTAMP() (Required)"} 
+                    />
+                  </Form.Item>
+                  {!isNullable && (
+                    <Alert
+                      message="Required Field"
+                      description="Non-nullable columns must have a default value to ensure data integrity. Common defaults: 0 for numbers, empty string ('') for text, CURRENT_TIMESTAMP() for timestamps."
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                  )}
+                </>
+              )
+            }}
           </Form.Item>
 
           <Form.Item
@@ -786,6 +889,85 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* View Table Schema Modal */}
+      <Modal
+        title={
+          <Space>
+            <TableOutlined />
+            <span>Table Schema: {selectedTableName}</span>
+          </Space>
+        }
+        open={viewSchemaModalVisible}
+        onCancel={() => setViewSchemaModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setViewSchemaModalVisible(false)}>
+            Close
+          </Button>
+        ]}
+        width={900}
+      >
+        {selectedTableSchema.length > 0 ? (
+          <>
+            <Alert
+              message="Schema Definition"
+              description={`This table has ${selectedTableSchema.length} column${selectedTableSchema.length !== 1 ? 's' : ''} defined.`}
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            <Table
+              columns={[
+                {
+                  title: 'Column Name',
+                  dataIndex: 'COLUMN_NAME',
+                  key: 'COLUMN_NAME',
+                  width: 200,
+                  render: (text: string) => <strong>{text}</strong>,
+                },
+                {
+                  title: 'Data Type',
+                  dataIndex: 'DATA_TYPE',
+                  key: 'DATA_TYPE',
+                  width: 150,
+                  render: (text: string) => <Tag color="blue">{text}</Tag>,
+                },
+                {
+                  title: 'Nullable',
+                  dataIndex: 'NULLABLE',
+                  key: 'NULLABLE',
+                  width: 100,
+                  render: (nullable: boolean) => (
+                    <Tag color={nullable ? 'green' : 'red'}>{nullable ? 'YES' : 'NO'}</Tag>
+                  ),
+                },
+                {
+                  title: 'Default Value',
+                  dataIndex: 'DEFAULT_VALUE',
+                  key: 'DEFAULT_VALUE',
+                  width: 150,
+                  render: (text: string) => text || <span style={{ color: '#999' }}>-</span>,
+                },
+                {
+                  title: 'Description',
+                  dataIndex: 'DESCRIPTION',
+                  key: 'DESCRIPTION',
+                  ellipsis: true,
+                  render: (text: string) => text || <span style={{ color: '#999' }}>No description</span>,
+                },
+              ]}
+              dataSource={selectedTableSchema}
+              rowKey="SCHEMA_ID"
+              pagination={false}
+              size="small"
+            />
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            <p>No schema information available for this table.</p>
+          </div>
+        )}
       </Modal>
     </div>
   )

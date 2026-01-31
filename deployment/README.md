@@ -51,9 +51,10 @@ graph TD
 
 ## Quick Start
 
-> **💻 Windows Users:** 
-> - Full Guide: [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md)
-> - Quick Commands: [WINDOWS_QUICK_REFERENCE.md](WINDOWS_QUICK_REFERENCE.md)
+### Platform-Specific Commands
+
+**Linux/Mac**: Use `.sh` scripts  
+**Windows**: Use `.bat` scripts (same functionality)
 
 ### 1. Deploy to Snowflake (Bronze + Silver + Gold Layers)
 
@@ -624,6 +625,109 @@ ORDER BY SCHEDULED_TIME DESC
 LIMIT 10;
 ```
 
+## Windows Deployment
+
+All deployment scripts have Windows batch file equivalents:
+
+```cmd
+cd deployment
+
+REM Full deployment
+deploy.bat
+
+REM Individual layers
+deploy_bronze.bat
+deploy_silver.bat
+deploy_gold.bat
+
+REM Container deployment
+deploy_container.bat
+
+REM Check connection
+check_snow_connection.bat
+
+REM Undeploy
+undeploy.bat
+```
+
+**Prerequisites for Windows**:
+- Snowflake CLI: `pip install snowflake-cli-labs`
+- Docker Desktop (for container deployment)
+- jq (optional): Download from https://stedolan.github.io/jq/
+
+**Configuration**: Same as Linux/Mac, edit `default.config` or create `custom.config`
+
+**Troubleshooting**:
+- Run Command Prompt as Administrator if permission errors occur
+- Ensure Docker Desktop is running for container deployments
+- Use verbose mode for debugging: `deploy.bat -v`
+
+## Snowpark Container Services Details
+
+### Prerequisites
+- Snowflake account with SPCS enabled
+- ACCOUNTADMIN or role with compute pool/service creation privileges
+- Docker installed and running
+
+### What Gets Deployed
+- **Compute Pool**: Auto-scaling pool (1-3 nodes, CPU_X64_XS)
+- **Image Repository**: Snowflake registry for Docker images
+- **Backend Service**: FastAPI application with health checks
+- **Frontend Service**: React + Nginx with API proxying
+
+### Service Management
+
+**Using management script**:
+```bash
+cd deployment
+
+# View status
+./manage_services.sh status
+
+# View logs
+./manage_services.sh logs backend 100
+./manage_services.sh logs frontend 50
+
+# Health checks
+./manage_services.sh health
+
+# Restart services
+./manage_services.sh restart all
+```
+
+**Manual SQL commands**:
+```sql
+-- Service status
+SELECT SYSTEM$GET_SERVICE_STATUS('BORDEREAU_APP');
+
+-- Service logs
+SELECT SYSTEM$GET_SERVICE_LOGS('BORDEREAU_APP', '0', 'backend', 100);
+
+-- Service endpoint
+SHOW ENDPOINTS IN SERVICE BORDEREAU_APP;
+
+-- Suspend/Resume
+ALTER SERVICE BORDEREAU_APP SUSPEND;
+ALTER SERVICE BORDEREAU_APP RESUME;
+```
+
+### Updating Services
+
+To deploy code changes:
+```bash
+# Backend only
+./redeploy_backend.sh
+
+# Full redeployment
+./deploy_container.sh
+```
+
+The script automatically:
+- Builds new Docker image
+- Pushes to Snowflake registry
+- Updates service with new image
+- Preserves endpoint URLs (no downtime)
+
 ## Related Documentation
 
 - [Documentation Hub](../docs/README.md) - Complete documentation index
@@ -634,4 +738,4 @@ LIMIT 10;
 
 ---
 
-**Version**: 2.1 | **Last Updated**: January 27, 2026 | **Status**: ✅ Production Ready
+**Version**: 3.0 | **Last Updated**: January 27, 2026 | **Status**: ✅ Production Ready

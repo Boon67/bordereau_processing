@@ -62,3 +62,8 @@ spec:
   - name: app
     port: 80
     public: true
+
+# Enable caller's rights - service executes with caller's permissions
+capabilities:
+  securityContext:
+    executeAsCaller: true

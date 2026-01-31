@@ -108,14 +108,29 @@ async def get_cortex_models(request: Request):
 async def create_target_schema(request: Request, schema: TargetSchemaCreate):
     """Create target schema definition (TPA-agnostic)"""
     try:
+        # Validation: Non-nullable columns must have a default value
+        if not schema.nullable and not schema.default_value:
+            raise HTTPException(
+                status_code=400, 
+                detail="Non-nullable columns must have a default value. Please provide a default value or make the column nullable."
+            )
+        
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Escape single quotes by doubling them for SQL
+        escaped_table = schema.table_name.upper().replace("'", "''")
+        escaped_column = schema.column_name.upper().replace("'", "''")
+        escaped_data_type = schema.data_type.replace("'", "''")
+        escaped_default = schema.default_value.replace("'", "''") if schema.default_value else None
+        escaped_description = schema.description.replace("'", "''") if schema.description else None
+        
         query = f"""
             INSERT INTO {settings.SILVER_SCHEMA_NAME}.target_schemas
             (table_name, column_name, data_type, nullable, default_value, description)
-            VALUES ('{schema.table_name.upper()}', '{schema.column_name.upper()}',
-                    '{schema.data_type}', {schema.nullable}, 
-                    {'NULL' if not schema.default_value else f"'{schema.default_value}'"},
-                    {'NULL' if not schema.description else f"'{schema.description}'"})
+            VALUES ('{escaped_table}', '{escaped_column}',
+                    '{escaped_data_type}', {schema.nullable}, 
+                    {'NULL' if not escaped_default else f"'{escaped_default}'"},
+                    {'NULL' if not escaped_description else f"'{escaped_description}'"})
         """
         await sf_service.execute_query(query)
         
@@ -123,6 +138,8 @@ async def create_target_schema(request: Request, schema: TargetSchemaCreate):
         cache.clear("schemas")
         
         return {"message": "Target schema created successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create target schema: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -133,16 +150,42 @@ async def update_target_schema(request: Request, schema_id: int, schema: TargetS
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
+        # If making column non-nullable, check if default value exists
+        if schema.nullable is False:
+            # Get current schema to check if default value exists
+            check_query = f"""
+                SELECT default_value
+                FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+                WHERE schema_id = {schema_id}
+            """
+            result = await sf_service.execute_query_dict(check_query)
+            
+            if result and not result[0].get('DEFAULT_VALUE') and not schema.default_value:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot make column non-nullable without a default value. Please provide a default value."
+                )
+        
         # Build update query dynamically based on provided fields
         update_fields = []
         if schema.data_type is not None:
-            update_fields.append(f"data_type = '{schema.data_type}'")
+            # Escape single quotes by doubling them for SQL
+            escaped_data_type = schema.data_type.replace("'", "''")
+            update_fields.append(f"data_type = '{escaped_data_type}'")
         if schema.nullable is not None:
             update_fields.append(f"nullable = {schema.nullable}")
         if schema.default_value is not None:
-            update_fields.append(f"default_value = '{schema.default_value}'")
+            # Handle empty string or null default value
+            if schema.default_value == "":
+                update_fields.append(f"default_value = NULL")
+            else:
+                # Escape single quotes by doubling them for SQL
+                escaped_default = schema.default_value.replace("'", "''")
+                update_fields.append(f"default_value = '{escaped_default}'")
         if schema.description is not None:
-            update_fields.append(f"description = '{schema.description}'")
+            # Escape single quotes by doubling them for SQL
+            escaped_description = schema.description.replace("'", "''")
+            update_fields.append(f"description = '{escaped_description}'")
         
         if not update_fields:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -190,20 +233,24 @@ async def delete_table_schema(request: Request, table_name: str, tpa: str):
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # First check if table exists
+        # Escape single quotes for SQL safety
+        escaped_table_name = table_name.upper().replace("'", "''")
+        escaped_tpa = tpa.replace("'", "''")
+        
         check_query = f"""
             SELECT COUNT(*) as count
             FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
-            WHERE table_name = '{table_name.upper()}' AND tpa = '{tpa}' AND active = TRUE
+            WHERE table_name = '{escaped_table_name}'
         """
         result = await sf_service.execute_query_dict(check_query)
         
         if not result or result[0]['COUNT'] == 0:
-            raise HTTPException(status_code=404, detail=f"Table schema '{table_name}' not found for TPA '{tpa}'")
+            raise HTTPException(status_code=404, detail=f"Table schema '{table_name}' not found")
         
         # Delete all columns for this table
         delete_query = f"""
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
-            WHERE table_name = '{table_name.upper()}' AND tpa = '{tpa}'
+            WHERE table_name = '{escaped_table_name}'
         """
         await sf_service.execute_query(delete_query)
         
@@ -297,6 +344,129 @@ async def create_silver_table(request: Request, table_name: str, tpa: str):
         }
     except Exception as e:
         logger.error(f"Failed to create table: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/tables/delete")
+async def delete_physical_table(request: Request, table_name: str, tpa: str):
+    """Delete physical Silver table
+    
+    Deletes the physical table with name format: {TPA}_{TABLE_NAME}
+    Example: PROVIDER_A_MEDICAL_CLAIMS
+    
+    WARNING: This will permanently delete the table and all its data.
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Construct the physical table name
+        physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
+        
+        logger.info(f"Attempting to delete physical table: {physical_table_name} for TPA: {tpa}")
+        
+        # Drop the physical table
+        drop_query = f"DROP TABLE IF EXISTS {settings.SILVER_SCHEMA_NAME}.{physical_table_name}"
+        await sf_service.execute_query(drop_query)
+        logger.info(f"Physical table {physical_table_name} dropped successfully")
+        
+        # Remove from created_tables tracking (escape single quotes for SQL safety)
+        escaped_table_name = physical_table_name.replace("'", "''")
+        escaped_tpa = tpa.replace("'", "''")
+        delete_tracking_query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.created_tables
+            WHERE physical_table_name = '{escaped_table_name}'
+              AND tpa = '{escaped_tpa}'
+        """
+        await sf_service.execute_query(delete_tracking_query)
+        logger.info(f"Removed {physical_table_name} from created_tables tracking")
+        
+        logger.info(f"Successfully deleted physical table {physical_table_name} for TPA {tpa}")
+        
+        return {
+            "message": f"Table {physical_table_name} deleted successfully",
+            "physical_table_name": physical_table_name
+        }
+    except Exception as e:
+        logger.error(f"Failed to delete table: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/data")
+async def get_silver_data(request: Request, tpa: str, table_name: str, limit: int = 100):
+    """Get data from a Silver layer table
+    
+    Args:
+        tpa: TPA code (e.g., 'provider_a')
+        table_name: Schema table name (e.g., 'DENTAL_CLAIMS')
+        limit: Maximum number of rows to return (default: 100)
+    
+    Returns:
+        List of records from the physical table
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Construct the physical table name: {TPA}_{TABLE_NAME}
+        physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
+        
+        # Query the physical table
+        query = f"""
+            SELECT *
+            FROM {settings.SILVER_SCHEMA_NAME}.{physical_table_name}
+            LIMIT {limit}
+        """
+        
+        result = await sf_service.execute_query_dict(query)
+        
+        # Also get row count
+        count_query = f"""
+            SELECT COUNT(*) as TOTAL_COUNT
+            FROM {settings.SILVER_SCHEMA_NAME}.{physical_table_name}
+        """
+        count_result = await sf_service.execute_query_dict(count_query)
+        total_count = count_result[0]['TOTAL_COUNT'] if count_result else 0
+        
+        return {
+            "data": result,
+            "total_count": total_count,
+            "limit": limit,
+            "table_name": physical_table_name
+        }
+    except Exception as e:
+        logger.error(f"Failed to get Silver data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/data/stats")
+async def get_silver_data_stats(request: Request, tpa: str, table_name: str):
+    """Get statistics for a Silver layer table"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Construct the physical table name
+        physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
+        
+        # Get table statistics
+        stats_query = f"""
+            SELECT 
+                COUNT(*) as TOTAL_RECORDS,
+                MAX(CREATED_TIMESTAMP) as LAST_UPDATED
+            FROM {settings.SILVER_SCHEMA_NAME}.{physical_table_name}
+        """
+        
+        result = await sf_service.execute_query_dict(stats_query)
+        
+        if result and len(result) > 0:
+            return {
+                "total_records": result[0]['TOTAL_RECORDS'] or 0,
+                "last_updated": result[0]['LAST_UPDATED'],
+                "data_quality_score": 95  # Placeholder - could be calculated from validation rules
+            }
+        else:
+            return {
+                "total_records": 0,
+                "last_updated": None,
+                "data_quality_score": 0
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Silver data stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/mappings")
@@ -435,11 +605,12 @@ async def transform_bronze_to_silver(request: Request, transform_request: Transf
     """Transform Bronze data to Silver"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        # Note: Procedure signature is (target_table, tpa, source_table, source_schema, batch_size, apply_rules, incremental)
         result = await sf_service.execute_procedure(
             "transform_bronze_to_silver",
-            transform_request.source_table,
             transform_request.target_table,
             transform_request.tpa,
+            transform_request.source_table,
             transform_request.source_schema,
             transform_request.batch_size,
             transform_request.apply_rules,

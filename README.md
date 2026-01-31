@@ -37,8 +37,6 @@ graph TD
 
 ## 🚀 Quick Start
 
-> **💻 Windows Users:** See [deployment/WINDOWS_DEPLOYMENT.md](deployment/WINDOWS_DEPLOYMENT.md) for Windows batch file deployment.
-
 ### 1. Prerequisites
 - Python 3.10+, Node.js 18+
 - Snowflake account with admin privileges
@@ -77,13 +75,13 @@ deploy.bat
 
 ## 📖 Documentation
 
-**Quick Links:**
-- **[DOCS.md](DOCS.md)** - Complete documentation map
-- **[QUICK_START.md](QUICK_START.md)** - Get started in 10 minutes
-- **[RECENT_FIXES.md](RECENT_FIXES.md)** - Latest fixes and enhancements
-- **[docs/README.md](docs/README.md)** - Documentation hub
-- **[docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md)** - Complete implementation history
-- **[deployment/README.md](deployment/README.md)** - Deployment guide
+**Core Documentation:**
+- **[Quick Start Guide](QUICK_START.md)** - Get started in 10 minutes
+- **[Documentation Hub](docs/README.md)** - Complete documentation index
+- **[Architecture](docs/ARCHITECTURE.md)** - System design, patterns, and data flow
+- **[User Guide](docs/USER_GUIDE.md)** - Complete usage instructions
+- **[Deployment Guide](deployment/README.md)** - Deployment to Snowflake and SPCS
+- **[Testing](docs/TESTING.md)** - Test plans and validation
 
 ## 📦 Deployment Options
 
@@ -233,4 +231,4 @@ Proprietary software. All rights reserved.
 
 ---
 
-**Version**: 1.1 | **Last Updated**: January 22, 2026 | **Status**: ✅ Production Ready
+**Version**: 3.0 | **Last Updated**: January 27, 2026 | **Status**: ✅ Production Ready

@@ -29,10 +29,13 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
   const [loadingTargetColumns, setLoadingTargetColumns] = useState(false)
   const [cortexModels, setCortexModels] = useState<string[]>([])
   const [loadingCortexModels, setLoadingCortexModels] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
 
   useEffect(() => {
     // Load created tables when TPA changes
     if (selectedTpa) {
+      setSelectedRowKeys([]) // Clear selection when TPA changes
       loadTargetTables()
       loadMappings()
     }
@@ -252,6 +255,54 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
       loadMappings()
     } catch (error: any) {
       message.error(`Failed to create mapping: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
+  const handleBulkApprove = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Please select at least one mapping to approve')
+      return
+    }
+
+    setBulkActionLoading(true)
+    try {
+      // Approve all selected mappings in parallel
+      await Promise.all(
+        selectedRowKeys.map(mappingId => 
+          apiService.approveMapping(mappingId as string)
+        )
+      )
+      message.success(`Approved ${selectedRowKeys.length} mapping(s)`)
+      setSelectedRowKeys([])
+      loadMappings()
+    } catch (error: any) {
+      message.error(`Bulk approve failed: ${error.response?.data?.detail || error.message}`)
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Please select at least one mapping to delete')
+      return
+    }
+
+    setBulkActionLoading(true)
+    try {
+      // Delete all selected mappings in parallel
+      await Promise.all(
+        selectedRowKeys.map(mappingId => 
+          apiService.deleteMapping(mappingId as string)
+        )
+      )
+      message.success(`Deleted ${selectedRowKeys.length} mapping(s)`)
+      setSelectedRowKeys([])
+      loadMappings()
+    } catch (error: any) {
+      message.error(`Bulk delete failed: ${error.response?.data?.detail || error.message}`)
+    } finally {
+      setBulkActionLoading(false)
     }
   }
 
@@ -530,14 +581,76 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
               }
             >
               {tableInfo.hasMappings ? (
-                <Table
-                  columns={columns}
-                  dataSource={tableMappings}
-                  rowKey="MAPPING_ID"
-                  loading={loading}
-                  pagination={false}
-                  size="small"
-                />
+                <>
+                  {selectedRowKeys.length > 0 && (
+                    <Alert
+                      message={`${selectedRowKeys.length} mapping(s) selected`}
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                      action={
+                        <Space>
+                          <Popconfirm
+                            title={`Approve ${selectedRowKeys.length} mapping(s)?`}
+                            description="This will approve all selected mappings."
+                            onConfirm={handleBulkApprove}
+                            okText="Yes"
+                            cancelText="No"
+                          >
+                            <Button 
+                              type="primary" 
+                              size="small" 
+                              icon={<CheckCircleOutlined />}
+                              loading={bulkActionLoading}
+                            >
+                              Bulk Approve
+                            </Button>
+                          </Popconfirm>
+                          <Popconfirm
+                            title={`Delete ${selectedRowKeys.length} mapping(s)?`}
+                            description="This action cannot be undone."
+                            onConfirm={handleBulkDelete}
+                            okText="Yes"
+                            cancelText="No"
+                            okButtonProps={{ danger: true }}
+                          >
+                            <Button 
+                              danger 
+                              size="small" 
+                              icon={<CloseCircleOutlined />}
+                              loading={bulkActionLoading}
+                            >
+                              Bulk Delete
+                            </Button>
+                          </Popconfirm>
+                          <Button 
+                            size="small" 
+                            onClick={() => setSelectedRowKeys([])}
+                          >
+                            Clear Selection
+                          </Button>
+                        </Space>
+                      }
+                    />
+                  )}
+                  <Table
+                    columns={columns}
+                    dataSource={tableMappings}
+                    rowKey="MAPPING_ID"
+                    loading={loading}
+                    pagination={false}
+                    size="small"
+                    rowSelection={{
+                      selectedRowKeys,
+                      onChange: (newSelectedRowKeys: React.Key[]) => {
+                        setSelectedRowKeys(newSelectedRowKeys)
+                      },
+                      getCheckboxProps: (record: FieldMapping) => ({
+                        name: record.MAPPING_ID,
+                      }),
+                    }}
+                  />
+                </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
                   <p>No field mappings created for this table yet.</p>

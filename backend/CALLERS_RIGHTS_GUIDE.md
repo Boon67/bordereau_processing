@@ -55,7 +55,7 @@ If caller's token is not available:
 
 ## Configuration
 
-### Enable/Disable
+### Application-Level Configuration
 
 ```bash
 # Enable caller's rights (default)
@@ -69,6 +69,33 @@ Or in Dockerfile:
 ```dockerfile
 ENV USE_CALLERS_RIGHTS=true
 ```
+
+### SPCS Service-Level Configuration
+
+For Snowpark Container Services, enable caller's rights in the service specification:
+
+**File**: `docker/snowpark-spec.yaml`
+
+```yaml
+spec:
+  containers:
+    - name: backend
+      image: /path/to/backend:latest
+      # ... container configuration ...
+  endpoints:
+    - name: app
+      port: 80
+      public: true
+
+# Enable caller's rights at service level
+capabilities:
+  securityContext:
+    executeAsCaller: true
+```
+
+**Important**: The `capabilities` section is a **top-level field**, not under `spec`.
+
+**Reference**: [Snowflake SPCS Caller's Rights Tutorial](https://docs.snowflake.com/en/developer-guide/snowpark-container-services/tutorials/advanced/tutorial-7-callers-rights)
 
 ---
 

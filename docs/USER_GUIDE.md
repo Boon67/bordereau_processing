@@ -226,16 +226,61 @@ SELECT * FROM silver_processing_log ORDER BY start_timestamp DESC LIMIT 20;
 6. **Define Rules**: Start with data quality rules
 7. **Incremental Processing**: Use watermarks for large datasets
 
+## TPA (Multi-Tenant) Architecture
+
+### What is TPA?
+
+TPA (Third Party Administrator) enables complete multi-tenant isolation where different healthcare providers can have:
+- Different schemas and field mappings
+- Different transformation rules
+- Separate data tables
+- Independent processing pipelines
+
+### TPA Naming Convention
+
+**TPA Codes**: Lowercase with underscores (e.g., `provider_a`, `blue_cross`)
+
+**Target Tables**: `{TABLE_NAME}_{TPA}` (e.g., `CLAIMS_PROVIDER_A`)
+
+**File Paths**: `@SRC/{tpa}/{filename}`
+
+### TPA Data Flow
+
+1. **File Upload**: Select TPA → Upload file → Stored in `@SRC/{tpa}/`
+2. **Bronze Processing**: TPA extracted from path → Stored in `RAW_DATA_TABLE.TPA`
+3. **Silver Configuration**: Select TPA in UI → All operations filtered by TPA
+4. **Field Mapping**: Mappings defined per TPA
+5. **Transformation**: Rules applied per TPA
+6. **Target Tables**: TPA-specific tables created
+
+### Managing TPAs
+
+**Add TPA**:
+1. Go to Admin > TPA Management
+2. Click "Add TPA"
+3. Enter TPA code, name, and description
+4. Click "Create"
+
+**View TPAs**: All pages have TPA selector at the top
+
+**TPA Isolation**: Each TPA has completely separate:
+- Field mappings
+- Target schemas
+- Transformation rules
+- Data tables
+
+---
+
 ## Related Documentation
 
 - [Documentation Hub](README.md) - Complete documentation index
 - [Quick Start Guide](../QUICK_START.md) - Get running in 10 minutes
-- [TPA Complete Guide](guides/TPA_COMPLETE_GUIDE.md) - Multi-tenant architecture
+- [Architecture](ARCHITECTURE.md) - System design and data flow
 - [Bronze README](../bronze/README.md) - Bronze layer details
 - [Silver README](../silver/README.md) - Silver layer details
 - [Deployment Guide](../deployment/README.md) - Deployment documentation
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: January 15, 2026
+**Version**: 2.0  
+**Last Updated**: January 31, 2026

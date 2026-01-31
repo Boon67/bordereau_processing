@@ -39,6 +39,7 @@ def transform_bronze_to_silver(session, target_table, tpa, source_table, source_
     
     import uuid
     from datetime import datetime
+    import json
     
     # Generate batch ID
     batch_id = f"BATCH_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
@@ -61,21 +62,65 @@ def transform_bronze_to_silver(session, target_table, tpa, source_table, source_
         """).collect()
         
         if not mappings:
+            # Log error
+            session.sql(f"""
+                UPDATE silver_processing_log
+                SET status = 'FAILED',
+                    end_timestamp = CURRENT_TIMESTAMP(),
+                    error_message = 'No approved mappings found for {target_table} and TPA {tpa}'
+                WHERE batch_id = '{batch_id}'
+                  AND processing_type = 'TRANSFORMATION'
+            """).collect()
             return f"ERROR: No approved mappings found for {target_table} and TPA {tpa}"
         
-        # Build transformation SQL (simplified version)
-        full_target_table = f"{target_table.upper()}_{tpa.upper()}"
+        # Build mapping dictionary
+        mapping_dict = {}
+        for row in mappings:
+            mapping_dict[row['SOURCE_FIELD']] = {
+                'target_column': row['TARGET_COLUMN'],
+                'transformation_logic': row['TRANSFORMATION_LOGIC']
+            }
         
-        # Get source data
-        source_data_query = f"""
-            SELECT RAW_DATA
+        # Build full target table name (TPA_TABLENAME format)
+        full_target_table = f"{tpa.upper()}_{target_table.upper()}"
+        
+        # Build column list for INSERT
+        target_columns = [m['TARGET_COLUMN'] for m in mappings]
+        columns_str = ', '.join(target_columns)
+        
+        # Build SELECT statement with field mappings
+        select_parts = []
+        for row in mappings:
+            source_field = row['SOURCE_FIELD']
+            transformation = row['TRANSFORMATION_LOGIC']
+            
+            # If transformation logic exists, use it; otherwise, direct mapping
+            if transformation and transformation.strip():
+                # For now, just use direct mapping - transformation logic can be enhanced later
+                select_parts.append(f"RAW_DATA:{source_field}::VARCHAR AS {row['TARGET_COLUMN']}")
+            else:
+                select_parts.append(f"RAW_DATA:{source_field}::VARCHAR AS {row['TARGET_COLUMN']}")
+        
+        select_str = ',\n            '.join(select_parts)
+        
+        # Build and execute INSERT statement
+        insert_query = f"""
+            INSERT INTO {full_target_table} ({columns_str})
+            SELECT 
+                {select_str}
             FROM {source_schema}.{source_table}
             WHERE TPA = '{tpa}'
+              AND RAW_DATA IS NOT NULL
             LIMIT {batch_size}
         """
         
-        source_data = session.sql(source_data_query).collect()
-        records_processed = len(source_data)
+        # Execute transformation
+        session.sql(insert_query).collect()
+        
+        # Get the actual number of rows inserted
+        count_query = f"SELECT COUNT(*) as row_count FROM {full_target_table}"
+        count_result = session.sql(count_query).collect()
+        records_processed = count_result[0]['ROW_COUNT'] if count_result else 0
         
         # Log success
         session.sql(f"""

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Button, Select, Space, message, Steps, Alert, Descriptions, Statistic, Row, Col, Progress, Timeline, Tag } from 'antd'
-import { ThunderboltOutlined, DatabaseOutlined, ApiOutlined, PlayCircleOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { Card, Typography, Button, Select, Space, message, Steps, Alert, Descriptions, Statistic, Row, Col, Progress, Timeline, Tag, Table } from 'antd'
+import { ThunderboltOutlined, DatabaseOutlined, ApiOutlined, PlayCircleOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
+import type { FieldMapping } from '../services/api'
 
 const { Title } = Typography
 const { Step } = Steps
@@ -12,6 +13,23 @@ interface SilverTransformProps {
 }
 
 const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selectedTpaName }) => {
+  // Add CSS for pending mapping rows
+  React.useEffect(() => {
+    const style = document.createElement('style')
+    style.innerHTML = `
+      .pending-mapping-row {
+        background-color: #fffbe6 !important;
+      }
+      .pending-mapping-row:hover {
+        background-color: #fff7cc !important;
+      }
+    `
+    document.head.appendChild(style)
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [])
+
   const [loading, setLoading] = useState(false)
   const [sourceTable, setSourceTable] = useState<string>('RAW_DATA_TABLE')
   const [targetTable, setTargetTable] = useState<string>('')
@@ -20,6 +38,8 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
   const [currentStep, setCurrentStep] = useState(0)
   const [transformResult, setTransformResult] = useState<any>(null)
   const [transformHistory, setTransformHistory] = useState<any[]>([])
+  const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([])
+  const [loadingMappings, setLoadingMappings] = useState(false)
 
   useEffect(() => {
     if (selectedTpa) {
@@ -50,6 +70,34 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
     }
   }
 
+  const loadFieldMappings = async () => {
+    if (!selectedTpa || !targetTable) return
+
+    setLoadingMappings(true)
+    try {
+      const mappings = await apiService.getFieldMappings(selectedTpa, targetTable)
+      setFieldMappings(mappings)
+      
+      const approvedCount = mappings.filter(m => m.APPROVED).length
+      const totalCount = mappings.length
+      
+      if (totalCount === 0) {
+        message.warning('No field mappings found for this table. Please create mappings first.')
+      } else if (approvedCount === 0) {
+        message.warning(`Found ${totalCount} mappings but none are approved. Please approve mappings before transforming.`)
+      } else if (approvedCount < totalCount) {
+        message.info(`${approvedCount} of ${totalCount} mappings are approved and ready for transformation.`)
+      } else {
+        message.success(`All ${totalCount} mappings are approved and ready for transformation.`)
+      }
+    } catch (error) {
+      message.error('Failed to load field mappings')
+      setFieldMappings([])
+    } finally {
+      setLoadingMappings(false)
+    }
+  }
+
   const handleTransform = async () => {
     if (!sourceTable || !targetTable) {
       message.warning('Please select both source and target tables')
@@ -72,6 +120,21 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
       const endTime = new Date()
       const duration = (endTime.getTime() - startTime.getTime()) / 1000
 
+      // Parse the result message to extract record count
+      // Backend returns: { message: "...", result: "SUCCESS: Transformed X records..." }
+      const resultMessage = result.result || result.message || ''
+      console.log('Transform result:', result)
+      console.log('Result message:', resultMessage)
+      
+      const recordCountMatch = resultMessage.match(/Transformed (\d+) records?/i)
+      const recordCount = recordCountMatch ? parseInt(recordCountMatch[1]) : null
+      
+      console.log('Record count match:', recordCountMatch)
+      console.log('Parsed record count:', recordCount)
+
+      // Check if the result indicates an error (even though HTTP status was 200)
+      const isError = resultMessage.toUpperCase().startsWith('ERROR')
+      
       const transformData = {
         source: sourceTable,
         target: targetTable,
@@ -79,12 +142,22 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
         timestamp: startTime.toISOString(),
         duration: `${duration.toFixed(2)}s`,
         result: result,
-        status: 'success'
+        resultMessage: resultMessage,
+        recordCount: recordCount,
+        status: isError ? 'failed' : 'success',
+        error: isError ? resultMessage : undefined
       }
 
       setTransformResult(transformData)
       setTransformHistory(prev => [transformData, ...prev])
-      message.success('Transformation completed successfully!')
+      
+      if (isError) {
+        message.error(`Transformation failed: ${resultMessage}`)
+      } else if (recordCount !== null) {
+        message.success(`Transformation completed! ${recordCount} record(s) processed.`)
+      } else {
+        message.warning(`Transformation completed, but record count could not be determined. Result: ${resultMessage}`)
+      }
       setCurrentStep(3)
     } catch (error: any) {
       const endTime = new Date()
@@ -183,38 +256,192 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
             <div style={{ marginTop: 16 }}>
               <Button
                 type="primary"
-                onClick={() => setCurrentStep(1)}
+                onClick={() => {
+                  setCurrentStep(1)
+                  loadFieldMappings()
+                }}
                 disabled={!sourceTable || !targetTable}
               >
-                Next: Verify Configuration
+                Next: Verify Mappings
               </Button>
             </div>
           </Space>
         </Card>
       )}
 
-      {currentStep >= 1 && (
-        <Card title="Step 2: Verify Configuration" style={{ marginBottom: 16 }}>
-          <Descriptions column={1} bordered>
+      {currentStep === 1 && (
+        <Card title="Step 2: Verify Mappings" style={{ marginBottom: 16 }}>
+          <Descriptions column={1} bordered style={{ marginBottom: 16 }}>
             <Descriptions.Item label="TPA">{selectedTpa}</Descriptions.Item>
             <Descriptions.Item label="Source Table">{sourceTable}</Descriptions.Item>
             <Descriptions.Item label="Target Table">{targetTable}</Descriptions.Item>
           </Descriptions>
 
-          <Alert
-            style={{ marginTop: 16 }}
-            message="Transformation Process"
-            description={
-              <ul style={{ marginBottom: 0 }}>
-                <li>Extract data from Bronze layer raw data table</li>
-                <li>Apply field mappings to transform data structure</li>
-                <li>Execute data quality rules and validations</li>
-                <li>Load transformed data into Silver layer target table</li>
-              </ul>
-            }
-            type="info"
-            showIcon
-          />
+          {loadingMappings ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Progress type="circle" percent={50} status="active" />
+              <p style={{ marginTop: 16 }}>Loading field mappings...</p>
+            </div>
+          ) : fieldMappings.length === 0 ? (
+            <Alert
+              message="No Field Mappings Found"
+              description={
+                <div>
+                  <p>No field mappings have been created for this table yet.</p>
+                  <p style={{ marginTop: 8 }}>
+                    Please go to <strong>Field Mappings</strong> page to create mappings before running the transformation.
+                  </p>
+                </div>
+              }
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          ) : (
+            <>
+              <Alert
+                message="Field Mappings"
+                description={
+                  <div>
+                    <p>The following field mappings will be applied during transformation:</p>
+                    <p style={{ marginTop: 8 }}>
+                      <strong>Total Mappings:</strong> {fieldMappings.length} | 
+                      <strong style={{ marginLeft: 8, color: '#52c41a' }}>Approved:</strong> {fieldMappings.filter(m => m.APPROVED).length} | 
+                      <strong style={{ marginLeft: 8, color: '#faad14' }}>Pending:</strong> {fieldMappings.filter(m => !m.APPROVED).length}
+                    </p>
+                  </div>
+                }
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+
+              <Table
+                columns={[
+                  {
+                    title: 'Source Field',
+                    dataIndex: 'SOURCE_FIELD',
+                    key: 'SOURCE_FIELD',
+                    width: 200,
+                    render: (text: string, record: FieldMapping) => (
+                      <div>
+                        <strong>{text}</strong>
+                        <div style={{ fontSize: '11px', color: '#999' }}>from {record.SOURCE_TABLE}</div>
+                      </div>
+                    ),
+                  },
+                  {
+                    title: '',
+                    key: 'arrow',
+                    width: 60,
+                    align: 'center' as const,
+                    render: () => <ArrowRightOutlined style={{ fontSize: '18px', color: '#1890ff' }} />,
+                  },
+                  {
+                    title: 'Target Column',
+                    dataIndex: 'TARGET_COLUMN',
+                    key: 'TARGET_COLUMN',
+                    width: 200,
+                    render: (text: string, record: FieldMapping) => (
+                      <div>
+                        <strong>{text}</strong>
+                        <div style={{ fontSize: '11px', color: '#999' }}>in {record.TARGET_TABLE}</div>
+                      </div>
+                    ),
+                  },
+                  {
+                    title: 'Method',
+                    dataIndex: 'MAPPING_METHOD',
+                    key: 'MAPPING_METHOD',
+                    width: 120,
+                    render: (method: string) => {
+                      const methodConfig: Record<string, { color: string; label: string }> = {
+                        MANUAL: { color: 'blue', label: 'Manual' },
+                        ML_AUTO: { color: 'green', label: 'ML Auto' },
+                        LLM_CORTEX: { color: 'purple', label: 'LLM' },
+                        SYSTEM: { color: 'default', label: 'System' },
+                      }
+                      const config = methodConfig[method] || { color: 'default', label: method }
+                      return <Tag color={config.color}>{config.label}</Tag>
+                    },
+                  },
+                  {
+                    title: 'Confidence',
+                    dataIndex: 'CONFIDENCE_SCORE',
+                    key: 'CONFIDENCE_SCORE',
+                    width: 120,
+                    render: (score: number | null) => {
+                      if (score === null || score === undefined) return '-'
+                      const percentage = Math.round(score * 100)
+                      return (
+                        <div style={{ width: 80 }}>
+                          <Progress 
+                            percent={percentage} 
+                            size="small"
+                            status={percentage >= 80 ? 'success' : percentage >= 60 ? 'normal' : 'exception'}
+                            showInfo={false}
+                          />
+                          <div style={{ fontSize: '11px', textAlign: 'center' }}>{percentage}%</div>
+                        </div>
+                      )
+                    },
+                  },
+                  {
+                    title: 'Status',
+                    dataIndex: 'APPROVED',
+                    key: 'APPROVED',
+                    width: 100,
+                    render: (approved: boolean) => (
+                      approved ? (
+                        <Tag color="success" icon={<CheckCircleOutlined />}>Approved</Tag>
+                      ) : (
+                        <Tag color="warning">Pending</Tag>
+                      )
+                    ),
+                  },
+                  {
+                    title: 'Transformation',
+                    dataIndex: 'TRANSFORMATION_LOGIC',
+                    key: 'TRANSFORMATION_LOGIC',
+                    ellipsis: true,
+                    render: (logic: string) => {
+                      if (!logic) return <span style={{ color: '#999' }}>Direct mapping</span>
+                      return (
+                        <code style={{ fontSize: '11px', background: '#f5f5f5', padding: '2px 6px', borderRadius: 3 }}>
+                          {logic}
+                        </code>
+                      )
+                    },
+                  },
+                ]}
+                dataSource={fieldMappings}
+                rowKey="MAPPING_ID"
+                pagination={false}
+                size="small"
+                rowClassName={(record: FieldMapping) => !record.APPROVED ? 'pending-mapping-row' : ''}
+              />
+
+              {fieldMappings.filter(m => !m.APPROVED).length > 0 && (
+                <Alert
+                  message="Pending Mappings"
+                  description={
+                    <div>
+                      <p>
+                        {fieldMappings.filter(m => !m.APPROVED).length} mapping(s) are not yet approved. 
+                        Only approved mappings will be used in the transformation.
+                      </p>
+                      <p style={{ marginTop: 8 }}>
+                        Go to <strong>Field Mappings</strong> page to approve pending mappings.
+                      </p>
+                    </div>
+                  }
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 16 }}
+                />
+              )}
+            </>
+          )}
 
           <div style={{ marginTop: 24 }}>
             <Space>
@@ -224,8 +451,9 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
               <Button 
                 type="primary"
                 onClick={() => setCurrentStep(2)}
+                disabled={fieldMappings.filter(m => m.APPROVED).length === 0}
               >
-                Next
+                Next: Execute Transform
               </Button>
             </Space>
           </div>
@@ -265,8 +493,10 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
             message={transformResult.status === 'success' ? 'Transformation Complete!' : 'Transformation Failed'}
             description={
               transformResult.status === 'success'
-                ? 'Data has been successfully transformed from Bronze to Silver layer.'
-                : transformResult.error
+                ? (transformResult.recordCount !== null && transformResult.recordCount > 0
+                    ? `Successfully transformed ${transformResult.recordCount} record(s) from Bronze to Silver layer.`
+                    : transformResult.resultMessage || 'Data has been successfully transformed from Bronze to Silver layer.')
+                : transformResult.error || transformResult.resultMessage
             }
             type={transformResult.status === 'success' ? 'success' : 'error'}
             showIcon
@@ -275,21 +505,29 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
           {transformResult.status === 'success' && (
             <div style={{ marginTop: 24 }}>
               <Row gutter={16}>
-                <Col span={8}>
+                <Col span={6}>
+                  <Statistic
+                    title="Records Processed"
+                    value={transformResult.recordCount !== null ? transformResult.recordCount : 'N/A'}
+                    prefix={<DatabaseOutlined />}
+                    valueStyle={{ color: '#3f8600' }}
+                  />
+                </Col>
+                <Col span={6}>
                   <Statistic
                     title="Source Table"
                     value={transformResult.source}
                     prefix={<DatabaseOutlined />}
                   />
                 </Col>
-                <Col span={8}>
+                <Col span={6}>
                   <Statistic
                     title="Target Table"
                     value={transformResult.target}
                     prefix={<DatabaseOutlined />}
                   />
                 </Col>
-                <Col span={8}>
+                <Col span={6}>
                   <Statistic
                     title="Duration"
                     value={transformResult.duration}
@@ -298,17 +536,32 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
                 </Col>
               </Row>
 
-              {transformResult.result && (
-                <Card title="Transformation Details" style={{ marginTop: 16 }} size="small">
-                  <Descriptions column={1} size="small">
-                    <Descriptions.Item label="TPA">{transformResult.tpa}</Descriptions.Item>
-                    <Descriptions.Item label="Timestamp">{new Date(transformResult.timestamp).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label="Status">
-                      <Tag color="success" icon={<CheckCircleOutlined />}>Success</Tag>
+              <Card title="Transformation Details" style={{ marginTop: 16 }} size="small">
+                <Descriptions column={1} size="small">
+                  <Descriptions.Item label="TPA">{transformResult.tpa}</Descriptions.Item>
+                  <Descriptions.Item label="Timestamp">{new Date(transformResult.timestamp).toLocaleString()}</Descriptions.Item>
+                  <Descriptions.Item label="Status">
+                    <Tag color={transformResult.status === 'success' ? 'success' : 'error'} 
+                         icon={transformResult.status === 'success' ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+                      {transformResult.status === 'success' ? 'Success' : 'Failed'}
+                    </Tag>
+                  </Descriptions.Item>
+                  {transformResult.resultMessage && (
+                    <Descriptions.Item label="Result">
+                      <div style={{ 
+                        fontFamily: 'monospace', 
+                        fontSize: '12px', 
+                        padding: '8px', 
+                        background: '#f5f5f5', 
+                        borderRadius: '4px',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {transformResult.resultMessage}
+                      </div>
                     </Descriptions.Item>
-                  </Descriptions>
-                </Card>
-              )}
+                  )}
+                </Descriptions>
+              </Card>
             </div>
           )}
 
@@ -339,6 +592,11 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
               >
                 <div>
                   <strong>{item.source}</strong> → <strong>{item.target}</strong>
+                  {item.status === 'success' && item.recordCount !== null && (
+                    <Tag color="success" style={{ marginLeft: 8 }}>
+                      {item.recordCount} record{item.recordCount !== 1 ? 's' : ''}
+                    </Tag>
+                  )}
                 </div>
                 <div style={{ fontSize: '12px', color: '#999' }}>
                   {new Date(item.timestamp).toLocaleString()} • {item.duration} • TPA: {item.tpa}

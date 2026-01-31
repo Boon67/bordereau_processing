@@ -236,8 +236,10 @@ export const apiService = {
     return response.data
   },
 
-  deleteTableSchema: async (tableName: string): Promise<any> => {
-    const response = await api.delete(`/silver/schemas/table/${tableName}`)
+  deleteTableSchema: async (tableName: string, tpa: string): Promise<any> => {
+    const response = await api.delete(`/silver/schemas/table/${tableName}`, {
+      params: { tpa }
+    })
     return response.data
   },
 
@@ -270,8 +272,29 @@ export const apiService = {
     return response.data
   },
 
+  getSilverData: async (tpa: string, tableName: string, limit: number = 100): Promise<any> => {
+    const response = await api.get('/silver/data', {
+      params: { tpa, table_name: tableName, limit }
+    })
+    return response.data
+  },
+
+  getSilverDataStats: async (tpa: string, tableName: string): Promise<any> => {
+    const response = await api.get('/silver/data/stats', {
+      params: { tpa, table_name: tableName }
+    })
+    return response.data
+  },
+
   createSilverTable: async (tableName: string, tpa: string): Promise<any> => {
     const response = await api.post('/silver/tables/create', null, {
+      params: { table_name: tableName, tpa }
+    })
+    return response.data
+  },
+
+  deletePhysicalTable: async (tableName: string, tpa: string): Promise<any> => {
+    const response = await api.delete('/silver/tables/delete', {
       params: { table_name: tableName, tpa }
     })
     return response.data
