@@ -1,6 +1,32 @@
 # User Guide
 
-**Complete usage guide for the Snowflake File Processing Pipeline.**
+**Complete usage guide for the Bordereau Processing Pipeline.**
+
+---
+
+## 🎯 What's New (v3.1 - Jan 2026)
+
+### Transformation Validation
+- ✅ **Automatic validation** before transformations run
+- ✅ **Clear error messages** for invalid mappings
+- ✅ **Validation endpoint** to check mappings anytime
+- ✅ **Prevents duplicates** and non-existent column mappings
+
+### Data Quality Improvements
+- ✅ **MERGE transformations** prevent duplicate records
+- ✅ **Idempotent operations** - safe to re-run transformations
+- ✅ **7 metadata columns** for complete data lineage
+- ✅ **Source traceability** back to original files
+
+### System Monitoring
+- ✅ **Comprehensive logging** to Snowflake tables
+- ✅ **API request tracking** with timing metrics
+- ✅ **Error logging** with stack traces
+- 🔧 **In Progress**: Fixing JSON escaping for full functionality
+
+**See [CHANGELOG](CHANGELOG.md) for details**
+
+---
 
 ## Table of Contents
 
@@ -11,18 +37,20 @@
 5. [TPA Management](#tpa-management)
 6. [Monitoring & Troubleshooting](#monitoring--troubleshooting)
 
+---
+
 ## Introduction
 
-The Snowflake File Processing Pipeline is a 100% Snowflake-native data pipeline with Bronze and Silver layers, featuring TPA (Third Party Administrator) as a first-class dimension for true multi-tenant data isolation.
+Snowflake-native healthcare claims processing pipeline with medallion architecture (Bronze → Silver → Gold) and multi-tenant TPA isolation.
 
 ### Key Features
 
-- **Automatic file ingestion** from CSV and Excel files
-- **TPA-based data isolation** for multi-tenant scenarios
-- **Three mapping methods**: Manual CSV, ML Pattern Matching, LLM Cortex AI
-- **Comprehensive rules engine** with 5 rule types
-- **Modern React UI** with FastAPI middleware
-- **No external orchestration** required
+- **Automatic file ingestion** from CSV/Excel files
+- **TPA-based isolation** for multi-tenancy
+- **AI-powered mapping**: Manual, ML Pattern Matching, LLM Cortex
+- **Validation system**: Prevents invalid transformations
+- **Modern React UI** with FastAPI backend
+- **Task-based automation** - no external orchestration
 
 ## Getting Started
 

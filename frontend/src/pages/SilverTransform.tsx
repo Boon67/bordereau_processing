@@ -35,6 +35,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
   const [targetTable, setTargetTable] = useState<string>('')
   const [sourceTables, setSourceTables] = useState<string[]>(['RAW_DATA_TABLE'])
   const [targetTables, setTargetTables] = useState<string[]>([])
+  const [tableMapping, setTableMapping] = useState<Record<string, string>>({}) // Maps physical table name to schema table name
   const [currentStep, setCurrentStep] = useState(0)
   const [transformResult, setTransformResult] = useState<any>(null)
   const [transformHistory, setTransformHistory] = useState<any[]>([])
@@ -59,12 +60,19 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
         (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
       )
       
-      // Extract unique schema table names
+      // Extract unique physical table names (e.g., PROVIDER_A_DENTAL_CLAIMS)
       const uniqueTargets = Array.from(
-        new Set(tpaCreatedTables.map((table: any) => table.SCHEMA_TABLE))
+        new Set(tpaCreatedTables.map((table: any) => table.TABLE_NAME))
       )
       
+      // Create mapping from physical table name to schema table name
+      const mapping: Record<string, string> = {}
+      tpaCreatedTables.forEach((table: any) => {
+        mapping[table.TABLE_NAME] = table.SCHEMA_TABLE
+      })
+      
       setTargetTables(uniqueTargets as string[])
+      setTableMapping(mapping)
     } catch (error) {
       message.error('Failed to load tables')
     }
@@ -75,7 +83,9 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
 
     setLoadingMappings(true)
     try {
-      const mappings = await apiService.getFieldMappings(selectedTpa, targetTable)
+      // Use schema table name for fetching mappings
+      const schemaTableName = tableMapping[targetTable] || targetTable
+      const mappings = await apiService.getFieldMappings(selectedTpa, schemaTableName)
       setFieldMappings(mappings)
       
       const approvedCount = mappings.filter(m => m.APPROVED).length
@@ -112,9 +122,11 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
     setLoading(true)
     const startTime = new Date()
     try {
+      // Use schema table name for transformation (procedure builds physical name internally)
+      const schemaTableName = tableMapping[targetTable] || targetTable
       const result = await apiService.transformBronzeToSilver(
         sourceTable,
-        targetTable,
+        schemaTableName,
         selectedTpa
       )
       const endTime = new Date()
@@ -125,8 +137,19 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
       const resultMessage = result.result || result.message || ''
       console.log('Transform result:', result)
       console.log('Result message:', resultMessage)
+      console.log('Result message type:', typeof resultMessage)
       
-      const recordCountMatch = resultMessage.match(/Transformed (\d+) records?/i)
+      // Try multiple patterns to extract record count
+      let recordCountMatch = resultMessage.match(/Transformed\s+(\d+)\s+records?/i)
+      if (!recordCountMatch) {
+        // Try pattern with "from" and "to"
+        recordCountMatch = resultMessage.match(/(\d+)\s+records?.*from/i)
+      }
+      if (!recordCountMatch) {
+        // Try to find any number followed by "record"
+        recordCountMatch = resultMessage.match(/(\d+)\s+record/i)
+      }
+      
       const recordCount = recordCountMatch ? parseInt(recordCountMatch[1]) : null
       
       console.log('Record count match:', recordCountMatch)
@@ -460,7 +483,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
         </Card>
       )}
 
-      {currentStep >= 2 && (
+      {currentStep === 2 && (
         <Card title="Step 3: Execute Transformation">
           <Alert
             style={{ marginBottom: 16 }}
@@ -488,7 +511,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
       )}
 
       {currentStep === 3 && transformResult && (
-        <Card>
+        <Card title="Step 4: Transformation Complete">
           <Alert
             message={transformResult.status === 'success' ? 'Transformation Complete!' : 'Transformation Failed'}
             description={

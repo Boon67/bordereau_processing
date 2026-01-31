@@ -23,7 +23,6 @@ import BronzeUpload from './pages/BronzeUpload'
 import BronzeStatus from './pages/BronzeStatus'
 import BronzeStages from './pages/BronzeStages'
 import BronzeData from './pages/BronzeData'
-import BronzeTasks from './pages/BronzeTasks'
 import SilverSchemas from './pages/SilverSchemas'
 import SilverMappings from './pages/SilverMappings'
 import SilverTransform from './pages/SilverTransform'
@@ -33,6 +32,7 @@ import GoldMetrics from './pages/GoldMetrics'
 import GoldQuality from './pages/GoldQuality'
 import GoldRules from './pages/GoldRules'
 import TPAManagement from './pages/TPAManagement'
+import TaskManagement from './pages/TaskManagement'
 import AdminLogs from './pages/AdminLogs'
 import { apiService, UserInfo } from './services/api'
 import type { TPA } from './types'
@@ -100,38 +100,33 @@ function App() {
       cancelText: 'Cancel',
       width: 600,
       onOk: async () => {
-        try {
-          const result = await apiService.clearAllData()
-          message.success(result.message || 'All data cleared successfully')
-          
-          // Show detailed results if available
-          if (result.results) {
-            const { stages_cleared, tables_truncated, errors } = result.results
-            if (errors && errors.length > 0) {
-              Modal.warning({
-                title: 'Some operations failed',
-                content: (
-                  <div>
-                    <p>Cleared: {stages_cleared.join(', ')}</p>
-                    <p>Truncated: {tables_truncated.join(', ')}</p>
-                    <p style={{ color: '#ff4d4f' }}>Errors:</p>
-                    <ul>
-                      {errors.map((err: string, idx: number) => (
-                        <li key={idx}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ),
-              })
-            }
+        const result = await apiService.clearAllData()
+        message.success(result.message || 'All data cleared successfully')
+        
+        // Show detailed results if available
+        if (result.results) {
+          const { stages_cleared, tables_truncated, errors } = result.results
+          if (errors && errors.length > 0) {
+            Modal.warning({
+              title: 'Some operations failed',
+              content: (
+                <div>
+                  <p>Cleared: {stages_cleared.join(', ')}</p>
+                  <p>Truncated: {tables_truncated.join(', ')}</p>
+                  <p style={{ color: '#ff4d4f' }}>Errors:</p>
+                  <ul>
+                    {errors.map((err: string, idx: number) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+            })
           }
-          // Return a resolved promise to close the modal
-          return Promise.resolve()
-        } catch (error: any) {
-          message.error(error.response?.data?.detail || 'Failed to clear data')
-          // Return a rejected promise to keep the modal open on error
-          return Promise.reject()
         }
+      },
+      onCancel: () => {
+        // Modal will close automatically
       },
     })
   }
@@ -164,11 +159,6 @@ function App() {
           key: '/bronze/data',
           icon: <TableOutlined />,
           label: 'Raw Data',
-        },
-        {
-          key: '/bronze/tasks',
-          icon: <SettingOutlined />,
-          label: 'Task Management',
         },
       ],
     },
@@ -231,6 +221,11 @@ function App() {
       icon: <ToolOutlined />,
       label: '⚙️ Administration',
       children: [
+        {
+          key: '/admin/tasks',
+          icon: <ThunderboltOutlined />,
+          label: 'Task Management',
+        },
         {
           key: '/admin/tpas',
           icon: <TeamOutlined />,
@@ -310,7 +305,6 @@ function App() {
               <Route path="/bronze/status" element={<BronzeStatus selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/bronze/stages" element={<BronzeStages selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/bronze/data" element={<BronzeData selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/bronze/tasks" element={<BronzeTasks />} />
               <Route path="/silver/schemas" element={<SilverSchemas selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/silver/mappings" element={<SilverMappings selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/silver/transform" element={<SilverTransform selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
@@ -319,6 +313,7 @@ function App() {
               <Route path="/gold/metrics" element={<GoldMetrics selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/gold/quality" element={<GoldQuality selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/gold/rules" element={<GoldRules selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/admin/tasks" element={<TaskManagement />} />
               <Route path="/admin/tpas" element={<TPAManagement onTpaChange={loadTpas} />} />
               <Route path="/admin/logs" element={<AdminLogs />} />
             </Routes>

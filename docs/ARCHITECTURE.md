@@ -1,7 +1,7 @@
 # Bordereau Processing Pipeline - Architecture Documentation
 
-**Version**: 3.0  
-**Last Updated**: January 27, 2026  
+**Version**: 3.1  
+**Last Updated**: January 31, 2026  
 **Status**: ✅ Production Ready
 
 ---
@@ -16,6 +16,7 @@
 6. [Design Patterns](#design-patterns)
 7. [Design Principles](#design-principles)
 8. [Technology Stack](#technology-stack)
+9. [Recent Enhancements](#recent-enhancements)
 
 ---
 
@@ -471,13 +472,93 @@ SELECT COUNT(*) FROM BRONZE.RAW_DATA_TABLE;
 
 ---
 
+---
+
+## Recent Enhancements
+
+### Transformation Validation System (2026-01-31)
+
+**Problem**: Transformations were failing silently due to invalid field mappings (e.g., mapping to non-existent columns).
+
+**Solution**: Comprehensive validation system with three layers:
+
+1. **Mapping Creation Validation** (`POST /api/silver/mappings`):
+   - Prevents duplicate mappings to same target column
+   - Validates target column exists in physical table
+   - Returns HTTP 400 with actionable error messages
+
+2. **Manual Validation Endpoint** (`GET /api/silver/mappings/validate`):
+   - Validates all mappings for a TPA/table combination
+   - Checks column existence in physical tables
+   - Detects duplicate target column mappings
+   - Returns detailed validation report with errors and warnings
+
+3. **Pre-Transformation Validation** (`POST /api/silver/transform`):
+   - Automatically validates mappings before transformation
+   - Fails fast with clear error messages
+   - Prevents wasted compute on guaranteed-to-fail transformations
+
+**Impact**: Eliminates silent failures, improves user experience, reduces debugging time.
+
+### Logging System (2026-01-31)
+
+**Implementation**: Complete observability system writing to Snowflake hybrid tables:
+
+- **Application Logs** (`BRONZE.APPLICATION_LOGS`): General Python logs (INFO, WARNING, ERROR)
+- **API Request Logs** (`BRONZE.API_REQUEST_LOGS`): HTTP request/response with timing
+- **Error Logs** (`BRONZE.ERROR_LOGS`): Detailed errors with stack traces
+
+**Components**:
+- `SnowflakeLogHandler`: Custom Python logging handler with batching
+- `APILoggingMiddleware`: FastAPI middleware for request/response capture
+- Asynchronous logging to prevent blocking main thread
+
+**Known Issue**: JSON escaping in PARSE_JSON needs fixing for full functionality.
+
+### MERGE-Based Transformations (2026-01-31)
+
+**Change**: Silver transformations now use `MERGE` instead of `INSERT`.
+
+**Benefits**:
+- **Idempotent**: Safe to re-run transformations without creating duplicates
+- **Audit Trail**: Updates `_BATCH_ID`, `_LOAD_TIMESTAMP`, `_LOADED_BY` on each run
+- **Data Quality**: `_RECORD_ID` ensures 1:1 Bronze→Silver mapping
+
+**Schema Change**: Added 7 metadata columns to all Silver tables:
+- `_RECORD_ID` (merge key, links to Bronze)
+- `_FILE_NAME`, `_FILE_ROW_NUMBER` (source traceability)
+- `_TPA`, `_BATCH_ID`, `_LOAD_TIMESTAMP`, `_LOADED_BY` (processing metadata)
+
+**Migration**: New tables auto-include columns; existing tables need manual addition.
+
+### Schema Update Fixes (2026-01-31)
+
+**Fixed**: 500 errors when updating Silver schema columns due to null handling.
+
+**Changes**:
+- Frontend only sends fields with actual values
+- Backend parses request body to distinguish "not provided" vs "provided as null"
+- Improved null handling for string operations
+
+---
+
 ## Related Documentation
 
-- [User Guide](USER_GUIDE.md) - How to use the application
-- [Deployment Guide](../deployment/README.md) - Deployment instructions
-- [Backend README](../backend/README.md) - Backend API and caller's rights
+**Core Docs**:
+- [User Guide](USER_GUIDE.md) - Application usage
+- [Changelog](CHANGELOG.md) - Detailed change history
+- [Quick Start](../QUICK_START.md) - Fast deployment
+
+**Technical Guides**:
+- [Silver Metadata Columns](guides/SILVER_METADATA_COLUMNS.md) - Data lineage reference
+- [TPA Complete Guide](guides/TPA_COMPLETE_GUIDE.md) - Multi-tenancy guide
+- [Table Editor Guide](guides/TABLE_EDITOR_APPLICATION_GUIDE.md) - Schema management
+
+**Deployment**:
+- [Deployment Guide](../deployment/README.md) - Infrastructure and deployment
+- [Backend README](../backend/README.md) - API and authentication
 
 **Layer Documentation**:
-- [Bronze Layer README](../bronze/README.md)
-- [Silver Layer README](../silver/README.md)
-- [Gold Layer README](../gold/README.md)
+- [Bronze Layer](../bronze/README.md) - File ingestion and raw storage
+- [Silver Layer](../silver/README.md) - Data transformation and cleaning
+- [Gold Layer](../gold/README.md) - Analytics and aggregations

@@ -28,10 +28,12 @@ fi
 BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-BRONZE}"
 SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-SILVER}"
 ROLE="${DEPLOY_ROLE:-SYSADMIN}"
+WAREHOUSE="${DEPLOY_WAREHOUSE:-COMPUTE_WH}"
 
 echo -e "${CYAN}  Database: ${DATABASE}${NC}"
 echo -e "${CYAN}  Silver Schema: ${SILVER_SCHEMA}${NC}"
 echo -e "${CYAN}  Role: ${ROLE}${NC}"
+echo -e "${CYAN}  Warehouse: ${WAREHOUSE}${NC}"
 
 # Function to execute SQL with variable substitution using snow CLI
 execute_sql() {
@@ -44,6 +46,7 @@ execute_sql() {
             -e "s/^SET BRONZE_SCHEMA_NAME = '.*';/SET BRONZE_SCHEMA_NAME = '${BRONZE_SCHEMA}';/" \
             -e "s/^SET SILVER_SCHEMA_NAME = '.*';/SET SILVER_SCHEMA_NAME = '${SILVER_SCHEMA}';/" \
             -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
+            -e "s/^SET WAREHOUSE_NAME = '.*';/SET WAREHOUSE_NAME = '${WAREHOUSE}';/" \
             "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME"
     else
         # Normal mode: suppress output, only show on error
@@ -52,6 +55,7 @@ execute_sql() {
             -e "s/^SET BRONZE_SCHEMA_NAME = '.*';/SET BRONZE_SCHEMA_NAME = '${BRONZE_SCHEMA}';/" \
             -e "s/^SET SILVER_SCHEMA_NAME = '.*';/SET SILVER_SCHEMA_NAME = '${SILVER_SCHEMA}';/" \
             -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
+            -e "s/^SET WAREHOUSE_NAME = '.*';/SET WAREHOUSE_NAME = '${WAREHOUSE}';/" \
             "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" 2>&1); then
             echo "$sql_output"
             return 1
@@ -67,5 +71,15 @@ execute_sql "${PROJECT_ROOT}/silver/3_Silver_Mapping_Procedures.sql"
 execute_sql "${PROJECT_ROOT}/silver/4_Silver_Rules_Engine.sql"
 execute_sql "${PROJECT_ROOT}/silver/5_Silver_Transformation_Logic.sql"
 execute_sql "${PROJECT_ROOT}/silver/6_Silver_Tasks.sql"
+
+# Optionally resume tasks
+if [[ "$DEPLOY_RESUME_TASKS" == "true" ]]; then
+    echo -e "${CYAN}Resuming Silver tasks...${NC}"
+    execute_sql "${PROJECT_ROOT}/deployment/resume_silver_tasks.sql"
+    echo -e "${GREEN}✓ Silver tasks resumed${NC}"
+else
+    echo -e "${CYAN}Tasks created in SUSPENDED state. To resume, run:${NC}"
+    echo -e "${CYAN}  snow sql -f deployment/resume_silver_tasks.sql --connection ${CONNECTION_NAME}${NC}"
+fi
 
 echo -e "${GREEN}✓ Silver layer deployed successfully${NC}"

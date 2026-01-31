@@ -202,6 +202,25 @@ export const apiService = {
   },
 
   // Silver endpoints
+  getSilverTasks: async (): Promise<any[]> => {
+    const response = await api.get('/silver/tasks')
+    return response.data
+  },
+
+  resumeSilverTask: async (taskName: string): Promise<any> => {
+    const response = await api.post(`/silver/tasks/${taskName}/resume`)
+    return response.data
+  },
+
+  suspendSilverTask: async (taskName: string): Promise<any> => {
+    const response = await api.post(`/silver/tasks/${taskName}/suspend`)
+    return response.data
+  },
+
+  updateSilverTaskSchedule: async (taskName: string, schedule: string): Promise<any> => {
+    const response = await api.put(`/silver/tasks/${taskName}/schedule`, { schedule })
+    return response.data
+  },
   getTargetSchemas: async (tableName?: string): Promise<TargetSchema[]> => {
     const response = await api.get('/silver/schemas', {
       params: { table_name: tableName },
@@ -381,6 +400,26 @@ export const apiService = {
   },
 
   // Gold endpoints
+  getGoldTasks: async (): Promise<any[]> => {
+    const response = await api.get('/gold/tasks')
+    return response.data
+  },
+
+  resumeGoldTask: async (taskName: string): Promise<any> => {
+    const response = await api.post(`/gold/tasks/${taskName}/resume`)
+    return response.data
+  },
+
+  suspendGoldTask: async (taskName: string): Promise<any> => {
+    const response = await api.post(`/gold/tasks/${taskName}/suspend`)
+    return response.data
+  },
+
+  updateGoldTaskSchedule: async (taskName: string, schedule: string): Promise<any> => {
+    const response = await api.put(`/gold/tasks/${taskName}/schedule`, { schedule })
+    return response.data
+  },
+
   getGoldTableData: async (tableName: string, tpa: string, limit = 100): Promise<any[]> => {
     const response = await api.get(`/gold/analytics/${tableName}`, {
       params: { tpa, limit },

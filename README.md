@@ -215,6 +215,15 @@ The backend supports multiple authentication methods:
 
 See [backend/README.md](backend/README.md) for setup details.
 
+## 📚 Documentation
+
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** ⚡ - One-page cheat sheet for common operations
+- **[Quick Start Guide](QUICK_START.md)** - Get up and running in 10 minutes
+- **[User Guide](docs/USER_GUIDE.md)** - Complete usage guide
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and technical details
+- **[Changelog](docs/CHANGELOG.md)** - Recent updates and fixes
+- **[Deployment Guide](deployment/README.md)** - Infrastructure and deployment
+
 ## 🐛 Troubleshooting
 
 **Backend issues**: Check Snowflake credentials, verify Python 3.10+  
@@ -224,6 +233,7 @@ See [backend/README.md](backend/README.md) for setup details.
 **For detailed troubleshooting:**
 - [Documentation Hub](docs/README.md) - Full documentation and guides
 - [Deployment Guide](deployment/README.md) - Deployment troubleshooting
+- [Changelog](docs/CHANGELOG.md) - Known issues and recent fixes
 
 ## 📝 License
 
@@ -231,4 +241,4 @@ Proprietary software. All rights reserved.
 
 ---
 
-**Version**: 3.0 | **Last Updated**: January 27, 2026 | **Status**: ✅ Production Ready
+**Version**: 3.1 | **Last Updated**: January 31, 2026 | **Status**: ✅ Production Ready

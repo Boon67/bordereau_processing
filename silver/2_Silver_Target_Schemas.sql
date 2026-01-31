@@ -79,6 +79,9 @@ def create_silver_table(session, table_name, tpa):
         column_defs.append(col_def)
     
     # Add metadata columns
+    column_defs.append("_RECORD_ID NUMBER(38,0) NOT NULL UNIQUE")  # Unique identifier from Bronze RECORD_ID
+    column_defs.append("_FILE_NAME VARCHAR(500)")  # Source file name from Bronze
+    column_defs.append("_FILE_ROW_NUMBER NUMBER(38,0)")  # Row number in source file from Bronze
     column_defs.append(f"_TPA VARCHAR(100) DEFAULT '{tpa}'")
     column_defs.append("_BATCH_ID VARCHAR(100)")
     column_defs.append("_LOAD_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()")
@@ -99,7 +102,7 @@ def create_silver_table(session, table_name, tpa):
     """
     session.sql(tracking_sql).collect()
     
-    return f"Successfully created table: {full_table_name} ({len(columns)} columns + 4 metadata columns)"
+    return f"Successfully created table: {full_table_name} ({len(columns)} columns + 7 metadata columns)"
 $$;
 
 -- ============================================

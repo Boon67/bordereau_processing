@@ -1,41 +1,60 @@
 # Documentation Hub
 
-**Version**: 5.0 (Extremely Consolidated)  
+**Version**: 6.0 (Extreme Consolidation)  
 **Last Updated**: January 31, 2026
 
 ---
 
-## 📚 Core Documentation
+## 📚 Start Here
 
-| Document | Description |
+| Document | Use When... |
 |----------|-------------|
-| [README](../README.md) | Project overview |
-| [Quick Start](../QUICK_START.md) | 10-minute setup |
-| [Architecture](ARCHITECTURE.md) | System design, patterns, logging, and testing |
-| [User Guide](USER_GUIDE.md) | Complete usage guide with TPA |
+| [Quick Reference](QUICK_REFERENCE.md) ⚡ | Need fast answers, common operations |
+| [Quick Start](../QUICK_START.md) | First-time setup (10 min) |
+| [User Guide](USER_GUIDE.md) | Learning to use the application |
+| [Architecture](ARCHITECTURE.md) | Understanding system design |
+| [Changelog](CHANGELOG.md) | Checking recent updates |
 
 ---
 
 ## 🎯 By Role
 
-**End Users**: [User Guide](USER_GUIDE.md)  
-**Developers**: [Architecture](ARCHITECTURE.md) + [Backend](../backend/README.md)  
-**DevOps**: [Deployment](../deployment/README.md)
+**End Users**: [Quick Reference](QUICK_REFERENCE.md) → [User Guide](USER_GUIDE.md)  
+**Developers**: [Architecture](ARCHITECTURE.md) → [Backend](../backend/README.md)  
+**DevOps**: [Deployment](../deployment/README.md) → [Quick Reference](QUICK_REFERENCE.md)
 
 ---
 
-## 📁 Layer Docs
+## 📖 Detailed Guides
 
-[Bronze](../bronze/README.md) | [Silver](../silver/README.md) | [Gold](../gold/README.md)
+**Technical**:
+- [Silver Metadata Columns](guides/SILVER_METADATA_COLUMNS.md) - Data lineage reference
+- [TPA Complete Guide](guides/TPA_COMPLETE_GUIDE.md) - Multi-tenancy deep dive
+- [Table Editor Guide](guides/TABLE_EDITOR_APPLICATION_GUIDE.md) - Schema management
+
+**Layer Docs**: [Bronze](../bronze/README.md) | [Silver](../silver/README.md) | [Gold](../gold/README.md)
+
+**Historical**: [Changelog Archive](changelog/) - Detailed fix documentation
 
 ---
 
 ## 🚀 Quick Commands
 
-**Local**: `./start.sh`  
-**Deploy**: `cd deployment && ./deploy.sh`  
-**API Docs**: http://localhost:8000/api/docs
+```bash
+# Local development
+./start.sh
+
+# Full deployment
+cd deployment && ./deploy.sh
+
+# Service management
+cd deployment && ./manage_services.sh status
+
+# API documentation
+open http://localhost:8000/api/docs
+```
 
 ---
 
-**12 essential files** | **75% reduction** | **100% information preserved**
+**Structure**: 1 quick ref + 4 core docs + 3 guides + 3 layer docs = **11 essential files**  
+**Reduction**: 80% fewer docs | **100% information preserved** | ⚡ **Faster navigation**

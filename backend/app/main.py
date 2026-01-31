@@ -12,7 +12,7 @@ import logging
 from app.api import bronze, silver, gold, tpa, user, logs
 from app.services.snowflake_service import SnowflakeService
 from app.config import settings
-from app.middleware.logging_middleware import LoggingMiddleware
+from app.middleware.logging_middleware import APILoggingMiddleware
 from app.middleware.auth_middleware import SnowflakeAuthMiddleware
 
 # Configure logging
@@ -21,6 +21,16 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add Snowflake logging handler
+try:
+    from app.utils.snowflake_logger import SnowflakeLogHandler
+    snowflake_handler = SnowflakeLogHandler(batch_size=10, flush_interval=5)
+    snowflake_handler.setLevel(logging.INFO)
+    logging.getLogger().addHandler(snowflake_handler)
+    logger.info("Snowflake logging handler initialized")
+except Exception as e:
+    logger.warning(f"Failed to initialize Snowflake logging handler: {e}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -47,8 +57,8 @@ app.add_middleware(
 # Add authentication middleware (extracts caller's token from cookies)
 app.add_middleware(SnowflakeAuthMiddleware)
 
-# Add logging middleware
-app.add_middleware(LoggingMiddleware)
+# Add API request logging middleware
+app.add_middleware(APILoggingMiddleware)
 
 # Include routers
 app.include_router(tpa.router, prefix="/api/tpas", tags=["TPA"])

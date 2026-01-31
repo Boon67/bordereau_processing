@@ -472,11 +472,135 @@ async def get_field_mappings(request: Request, tpa: str, target_table: Optional[
         logger.error(f"Failed to get field mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/mappings")
-async def create_field_mapping(request: Request, mapping: FieldMappingCreate):
-    """Create field mapping"""
+@router.get("/mappings/validate")
+async def validate_field_mappings(request: Request, tpa: str, target_table: str):
+    """Validate field mappings against physical table structure"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Get all active approved mappings
+        mappings_query = f"""
+            SELECT source_field, target_column, mapping_id
+            FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
+            WHERE target_table = '{target_table.upper()}'
+              AND tpa = '{tpa}'
+              AND approved = TRUE
+              AND active = TRUE
+        """
+        mappings = await sf_service.execute_query_dict(mappings_query)
+        
+        if not mappings:
+            return {
+                "valid": False,
+                "message": "No approved mappings found",
+                "errors": [],
+                "warnings": []
+            }
+        
+        # Get physical table columns
+        physical_table_name = f"{tpa.upper()}_{target_table.upper()}"
+        columns_query = f"""
+            SELECT column_name
+            FROM {settings.SILVER_SCHEMA_NAME}.INFORMATION_SCHEMA.COLUMNS
+            WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
+              AND table_name = '{physical_table_name}'
+        """
+        
+        try:
+            columns_result = await sf_service.execute_query_dict(columns_query)
+            existing_columns = {row['COLUMN_NAME'].upper() for row in columns_result}
+        except Exception as e:
+            return {
+                "valid": False,
+                "message": f"Could not validate: table '{physical_table_name}' may not exist",
+                "errors": [str(e)],
+                "warnings": []
+            }
+        
+        # Validate each mapping
+        errors = []
+        warnings = []
+        duplicate_targets = {}
+        
+        for mapping in mappings:
+            target_col = mapping['TARGET_COLUMN'].upper()
+            
+            # Check if target column exists
+            if target_col not in existing_columns:
+                errors.append({
+                    "mapping_id": mapping['MAPPING_ID'],
+                    "source_field": mapping['SOURCE_FIELD'],
+                    "target_column": target_col,
+                    "error": f"Target column '{target_col}' does not exist in table '{physical_table_name}'"
+                })
+            
+            # Check for duplicate target columns
+            if target_col in duplicate_targets:
+                warnings.append({
+                    "target_column": target_col,
+                    "warning": f"Multiple source fields mapped to '{target_col}': {duplicate_targets[target_col]} and {mapping['SOURCE_FIELD']}"
+                })
+            else:
+                duplicate_targets[target_col] = mapping['SOURCE_FIELD']
+        
+        return {
+            "valid": len(errors) == 0,
+            "message": "All mappings are valid" if len(errors) == 0 else f"Found {len(errors)} invalid mapping(s)",
+            "errors": errors,
+            "warnings": warnings,
+            "total_mappings": len(mappings),
+            "physical_table": physical_table_name
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to validate field mappings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/mappings")
+async def create_field_mapping(request: Request, mapping: FieldMappingCreate):
+    """Create field mapping with validation"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Validation 1: Check if mapping already exists
+        check_duplicate_query = f"""
+            SELECT COUNT(*) as count
+            FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
+            WHERE target_table = '{mapping.target_table.upper()}'
+              AND target_column = '{mapping.target_column.upper()}'
+              AND tpa = '{mapping.tpa}'
+              AND active = TRUE
+        """
+        duplicate_result = await sf_service.execute_query_dict(check_duplicate_query)
+        if duplicate_result and duplicate_result[0]['COUNT'] > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Mapping already exists for target column '{mapping.target_column}' in table '{mapping.target_table}' for TPA '{mapping.tpa}'"
+            )
+        
+        # Validation 2: Check if target column exists in physical table
+        physical_table_name = f"{mapping.tpa.upper()}_{mapping.target_table.upper()}"
+        try:
+            column_check_query = f"""
+                SELECT column_name
+                FROM {settings.SILVER_SCHEMA_NAME}.INFORMATION_SCHEMA.COLUMNS
+                WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
+                  AND table_name = '{physical_table_name}'
+                  AND column_name = '{mapping.target_column.upper()}'
+            """
+            column_result = await sf_service.execute_query_dict(column_check_query)
+            if not column_result or len(column_result) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Target column '{mapping.target_column}' does not exist in table '{physical_table_name}'. Please add it to the target schema first."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not validate column existence: {str(e)}")
+            # Continue anyway if we can't check (table might not exist yet)
+        
+        # Create the mapping
         query = f"""
             INSERT INTO {settings.SILVER_SCHEMA_NAME}.field_mappings
             (source_field, target_table, target_column, tpa, mapping_method, transformation_logic, description, approved)
@@ -487,6 +611,8 @@ async def create_field_mapping(request: Request, mapping: FieldMappingCreate):
         """
         await sf_service.execute_query(query)
         return {"message": "Field mapping created successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create field mapping: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -595,9 +721,60 @@ async def decline_mapping(request: Request, mapping_id: int):
 
 @router.post("/transform")
 async def transform_bronze_to_silver(request: Request, transform_request: TransformRequest):
-    """Transform Bronze data to Silver"""
+    """Transform Bronze data to Silver with pre-validation"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Log transformation start
+        logger.info(f"Starting transformation: {transform_request.target_table} for TPA {transform_request.tpa}")
+        
+        # Pre-validation: Check mappings before running transformation
+        try:
+            mappings_query = f"""
+                SELECT target_column
+                FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
+                WHERE target_table = '{transform_request.target_table.upper()}'
+                  AND tpa = '{transform_request.tpa}'
+                  AND approved = TRUE
+                  AND active = TRUE
+            """
+            mappings = await sf_service.execute_query_dict(mappings_query)
+            
+            if not mappings or len(mappings) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No approved mappings found for table '{transform_request.target_table}' and TPA '{transform_request.tpa}'. Please create and approve mappings first."
+                )
+            
+            # Check if physical table exists and validate columns
+            physical_table_name = f"{transform_request.tpa.upper()}_{transform_request.target_table.upper()}"
+            columns_query = f"""
+                SELECT column_name
+                FROM {settings.SILVER_SCHEMA_NAME}.INFORMATION_SCHEMA.COLUMNS
+                WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
+                  AND table_name = '{physical_table_name}'
+            """
+            columns_result = await sf_service.execute_query_dict(columns_query)
+            existing_columns = {row['COLUMN_NAME'].upper() for row in columns_result}
+            
+            # Validate all mapped columns exist
+            invalid_columns = []
+            for mapping in mappings:
+                if mapping['TARGET_COLUMN'].upper() not in existing_columns:
+                    invalid_columns.append(mapping['TARGET_COLUMN'])
+            
+            if invalid_columns:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid mappings detected: columns {', '.join(invalid_columns)} do not exist in table '{physical_table_name}'. Please fix the mappings before transforming."
+                )
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not pre-validate mappings: {str(e)}. Proceeding with transformation...")
+        
+        # Execute transformation
         # Note: Procedure signature is (target_table, tpa, source_table, source_schema, batch_size, apply_rules, incremental)
         result = await sf_service.execute_procedure(
             "transform_bronze_to_silver",
@@ -609,7 +786,140 @@ async def transform_bronze_to_silver(request: Request, transform_request: Transf
             transform_request.apply_rules,
             transform_request.incremental
         )
-        return {"message": "Transformation completed", "result": result}
+        logger.info(f"Transformation completed. Result type: {type(result)}, Result value: {result}")
+        
+        # Ensure result is a string
+        result_str = str(result) if result is not None else "Transformation completed with unknown status"
+        
+        return {"message": "Transformation completed", "result": result_str}
     except Exception as e:
-        logger.error(f"Transformation failed: {str(e)}")
+        logger.error(f"Transformation failed: {str(e)}", exc_info=True)
+        
+        # Log error to Snowflake
+        from app.utils.snowflake_logger import log_error
+        from app.utils.auth_utils import get_caller_user
+        import traceback
+        
+        try:
+            await log_error(
+                source="transform_bronze_to_silver",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                stack_trace=traceback.format_exc(),
+                context={
+                    "target_table": transform_request.target_table,
+                    "tpa": transform_request.tpa,
+                    "source_table": transform_request.source_table
+                },
+                user_name=get_caller_user(request),
+                tpa_code=transform_request.tpa
+            )
+        except:
+            pass  # Don't let logging errors crash the response
+        
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# Task Management Endpoints
+# ============================================
+
+@router.get("/tasks")
+async def get_silver_tasks(request: Request):
+    """Get Silver tasks status with predecessor information"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        query = f"SHOW TASKS IN SCHEMA {settings.SILVER_SCHEMA_NAME}"
+        tasks = await sf_service.execute_query_dict(query, timeout=30)
+        
+        # Add predecessor information to each task
+        for task in tasks:
+            task_name = task.get('name', '')
+            # Get task details including predecessors
+            desc_query = f"DESC TASK {settings.SILVER_SCHEMA_NAME}.{task_name}"
+            try:
+                desc_result = await sf_service.execute_query_dict(desc_query, timeout=30)
+                # Find predecessor info in description
+                for row in desc_result:
+                    if row.get('property', '').upper() == 'PREDECESSORS':
+                        task['predecessors'] = row.get('value', '')
+                        break
+                else:
+                    task['predecessors'] = ''
+            except:
+                task['predecessors'] = ''
+        
+        return tasks
+    except Exception as e:
+        logger.error(f"Failed to get Silver tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/tasks/{task_name}/resume")
+async def resume_silver_task(request: Request, task_name: str):
+    """Resume a Silver task"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        query = f"ALTER TASK {settings.SILVER_SCHEMA_NAME}.{task_name} RESUME"
+        await sf_service.execute_query(query)
+        return {"message": f"Task {task_name} resumed successfully"}
+    except Exception as e:
+        logger.error(f"Failed to resume Silver task: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/tasks/{task_name}/suspend")
+async def suspend_silver_task(request: Request, task_name: str):
+    """Suspend a Silver task"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        query = f"ALTER TASK {settings.SILVER_SCHEMA_NAME}.{task_name} SUSPEND"
+        await sf_service.execute_query(query, timeout=30)
+        return {"message": f"Task {task_name} suspended successfully"}
+    except Exception as e:
+        logger.error(f"Failed to suspend Silver task: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class SilverScheduleUpdate(BaseModel):
+    schedule: str
+
+@router.put("/tasks/{task_name}/schedule")
+async def update_silver_task_schedule(request: Request, task_name: str, schedule_update: SilverScheduleUpdate):
+    """Update Silver task schedule (only for root tasks without predecessors)"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        schedule = schedule_update.schedule
+        
+        # Check if task has predecessors
+        desc_query = f"DESC TASK {settings.SILVER_SCHEMA_NAME}.{task_name}"
+        desc_result = await sf_service.execute_query_dict(desc_query, timeout=30)
+        
+        has_predecessors = False
+        for row in desc_result:
+            if row.get('property', '').upper() == 'PREDECESSORS':
+                predecessors = row.get('value', '')
+                if predecessors and predecessors.strip():
+                    has_predecessors = True
+                    break
+        
+        if has_predecessors:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot modify schedule for tasks with predecessors. Only root tasks can have their schedule changed."
+            )
+        
+        # Suspend task first
+        suspend_query = f"ALTER TASK {settings.SILVER_SCHEMA_NAME}.{task_name} SUSPEND"
+        await sf_service.execute_query(suspend_query, timeout=30)
+        
+        # Update schedule
+        update_query = f"ALTER TASK {settings.SILVER_SCHEMA_NAME}.{task_name} SET SCHEDULE = '{schedule}'"
+        await sf_service.execute_query(update_query, timeout=30)
+        
+        # Resume task
+        resume_query = f"ALTER TASK {settings.SILVER_SCHEMA_NAME}.{task_name} RESUME"
+        await sf_service.execute_query(resume_query, timeout=30)
+        
+        return {"message": f"Task {task_name} schedule updated successfully to: {schedule}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update Silver task schedule: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

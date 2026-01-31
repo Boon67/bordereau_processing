@@ -84,9 +84,8 @@ def transform_bronze_to_silver(session, target_table, tpa, source_table, source_
         # Build full target table name (TPA_TABLENAME format)
         full_target_table = f"{tpa.upper()}_{target_table.upper()}"
         
-        # Build column list for INSERT
+        # Build column list for MERGE
         target_columns = [m['TARGET_COLUMN'] for m in mappings]
-        columns_str = ', '.join(target_columns)
         
         # Build SELECT statement with field mappings
         select_parts = []
@@ -103,24 +102,57 @@ def transform_bronze_to_silver(session, target_table, tpa, source_table, source_
         
         select_str = ',\n            '.join(select_parts)
         
-        # Build and execute INSERT statement
-        insert_query = f"""
-            INSERT INTO {full_target_table} ({columns_str})
-            SELECT 
-                {select_str}
-            FROM {source_schema}.{source_table}
-            WHERE TPA = '{tpa}'
-              AND RAW_DATA IS NOT NULL
-            LIMIT {batch_size}
+        # Build column list strings for MERGE statement
+        columns_str = ', '.join(target_columns)
+        update_set_parts = [f"{col} = source.{col}" for col in target_columns]
+        update_set_str = ',\n                '.join(update_set_parts)
+        insert_columns_str = ', '.join(['_RECORD_ID', '_FILE_NAME', '_FILE_ROW_NUMBER'] + target_columns + ['_TPA', '_BATCH_ID', '_LOAD_TIMESTAMP', '_LOADED_BY'])
+        insert_values_str = ', '.join(['source._RECORD_ID', 'source._FILE_NAME', 'source._FILE_ROW_NUMBER'] + [f'source.{col}' for col in target_columns] + ['source._TPA', 'source._BATCH_ID', 'source._LOAD_TIMESTAMP', 'source._LOADED_BY'])
+        
+        # Build and execute MERGE statement
+        merge_query = f"""
+            MERGE INTO {full_target_table} AS target
+            USING (
+                SELECT 
+                    RECORD_ID AS _RECORD_ID,
+                    FILE_NAME AS _FILE_NAME,
+                    FILE_ROW_NUMBER AS _FILE_ROW_NUMBER,
+                    {select_str},
+                    '{tpa}' AS _TPA,
+                    '{batch_id}' AS _BATCH_ID,
+                    CURRENT_TIMESTAMP() AS _LOAD_TIMESTAMP,
+                    CURRENT_USER() AS _LOADED_BY
+                FROM {source_schema}.{source_table}
+                WHERE TPA = '{tpa}'
+                  AND RAW_DATA IS NOT NULL
+                LIMIT {batch_size}
+            ) AS source
+            ON target._RECORD_ID = source._RECORD_ID
+            WHEN MATCHED THEN
+                UPDATE SET
+                {update_set_str},
+                _FILE_NAME = source._FILE_NAME,
+                _FILE_ROW_NUMBER = source._FILE_ROW_NUMBER,
+                _BATCH_ID = source._BATCH_ID,
+                _LOAD_TIMESTAMP = source._LOAD_TIMESTAMP,
+                _LOADED_BY = source._LOADED_BY
+            WHEN NOT MATCHED THEN
+                INSERT ({insert_columns_str})
+                VALUES ({insert_values_str})
         """
         
         # Execute transformation
-        session.sql(insert_query).collect()
+        merge_result = session.sql(merge_query).collect()
         
-        # Get the actual number of rows inserted
-        count_query = f"SELECT COUNT(*) as row_count FROM {full_target_table}"
-        count_result = session.sql(count_query).collect()
-        records_processed = count_result[0]['ROW_COUNT'] if count_result else 0
+        # Get the number of rows affected from the merge result
+        if merge_result and len(merge_result) > 0:
+            result_row = merge_result[0]
+            # MERGE returns: number of rows inserted, number of rows updated
+            rows_inserted = result_row.get('number of rows inserted') or result_row.get('NUMBER OF ROWS INSERTED') or 0
+            rows_updated = result_row.get('number of rows updated') or result_row.get('NUMBER OF ROWS UPDATED') or 0
+            records_processed = rows_inserted + rows_updated
+        else:
+            records_processed = 0
         
         # Log success
         session.sql(f"""
@@ -133,7 +165,7 @@ def transform_bronze_to_silver(session, target_table, tpa, source_table, source_
               AND processing_type = 'TRANSFORMATION'
         """).collect()
         
-        return f"SUCCESS: Transformed {records_processed} records from {source_table} to {full_target_table}"
+        return f"SUCCESS: Merged {records_processed} records from {source_table} to {full_target_table} (inserted/updated)"
         
     except Exception as e:
         # Log error

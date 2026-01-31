@@ -28,6 +28,16 @@ async def get_gold_table_data(request: Request, table_name: str, tpa: str, limit
         if table_name.upper() not in valid_tables:
             raise HTTPException(status_code=400, detail=f"Invalid table name. Must be one of: {valid_tables}")
         
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return []
+        
         # Build query with TPA filter
         tpa_suffix = f"_{tpa}" if tpa != 'ALL' else "_ALL"
         full_table_name = f"{table_name.upper()}{tpa_suffix}"
@@ -44,6 +54,8 @@ async def get_gold_table_data(request: Request, table_name: str, tpa: str, limit
         raise
     except Exception as e:
         logger.error(f"Failed to get Gold table data: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analytics/{table_name}/stats")
@@ -56,6 +68,16 @@ async def get_gold_stats(request: Request, table_name: str, tpa: str):
         valid_tables = ['CLAIMS_ANALYTICS', 'MEMBER_360', 'PROVIDER_PERFORMANCE', 'FINANCIAL_SUMMARY']
         if table_name.upper() not in valid_tables:
             raise HTTPException(status_code=400, detail=f"Invalid table name. Must be one of: {valid_tables}")
+        
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return {"total_records": 0, "last_updated": None, "status": "No Data", "quality_score": 0}
         
         tpa_suffix = f"_{tpa}" if tpa != 'ALL' else "_ALL"
         full_table_name = f"{table_name.upper()}{tpa_suffix}"
@@ -78,6 +100,8 @@ async def get_gold_stats(request: Request, table_name: str, tpa: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get Gold stats: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return {"total_records": 0, "last_updated": None, "status": "No Data", "quality_score": 0}
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/metrics")
@@ -85,6 +109,16 @@ async def get_business_metrics(request: Request, tpa: str):
     """Get business metrics for TPA"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return []
         
         query = f"""
             SELECT 
@@ -108,6 +142,9 @@ async def get_business_metrics(request: Request, tpa: str):
         return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get business metrics: {str(e)}")
+        # Return empty array instead of error for missing tables
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/quality/results")
@@ -115,6 +152,16 @@ async def get_quality_check_results(request: Request, tpa: str, limit: int = 100
     """Get quality check results for TPA"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return []
         
         query = f"""
             SELECT 
@@ -152,6 +199,8 @@ async def get_quality_check_results(request: Request, tpa: str, limit: int = 100
         return results
     except Exception as e:
         logger.error(f"Failed to get quality check results: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/quality/stats")
@@ -159,6 +208,16 @@ async def get_quality_stats(request: Request, tpa: str):
     """Get quality statistics for TPA"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return {"total_checks": 0, "passed_checks": 0, "failed_checks": 0, "warning_checks": 0, "pass_rate": 0}
         
         query = f"""
             SELECT 
@@ -172,9 +231,11 @@ async def get_quality_stats(request: Request, tpa: str):
         """
         
         result = await sf_service.execute_query_dict(query)
-        return result[0] if result and len(result) > 0 else {}
+        return result[0] if result and len(result) > 0 else {"total_checks": 0, "passed_checks": 0, "failed_checks": 0, "warning_checks": 0, "pass_rate": 0}
     except Exception as e:
         logger.error(f"Failed to get quality stats: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return {"total_checks": 0, "passed_checks": 0, "failed_checks": 0, "warning_checks": 0, "pass_rate": 0}
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/rules/transformation")
@@ -182,6 +243,16 @@ async def get_transformation_rules(request: Request, tpa: str):
     """Get transformation rules for TPA"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return []
         
         query = f"""
             SELECT 
@@ -207,6 +278,8 @@ async def get_transformation_rules(request: Request, tpa: str):
         return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get transformation rules: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/rules/quality")
@@ -214,6 +287,16 @@ async def get_quality_rules(request: Request, tpa: str):
     """Get quality rules for TPA"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Check if Gold schema exists
+        check_schema = f"""
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.SCHEMATA 
+            WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
+        """
+        schema_result = await sf_service.execute_query_dict(check_schema)
+        if not schema_result or schema_result[0]['CNT'] == 0:
+            return []
         
         query = f"""
             SELECT 
@@ -240,6 +323,8 @@ async def get_quality_rules(request: Request, tpa: str):
         return await sf_service.execute_query_dict(query)
     except Exception as e:
         logger.error(f"Failed to get quality rules: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/rules/transformation/{rule_id}/status")
@@ -286,4 +371,109 @@ async def update_quality_rule_status(request: Request, rule_id: int, status: Rul
         }
     except Exception as e:
         logger.error(f"Failed to update quality rule status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# Task Management Endpoints
+# ============================================
+
+@router.get("/tasks")
+async def get_gold_tasks(request: Request):
+    """Get Gold tasks status with predecessor information"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        query = f"SHOW TASKS IN SCHEMA {settings.GOLD_SCHEMA_NAME}"
+        tasks = await sf_service.execute_query_dict(query, timeout=30)
+        
+        # Add predecessor information to each task
+        for task in tasks:
+            task_name = task.get('name', '')
+            # Get task details including predecessors
+            desc_query = f"DESC TASK {settings.GOLD_SCHEMA_NAME}.{task_name}"
+            try:
+                desc_result = await sf_service.execute_query_dict(desc_query, timeout=30)
+                # Find predecessor info in description
+                for row in desc_result:
+                    if row.get('property', '').upper() == 'PREDECESSORS':
+                        task['predecessors'] = row.get('value', '')
+                        break
+                else:
+                    task['predecessors'] = ''
+            except:
+                task['predecessors'] = ''
+        
+        return tasks
+    except Exception as e:
+        logger.error(f"Failed to get Gold tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/tasks/{task_name}/resume")
+async def resume_gold_task(request: Request, task_name: str):
+    """Resume a Gold task"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        query = f"ALTER TASK {settings.GOLD_SCHEMA_NAME}.{task_name} RESUME"
+        await sf_service.execute_query(query)
+        return {"message": f"Task {task_name} resumed successfully"}
+    except Exception as e:
+        logger.error(f"Failed to resume Gold task: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/tasks/{task_name}/suspend")
+async def suspend_gold_task(request: Request, task_name: str):
+    """Suspend a Gold task"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        query = f"ALTER TASK {settings.GOLD_SCHEMA_NAME}.{task_name} SUSPEND"
+        await sf_service.execute_query(query, timeout=30)
+        return {"message": f"Task {task_name} suspended successfully"}
+    except Exception as e:
+        logger.error(f"Failed to suspend Gold task: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class GoldScheduleUpdate(BaseModel):
+    schedule: str
+
+@router.put("/tasks/{task_name}/schedule")
+async def update_gold_task_schedule(request: Request, task_name: str, schedule_update: GoldScheduleUpdate):
+    """Update Gold task schedule (only for root tasks without predecessors)"""
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        schedule = schedule_update.schedule
+        
+        # Check if task has predecessors
+        desc_query = f"DESC TASK {settings.GOLD_SCHEMA_NAME}.{task_name}"
+        desc_result = await sf_service.execute_query_dict(desc_query, timeout=30)
+        
+        has_predecessors = False
+        for row in desc_result:
+            if row.get('property', '').upper() == 'PREDECESSORS':
+                predecessors = row.get('value', '')
+                if predecessors and predecessors.strip():
+                    has_predecessors = True
+                    break
+        
+        if has_predecessors:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot modify schedule for tasks with predecessors. Only root tasks can have their schedule changed."
+            )
+        
+        # Suspend task first
+        suspend_query = f"ALTER TASK {settings.GOLD_SCHEMA_NAME}.{task_name} SUSPEND"
+        await sf_service.execute_query(suspend_query, timeout=30)
+        
+        # Update schedule
+        update_query = f"ALTER TASK {settings.GOLD_SCHEMA_NAME}.{task_name} SET SCHEDULE = '{schedule}'"
+        await sf_service.execute_query(update_query, timeout=30)
+        
+        # Resume task
+        resume_query = f"ALTER TASK {settings.GOLD_SCHEMA_NAME}.{task_name} RESUME"
+        await sf_service.execute_query(resume_query, timeout=30)
+        
+        return {"message": f"Task {task_name} schedule updated successfully to: {schedule}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update Gold task schedule: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

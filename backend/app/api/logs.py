@@ -56,10 +56,13 @@ async def get_application_logs(
         """
         
         result = await sf_service.execute_query(query)
-        return result
+        return result if result else []
         
     except Exception as e:
         logger.error(f"Error fetching application logs: {str(e)}")
+        # Return empty array if table doesn't exist or query fails
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -107,10 +110,12 @@ async def get_task_execution_logs(
         """
         
         result = await sf_service.execute_query(query)
-        return result
+        return result if result else []
         
     except Exception as e:
         logger.error(f"Error fetching task execution logs: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -164,10 +169,12 @@ async def get_file_processing_logs(
         """
         
         result = await sf_service.execute_query(query)
-        return result
+        return result if result else []
         
     except Exception as e:
         logger.error(f"Error fetching file processing logs: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -218,10 +225,12 @@ async def get_error_logs(
         """
         
         result = await sf_service.execute_query(query)
-        return result
+        return result if result else []
         
     except Exception as e:
         logger.error(f"Error fetching error logs: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -274,10 +283,12 @@ async def get_api_request_logs(
         """
         
         result = await sf_service.execute_query(query)
-        return result
+        return result if result else []
         
     except Exception as e:
         logger.error(f"Error fetching API request logs: {str(e)}")
+        if "does not exist" in str(e).lower() or "invalid" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 

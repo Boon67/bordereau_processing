@@ -134,7 +134,7 @@ show_backend_status() {
     echo ""
     
     log_info "Service: $BACKEND_SERVICE_NAME"
-    execute_sql "SELECT SYSTEM\$GET_SERVICE_STATUS('${BACKEND_SERVICE_NAME}')"
+    execute_sql "CALL SYSTEM\\\$GET_SERVICE_STATUS('${DATABASE_NAME}.${SCHEMA_NAME}.${BACKEND_SERVICE_NAME}')"
     
     echo ""
     log_info "Endpoint:"
@@ -158,7 +158,7 @@ show_frontend_status() {
         echo ""
         
         log_info "Service: $UNIFIED_SERVICE_NAME"
-        execute_sql "SELECT SYSTEM\$GET_SERVICE_STATUS('${UNIFIED_SERVICE_NAME}')"
+        execute_sql "CALL SYSTEM\\\$GET_SERVICE_STATUS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}')"
         
         echo ""
         log_info "Public Endpoint (Frontend):"
@@ -185,7 +185,7 @@ show_frontend_status() {
     echo ""
     
     log_info "Service: $FRONTEND_SERVICE_NAME"
-    execute_sql "SELECT SYSTEM\$GET_SERVICE_STATUS('${FRONTEND_SERVICE_NAME}')"
+    execute_sql "CALL SYSTEM\\\$GET_SERVICE_STATUS('${DATABASE_NAME}.${SCHEMA_NAME}.${FRONTEND_SERVICE_NAME}')"
     
     echo ""
     log_info "Endpoint:"
@@ -236,19 +236,19 @@ show_logs() {
         case "$service" in
             backend)
                 log_info "Getting backend logs (last $lines lines)..."
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${UNIFIED_SERVICE_NAME}', 0, 'backend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}', '0', 'backend', ${lines})"
                 ;;
             frontend)
                 log_info "Getting frontend logs (last $lines lines)..."
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${UNIFIED_SERVICE_NAME}', 0, 'frontend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}', '0', 'frontend', ${lines})"
                 ;;
             all)
                 echo ""
                 echo -e "${CYAN}━━━━ Backend Container Logs (last $lines lines) ━━━━${NC}"
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${UNIFIED_SERVICE_NAME}', 0, 'backend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}', '0', 'backend', ${lines})"
                 echo ""
                 echo -e "${MAGENTA}━━━━ Frontend Container Logs (last $lines lines) ━━━━${NC}"
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${UNIFIED_SERVICE_NAME}', 0, 'frontend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}', '0', 'frontend', ${lines})"
                 ;;
             *)
                 log_error "Invalid service: $service (use: backend, frontend, or all)"
@@ -260,19 +260,19 @@ show_logs() {
         case "$service" in
             backend)
                 log_info "Getting backend logs (last $lines lines)..."
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${BACKEND_SERVICE_NAME}', 0, 'backend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${BACKEND_SERVICE_NAME}', '0', 'backend', ${lines})"
                 ;;
             frontend)
                 log_info "Getting frontend logs (last $lines lines)..."
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${FRONTEND_SERVICE_NAME}', 0, 'frontend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${FRONTEND_SERVICE_NAME}', '0', 'frontend', ${lines})"
                 ;;
             all)
                 echo ""
                 echo -e "${CYAN}━━━━ Backend Logs (last $lines lines) ━━━━${NC}"
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${BACKEND_SERVICE_NAME}', 0, 'backend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${BACKEND_SERVICE_NAME}', '0', 'backend', ${lines})"
                 echo ""
                 echo -e "${MAGENTA}━━━━ Frontend Logs (last $lines lines) ━━━━${NC}"
-                execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${FRONTEND_SERVICE_NAME}', 0, 'frontend', ${lines})"
+                execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${FRONTEND_SERVICE_NAME}', '0', 'frontend', ${lines})"
                 ;;
             *)
                 log_error "Invalid service: $service (use: backend, frontend, or all)"
@@ -558,11 +558,11 @@ show_all() {
     echo ""
     
     echo -e "${CYAN}Backend (last 10 lines):${NC}"
-    execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${BACKEND_SERVICE_NAME}', 0, 'backend', 10)"
+    execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${BACKEND_SERVICE_NAME}', '0', 'backend', 10)"
     echo ""
     
     echo -e "${MAGENTA}Frontend (last 10 lines):${NC}"
-    execute_sql "SELECT SYSTEM\$GET_SERVICE_LOGS('${FRONTEND_SERVICE_NAME}', 0, 'frontend', 10)"
+    execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${FRONTEND_SERVICE_NAME}', '0', 'frontend', 10)"
     echo ""
 }
 
