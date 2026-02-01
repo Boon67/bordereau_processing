@@ -47,6 +47,21 @@ function App() {
   const [tpas, setTpas] = useState<TPA[]>([])
   const [loading, setLoading] = useState(true)
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [openKeys, setOpenKeys] = useState<string[]>([])
+
+  // Determine which menu should be open based on current path
+  useEffect(() => {
+    const path = location.pathname
+    if (path.startsWith('/bronze')) {
+      setOpenKeys(['bronze'])
+    } else if (path.startsWith('/silver')) {
+      setOpenKeys(['silver'])
+    } else if (path.startsWith('/gold')) {
+      setOpenKeys(['gold'])
+    } else if (path.startsWith('/admin')) {
+      setOpenKeys(['admin'])
+    }
+  }, [location.pathname])
 
   useEffect(() => {
     loadTpas()
@@ -279,6 +294,8 @@ function App() {
             mode="inline"
             items={menuItems}
             selectedKeys={[location.pathname]}
+            openKeys={openKeys}
+            onOpenChange={(keys) => setOpenKeys(keys)}
             onClick={({ key }) => {
               if (key === 'clear-data') {
                 handleClearAllData()

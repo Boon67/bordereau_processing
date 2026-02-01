@@ -16,6 +16,77 @@ from app.utils.auth_utils import get_caller_token
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+def validate_default_value_compatibility(data_type: str, default_value: str) -> tuple[bool, str]:
+    """
+    Validate that a default value is compatible with the column data type.
+    
+    Returns:
+        tuple[bool, str]: (is_valid, error_message)
+    """
+    if not default_value or not default_value.strip():
+        return True, ""
+    
+    default_value = default_value.strip()
+    data_type_upper = data_type.upper()
+    
+    # Extract base type (e.g., VARCHAR(100) -> VARCHAR)
+    base_type = data_type_upper.split('(')[0].strip()
+    
+    # Functions that are always valid
+    valid_functions = ['CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_USER', 
+                      'SYSDATE', 'GETDATE', 'UUID_STRING', 'SEQ']
+    
+    # Check if it's a function call
+    is_function = '(' in default_value and ')' in default_value
+    if is_function:
+        func_name = default_value.split('(')[0].strip().upper()
+        
+        # Type-specific function validation
+        if base_type in ['DATE']:
+            if func_name in ['CURRENT_TIMESTAMP', 'GETDATE', 'SYSDATE']:
+                return False, f"DATE columns cannot use {func_name}(). Use CURRENT_DATE() instead."
+            if func_name not in ['CURRENT_DATE']:
+                return False, f"DATE columns should use CURRENT_DATE() for date functions."
+        
+        elif base_type in ['TIME']:
+            if func_name not in ['CURRENT_TIME']:
+                return False, f"TIME columns should use CURRENT_TIME() for time functions."
+        
+        elif base_type in ['TIMESTAMP', 'TIMESTAMP_NTZ', 'TIMESTAMP_LTZ', 'TIMESTAMP_TZ']:
+            if func_name == 'CURRENT_DATE':
+                return False, f"TIMESTAMP columns cannot use CURRENT_DATE(). Use CURRENT_TIMESTAMP() instead."
+        
+        # If it's a recognized function, it's valid
+        if func_name in valid_functions:
+            return True, ""
+    
+    # Validate literal values based on type
+    if base_type in ['NUMBER', 'INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'BYTEINT',
+                     'FLOAT', 'DOUBLE', 'REAL', 'DECIMAL', 'NUMERIC']:
+        # Check if it's a valid number
+        try:
+            float(default_value.replace(',', ''))
+            return True, ""
+        except ValueError:
+            if not is_function:
+                return False, f"Default value '{default_value}' is not a valid number for {data_type}."
+    
+    elif base_type == 'BOOLEAN':
+        if default_value.upper() not in ['TRUE', 'FALSE', '0', '1']:
+            return False, f"Default value '{default_value}' is not valid for BOOLEAN. Use TRUE or FALSE."
+    
+    elif base_type in ['VARCHAR', 'CHAR', 'STRING', 'TEXT']:
+        # String literals should be quoted, but we'll accept them without quotes
+        # The stored procedure will handle the quoting
+        return True, ""
+    
+    elif base_type in ['DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMP_NTZ', 'TIMESTAMP_LTZ', 'TIMESTAMP_TZ']:
+        # If not a function, check if it's a quoted date/time string
+        if not is_function and not (default_value.startswith("'") and default_value.endswith("'")):
+            return False, f"Date/time default values should be functions like CURRENT_DATE() or quoted strings like '2024-01-01'."
+    
+    return True, ""
+
 class TargetSchemaCreate(BaseModel):
     table_name: str
     column_name: str
@@ -115,6 +186,12 @@ async def create_target_schema(request: Request, schema: TargetSchemaCreate):
                 detail="Non-nullable columns must have a default value. Please provide a default value or make the column nullable."
             )
         
+        # Validation: Default value must be compatible with data type
+        if schema.default_value:
+            is_valid, error_msg = validate_default_value_compatibility(schema.data_type, schema.default_value)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=error_msg)
+        
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Escape single quotes by doubling them for SQL
@@ -149,6 +226,26 @@ async def update_target_schema(request: Request, schema_id: int, schema: TargetS
     """Update target schema definition"""
     try:
         logger.info(f"Update schema request: schema_id={schema_id}, data_type={schema.data_type}, nullable={schema.nullable}, default_value={schema.default_value}, description={schema.description}")
+        
+        # Validation: If both data_type and default_value are provided, validate compatibility
+        if schema.data_type and schema.default_value:
+            is_valid, error_msg = validate_default_value_compatibility(schema.data_type, schema.default_value)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=error_msg)
+        
+        # If only default_value is provided, we need to fetch the data_type to validate
+        if schema.default_value and not schema.data_type:
+            sf_service_temp = SnowflakeService(caller_token=get_caller_token(request))
+            existing_query = f"""
+                SELECT data_type FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+                WHERE schema_id = {schema_id}
+            """
+            existing_result = await sf_service_temp.execute_query_dict(existing_query)
+            if existing_result and len(existing_result) > 0:
+                existing_data_type = existing_result[0]['DATA_TYPE']
+                is_valid, error_msg = validate_default_value_compatibility(existing_data_type, schema.default_value)
+                if not is_valid:
+                    raise HTTPException(status_code=400, detail=error_msg)
         
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
@@ -322,10 +419,20 @@ async def create_silver_table(request: Request, table_name: str, tpa: str):
     Example: PROVIDER_A_MEDICAL_CLAIMS
     """
     try:
+        logger.info(f"Creating table: table_name={table_name}, tpa={tpa}")
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
         # Use fully qualified procedure name
         proc_name = f"{settings.SILVER_SCHEMA_NAME}.create_silver_table"
+        logger.info(f"Calling procedure: {proc_name}")
+        
         result = await sf_service.execute_procedure(proc_name, table_name, tpa)
+        logger.info(f"Procedure result: {result}")
+        
+        # Check if result indicates an error
+        if result and isinstance(result, str) and result.startswith("ERROR:"):
+            logger.error(f"Procedure returned error: {result}")
+            raise HTTPException(status_code=400, detail=result)
         
         # Extract the actual table name from the result
         physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
@@ -335,9 +442,19 @@ async def create_silver_table(request: Request, table_name: str, tpa: str):
             "physical_table_name": physical_table_name,
             "result": result
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to create table: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to create table: {str(e)}", exc_info=True)
+        
+        # Provide more detailed error message
+        error_msg = str(e)
+        if "does not exist" in error_msg.lower():
+            error_msg = f"Table creation failed: {error_msg}. Please ensure the schema definition exists."
+        elif "already exists" in error_msg.lower():
+            error_msg = f"Table already exists: {tpa.upper()}_{table_name.upper()}"
+        
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @router.delete("/tables/delete")
 async def delete_physical_table(request: Request, table_name: str, tpa: str):

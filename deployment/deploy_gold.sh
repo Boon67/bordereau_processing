@@ -68,13 +68,18 @@ echo -e "${BLUE}DEPLOYING GOLD LAYER${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 
+# Helper function to execute SQL with variable substitution
+execute_sql() {
+    local sql_file="$1"
+    sed "s/&{DATABASE_NAME}/$DATABASE_NAME/g; \
+         s/&{SILVER_SCHEMA_NAME}/$SILVER_SCHEMA_NAME/g; \
+         s/&{GOLD_SCHEMA_NAME}/$GOLD_SCHEMA_NAME/g" "$sql_file" | \
+    snow sql --stdin --connection "$CONNECTION_NAME" --enable-templating NONE
+}
+
 # 1. Gold Schema Setup
 echo -e "${YELLOW}[1/5]${NC} Creating Gold schema and metadata tables..."
-snow sql -f gold/1_Gold_Schema_Setup.sql \
-    --connection "$CONNECTION_NAME" \
-    -D "DATABASE_NAME=$DATABASE_NAME" \
-    -D "SILVER_SCHEMA_NAME=$SILVER_SCHEMA_NAME" \
-    -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"
+execute_sql "gold/1_Gold_Schema_Setup.sql"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Gold schema created${NC}"
@@ -86,10 +91,7 @@ echo ""
 
 # 2. Gold Target Schemas (Using BULK optimized version)
 echo -e "${YELLOW}[2/5]${NC} Creating Gold target schemas (bulk optimized - 88% faster)..."
-snow sql -f "$PROJECT_ROOT/gold/2_Gold_Target_Schemas_BULK.sql" \
-    --connection "$CONNECTION_NAME" \
-    -D "DATABASE_NAME=$DATABASE_NAME" \
-    -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"
+execute_sql "$PROJECT_ROOT/gold/2_Gold_Target_Schemas_BULK.sql"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Gold target schemas created (8 operations vs 69)${NC}"
@@ -101,10 +103,7 @@ echo ""
 
 # 3. Gold Transformation Rules
 echo -e "${YELLOW}[3/5]${NC} Creating Gold transformation rules..."
-snow sql -f "$PROJECT_ROOT/gold/3_Gold_Transformation_Rules.sql" \
-    --connection "$CONNECTION_NAME" \
-    -D "DATABASE_NAME=$DATABASE_NAME" \
-    -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"
+execute_sql "$PROJECT_ROOT/gold/3_Gold_Transformation_Rules.sql"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Gold transformation rules created${NC}"
@@ -118,7 +117,7 @@ echo ""
 echo -e "${YELLOW}[4/5]${NC} Skipping Gold transformation procedures..."
 echo -e "${BLUE}Note: Transformation procedures require Silver tables with data${NC}"
 echo -e "${BLUE}Deploy these after loading data: ./deploy_gold.sh --procedures-only${NC}"
-# snow sql -f gold/4_Gold_Transformation_Procedures.sql \
+# snow sql -f gold/4_Gold_Transformation_Procedures.sql --enable-templating LEGACY \
 #     --connection "$CONNECTION_NAME" \
 #     -D "DATABASE_NAME=$DATABASE_NAME" \
 #     -D "SILVER_SCHEMA_NAME=$SILVER_SCHEMA_NAME" \
@@ -129,7 +128,7 @@ echo ""
 echo -e "${YELLOW}[5/5]${NC} Creating Gold tasks..."
 echo -e "${BLUE}Note: Skipping Gold tasks (depend on transformation procedures)${NC}"
 echo -e "${BLUE}These can be created after procedures are deployed${NC}"
-# snow sql -f "$PROJECT_ROOT/gold/5_Gold_Tasks.sql" \
+# snow sql -f "$PROJECT_ROOT/gold/5_Gold_Tasks.sql" --enable-templating LEGACY \
 #     --connection "$CONNECTION_NAME" \
 #     -D "DATABASE_NAME=$DATABASE_NAME" \
 #     -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"

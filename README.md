@@ -75,13 +75,20 @@ deploy.bat
 
 ## 📖 Documentation
 
-**Core Documentation:**
+**Start Here:**
 - **[Quick Start Guide](QUICK_START.md)** - Get started in 10 minutes
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** ⚡ - One-page cheat sheet
+
+**Core Documentation:**
 - **[Documentation Hub](docs/README.md)** - Complete documentation index
-- **[Architecture](docs/ARCHITECTURE.md)** - System design, patterns, and data flow
 - **[User Guide](docs/USER_GUIDE.md)** - Complete usage instructions
+- **[Architecture](docs/ARCHITECTURE.md)** - System design, patterns, and data flow
+- **[Technical Reference](docs/TECHNICAL_REFERENCE.md)** - Advanced topics and troubleshooting
+- **[Changelog](docs/CHANGELOG.md)** - Recent updates and fixes
+
+**Infrastructure:**
 - **[Deployment Guide](deployment/README.md)** - Deployment to Snowflake and SPCS
-- **[Testing](docs/TESTING.md)** - Test plans and validation
+- **[Backend API](backend/README.md)** - API and authentication setup
 
 ## 📦 Deployment Options
 
@@ -174,18 +181,6 @@ graph LR
     style J fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-## 📖 Documentation
-
-| Document | Description |
-|----------|-------------|
-| **[Documentation Hub](docs/README.md)** | Complete documentation index |
-| [Quick Start Guide](QUICK_START.md) | Get running in 10 minutes |
-| [Implementation Log](docs/IMPLEMENTATION_LOG.md) | Complete implementation history |
-| [Test Reports](docs/testing/COMPREHENSIVE_TEST_REPORT.md) | Comprehensive test results |
-| [User Guide](docs/USER_GUIDE.md) | Complete usage instructions |
-| [Deployment Guide](deployment/README.md) | Full deployment documentation |
-| [Quick Reference](deployment/QUICK_REFERENCE.md) | Quick deployment commands |
-| [Backend README](backend/README.md) | Backend API documentation |
 
 ## 🛠️ Development
 
@@ -215,14 +210,6 @@ The backend supports multiple authentication methods:
 
 See [backend/README.md](backend/README.md) for setup details.
 
-## 📚 Documentation
-
-- **[Quick Reference](docs/QUICK_REFERENCE.md)** ⚡ - One-page cheat sheet for common operations
-- **[Quick Start Guide](QUICK_START.md)** - Get up and running in 10 minutes
-- **[User Guide](docs/USER_GUIDE.md)** - Complete usage guide
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and technical details
-- **[Changelog](docs/CHANGELOG.md)** - Recent updates and fixes
-- **[Deployment Guide](deployment/README.md)** - Infrastructure and deployment
 
 ## 🐛 Troubleshooting
 
@@ -231,7 +218,8 @@ See [backend/README.md](backend/README.md) for setup details.
 **Connection issues**: Verify Snow CLI connection with `snow connection test`
 
 **For detailed troubleshooting:**
-- [Documentation Hub](docs/README.md) - Full documentation and guides
+- [Quick Reference](docs/QUICK_REFERENCE.md) - Common operations and solutions
+- [Technical Reference](docs/TECHNICAL_REFERENCE.md) - Advanced troubleshooting
 - [Deployment Guide](deployment/README.md) - Deployment troubleshooting
 - [Changelog](docs/CHANGELOG.md) - Known issues and recent fixes
 

@@ -53,7 +53,7 @@ execute_sql() {
             -e "s/^SET SILVER_SCHEMA_NAME = '.*';/SET SILVER_SCHEMA_NAME = '${SILVER_SCHEMA}';/" \
             -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
             -e "s/^SET WAREHOUSE_NAME = '.*';/SET WAREHOUSE_NAME = '${WAREHOUSE}';/" \
-            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME"
+            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" --enable-templating NONE
     else
         # Normal mode: suppress output, only show on error
         local sql_output
@@ -62,7 +62,7 @@ execute_sql() {
             -e "s/^SET SILVER_SCHEMA_NAME = '.*';/SET SILVER_SCHEMA_NAME = '${SILVER_SCHEMA}';/" \
             -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
             -e "s/^SET WAREHOUSE_NAME = '.*';/SET WAREHOUSE_NAME = '${WAREHOUSE}';/" \
-            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" 2>&1); then
+            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" --enable-templating NONE 2>&1); then
             echo "$sql_output"
             return 1
         fi
@@ -85,7 +85,7 @@ if [[ "$DEPLOY_RESUME_TASKS" == "true" ]]; then
     echo -e "${GREEN}✓ Silver tasks resumed${NC}"
 else
     echo -e "${CYAN}Tasks created in SUSPENDED state. To resume, run:${NC}"
-    echo -e "${CYAN}  snow sql -f deployment/resume_silver_tasks.sql --connection ${CONNECTION_NAME}${NC}"
+    echo -e "${CYAN}  snow sql -f deployment/resume_silver_tasks.sql --enable-templating LEGACY --connection ${CONNECTION_NAME}${NC}"
 fi
 
 echo -e "${GREEN}✓ Silver layer deployed successfully${NC}"

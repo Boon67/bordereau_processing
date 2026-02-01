@@ -65,7 +65,7 @@ execute_sql() {
             -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
             -e "s/^SET BRONZE_DISCOVERY_SCHEDULE = '.*';/SET BRONZE_DISCOVERY_SCHEDULE = '${BRONZE_DISCOVERY_SCHEDULE}';/" \
             -e "s/__BRONZE_DISCOVERY_SCHEDULE__/${BRONZE_DISCOVERY_SCHEDULE}/g" \
-            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME"
+            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" --enable-templating NONE
     else
         # Normal mode: suppress output, only show on error
         local sql_output
@@ -77,7 +77,7 @@ execute_sql() {
             -e "s/^SET SNOWFLAKE_ROLE = '.*';/SET SNOWFLAKE_ROLE = '${ROLE}';/" \
             -e "s/^SET BRONZE_DISCOVERY_SCHEDULE = '.*';/SET BRONZE_DISCOVERY_SCHEDULE = '${BRONZE_DISCOVERY_SCHEDULE}';/" \
             -e "s/__BRONZE_DISCOVERY_SCHEDULE__/${BRONZE_DISCOVERY_SCHEDULE}/g" \
-            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" 2>&1); then
+            "$sql_file" | snow sql --stdin --connection "$CONNECTION_NAME" --enable-templating NONE 2>&1); then
             echo "$sql_output"
             return 1
         fi
@@ -100,7 +100,7 @@ if [[ "$AUTO_RESUME_TASKS" == "true" ]]; then
 else
     echo -e "${YELLOW}⚠ Bronze tasks created in SUSPENDED state${NC}"
     echo -e "${YELLOW}  To resume tasks manually, run:${NC}"
-    echo -e "${CYAN}  snow sql -f deployment/resume_tasks.sql --connection $CONNECTION_NAME${NC}"
+    echo -e "${CYAN}  snow sql -f deployment/resume_tasks.sql --enable-templating LEGACY --connection $CONNECTION_NAME${NC}"
 fi
 
 echo -e "${GREEN}✓ Bronze layer deployed successfully${NC}"

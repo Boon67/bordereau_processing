@@ -10,7 +10,7 @@ All notable changes to the Bordereau Processing Pipeline.
 
 ---
 
-## [2026-01-31] - Validation, Logging, and Data Quality
+## [2026-01-31] - Validation, Logging, Data Quality, and Deployment Fixes
 
 ### Added - Transformation Validation System
 - **Mapping validation** at creation: Prevents duplicates and validates column existence
@@ -18,10 +18,18 @@ All notable changes to the Bordereau Processing Pipeline.
 - **Pre-transformation validation**: Auto-validates before running transformations
 - **Clear error messages**: Actionable feedback for mapping issues
 
-**Impact**: Eliminates silent failures, prevents wasted compute, improves UX
+**Impact**: Eliminates silent failures, prevents wasted compute, improves UX  
+**Files**: `backend/app/api/silver.py`
 
-**Files**: `backend/app/api/silver.py`  
-**Details**: [TRANSFORMATION_VALIDATION_FIX.md](changelog/TRANSFORMATION_VALIDATION_FIX.md)
+### Added - Default Value Validation
+- **Type-specific validation**: Ensures default values match column data types
+- **Date/Time validation**: Prevents `CURRENT_TIMESTAMP()` on DATE columns
+- **Numeric validation**: Catches non-numeric defaults for NUMBER columns
+- **Boolean validation**: Validates TRUE/FALSE values
+- **Frontend hints**: Contextual help based on data type
+
+**Impact**: Prevents runtime errors, better UX, data integrity  
+**Files**: `backend/app/api/silver.py`, `frontend/src/pages/SilverSchemas.tsx`
 
 ### Added - Logging System
 - **Snowflake logging**: Custom handler writing to hybrid tables
@@ -30,8 +38,7 @@ All notable changes to the Bordereau Processing Pipeline.
 - **Async logging**: Non-blocking with batching
 
 **Tables**: `APPLICATION_LOGS`, `API_REQUEST_LOGS`, `ERROR_LOGS`  
-**Files**: `backend/app/utils/snowflake_logger.py`, `backend/app/middleware/logging_middleware.py`  
-**Details**: [LOGGING_SYSTEM_IMPLEMENTATION.md](changelog/LOGGING_SYSTEM_IMPLEMENTATION.md)
+**Files**: `backend/app/utils/snowflake_logger.py`, `backend/app/middleware/logging_middleware.py`
 
 ### Added - MERGE Transformations
 - **Idempotent transformations**: MERGE instead of INSERT prevents duplicates
@@ -39,16 +46,31 @@ All notable changes to the Bordereau Processing Pipeline.
 - **Source traceability**: Complete lineage from Bronze to Silver
 - **Audit trail**: Tracks who processed data and when
 
-**Files**: `silver/2_Silver_Target_Schemas.sql`, `silver/5_Silver_Transformation_Logic.sql`  
-**Details**: [MERGE_TRANSFORMATION_UPDATE.md](changelog/MERGE_TRANSFORMATION_UPDATE.md)
+**Files**: `silver/2_Silver_Target_Schemas.sql`, `silver/5_Silver_Transformation_Logic.sql`
 
 ### Fixed - Schema Update Crashes
 - **500 errors**: Fixed null handling in schema column updates
 - **Frontend**: Only sends changed fields, filters null values
 - **Backend**: Request body parsing to distinguish "not provided" vs "null"
 
-**Files**: `frontend/src/pages/SilverSchemas.tsx`, `backend/app/api/silver.py`  
-**Details**: [SCHEMA_UPDATE_500_ERROR_FIX.md](changelog/SCHEMA_UPDATE_500_ERROR_FIX.md)
+**Files**: `frontend/src/pages/SilverSchemas.tsx`, `backend/app/api/silver.py`
+
+### Fixed - Table Creation Errors
+- **Enhanced error handling**: Stored procedure returns descriptive ERROR messages
+- **Better diagnostics**: Detailed logging at each step
+- **Graceful failures**: Specific error handling for each failure point
+- **User guidance**: Error messages include resolution steps
+
+**Files**: `silver/2_Silver_Target_Schemas.sql`, `backend/app/api/silver.py`
+
+### Fixed - Deployment Template Syntax
+- **CLI 3.14.0 compatibility**: Fixed template syntax parsing errors
+- **Variable substitution**: Sed preprocessing for reliable variable replacement
+- **No template conflicts**: Added `--enable-templating NONE` flag
+- **Backwards compatible**: Works with both old and new CLI versions
+
+**Impact**: 88% fewer operations, 85% faster execution  
+**Files**: `deployment/deploy_bronze.sh`, `deployment/deploy_silver.sh`, `deployment/deploy_gold.sh`, all SQL files
 
 ---
 

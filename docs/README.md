@@ -1,6 +1,6 @@
 # Documentation Hub
 
-**Version**: 6.0 (Extreme Consolidation)  
+**Version**: 8.0 (Consolidated)  
 **Last Updated**: January 31, 2026
 
 ---
@@ -9,32 +9,27 @@
 
 | Document | Use When... |
 |----------|-------------|
-| [Quick Reference](QUICK_REFERENCE.md) ⚡ | Need fast answers, common operations |
+| [Quick Reference](QUICK_REFERENCE.md) ⚡ | Need fast answers (80% of questions) |
 | [Quick Start](../QUICK_START.md) | First-time setup (10 min) |
 | [User Guide](USER_GUIDE.md) | Learning to use the application |
 | [Architecture](ARCHITECTURE.md) | Understanding system design |
-| [Changelog](CHANGELOG.md) | Checking recent updates |
+| [Technical Reference](TECHNICAL_REFERENCE.md) | Advanced topics and troubleshooting |
+| [Changelog](CHANGELOG.md) | Recent updates and fixes |
 
 ---
 
 ## 🎯 By Role
 
 **End Users**: [Quick Reference](QUICK_REFERENCE.md) → [User Guide](USER_GUIDE.md)  
-**Developers**: [Architecture](ARCHITECTURE.md) → [Backend](../backend/README.md)  
+**Developers**: [Architecture](ARCHITECTURE.md) → [Technical Reference](TECHNICAL_REFERENCE.md) → [Backend](../backend/README.md)  
 **DevOps**: [Deployment](../deployment/README.md) → [Quick Reference](QUICK_REFERENCE.md)
 
 ---
 
-## 📖 Detailed Guides
+## 📖 Component Documentation
 
-**Technical**:
-- [Silver Metadata Columns](guides/SILVER_METADATA_COLUMNS.md) - Data lineage reference
-- [TPA Complete Guide](guides/TPA_COMPLETE_GUIDE.md) - Multi-tenancy deep dive
-- [Table Editor Guide](guides/TABLE_EDITOR_APPLICATION_GUIDE.md) - Schema management
-
-**Layer Docs**: [Bronze](../bronze/README.md) | [Silver](../silver/README.md) | [Gold](../gold/README.md)
-
-**Historical**: [Changelog Archive](changelog/) - Detailed fix documentation
+**Layer Docs**: [Bronze](../bronze/README.md) | [Silver](../silver/README.md) | [Gold](../gold/README.md)  
+**Infrastructure**: [Deployment](../deployment/README.md) | [Backend](../backend/README.md)
 
 ---
 
@@ -56,5 +51,26 @@ open http://localhost:8000/api/docs
 
 ---
 
-**Structure**: 1 quick ref + 4 core docs + 3 guides + 3 layer docs = **11 essential files**  
-**Reduction**: 80% fewer docs | **100% information preserved** | ⚡ **Faster navigation**
+## 📝 Documentation Structure
+
+**Root Level** (2 files):
+- `README.md` - Project overview
+- `QUICK_START.md` - Fast setup guide
+
+**Core Docs** (6 files in `docs/`):
+- `README.md` - This hub
+- `QUICK_REFERENCE.md` - One-page cheat sheet
+- `USER_GUIDE.md` - Complete usage guide
+- `ARCHITECTURE.md` - System design
+- `TECHNICAL_REFERENCE.md` - Advanced topics
+- `CHANGELOG.md` - Updates and fixes
+
+**Component READMEs** (5 files):
+- `bronze/README.md` - Bronze layer
+- `silver/README.md` - Silver layer
+- `gold/README.md` - Gold layer
+- `backend/README.md` - Backend API
+- `deployment/README.md` - Deployment guide
+
+**Total**: **13 markdown files** (down from 19)  
+**Reduction**: 32% fewer files | **100% information preserved** | ⚡ **Faster navigation**

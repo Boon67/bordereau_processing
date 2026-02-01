@@ -197,8 +197,48 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
     setIsDrawerVisible(true)
   }
 
+  const validateDefaultValue = (dataType: string, defaultValue: string): { valid: boolean; message: string } => {
+    if (!defaultValue || !defaultValue.trim()) {
+      return { valid: true, message: '' }
+    }
+
+    const value = defaultValue.trim()
+    const baseType = dataType.toUpperCase().split('(')[0].trim()
+    const isFunction = value.includes('(') && value.includes(')')
+
+    // Type-specific validation
+    if (baseType === 'DATE') {
+      if (value.toUpperCase().includes('CURRENT_TIMESTAMP') || value.toUpperCase().includes('GETDATE')) {
+        return { valid: false, message: 'DATE columns cannot use CURRENT_TIMESTAMP(). Use CURRENT_DATE() instead.' }
+      }
+    } else if (baseType.startsWith('TIMESTAMP')) {
+      if (value.toUpperCase().includes('CURRENT_DATE()')) {
+        return { valid: false, message: 'TIMESTAMP columns cannot use CURRENT_DATE(). Use CURRENT_TIMESTAMP() instead.' }
+      }
+    } else if (['NUMBER', 'INT', 'INTEGER', 'FLOAT', 'DOUBLE', 'DECIMAL'].includes(baseType)) {
+      if (!isFunction && isNaN(Number(value.replace(',', '')))) {
+        return { valid: false, message: `'${value}' is not a valid number for ${dataType}.` }
+      }
+    } else if (baseType === 'BOOLEAN') {
+      if (!['TRUE', 'FALSE', '0', '1'].includes(value.toUpperCase())) {
+        return { valid: false, message: 'BOOLEAN default must be TRUE or FALSE.' }
+      }
+    }
+
+    return { valid: true, message: '' }
+  }
+
   const handleSubmitColumn = async (values: any) => {
     try {
+      // Validate default value compatibility
+      if (values.default_value && values.data_type) {
+        const validation = validateDefaultValue(values.data_type, values.default_value)
+        if (!validation.valid) {
+          message.error(validation.message)
+          return
+        }
+      }
+
       if (editingSchema) {
         // Update existing schema - only send fields that have values
         const updatePayload: any = {}
@@ -684,9 +724,11 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
             <Switch />
           </Form.Item>
 
-          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.nullable !== currentValues.nullable}>
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.nullable !== currentValues.nullable || prevValues.data_type !== currentValues.data_type}>
             {({ getFieldValue }) => {
               const isNullable = getFieldValue('nullable')
+              const dataType = getFieldValue('data_type')
+              
               return (
                 <>
                   <Form.Item
@@ -696,11 +738,29 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
                       {
                         required: !isNullable,
                         message: 'Default value is required for non-nullable columns'
+                      },
+                      {
+                        validator: async (_, value) => {
+                          if (value && dataType) {
+                            const validation = validateDefaultValue(dataType, value)
+                            if (!validation.valid) {
+                              return Promise.reject(new Error(validation.message))
+                            }
+                          }
+                          return Promise.resolve()
+                        }
                       }
                     ]}
                   >
                     <Input 
-                      placeholder={isNullable ? "e.g., NULL, 0, 'N/A' (Optional)" : "e.g., 0, 'N/A', CURRENT_TIMESTAMP() (Required)"} 
+                      placeholder={
+                        dataType === 'DATE' ? "e.g., CURRENT_DATE(), '2024-01-01'" :
+                        dataType?.startsWith('TIMESTAMP') ? "e.g., CURRENT_TIMESTAMP()" :
+                        dataType?.startsWith('NUMBER') ? "e.g., 0, 100.50" :
+                        dataType === 'BOOLEAN' ? "e.g., TRUE, FALSE" :
+                        dataType?.startsWith('VARCHAR') ? "e.g., 'N/A', 'Unknown'" :
+                        isNullable ? "e.g., NULL, 0, 'N/A' (Optional)" : "e.g., 0, 'N/A', CURRENT_TIMESTAMP() (Required)"
+                      } 
                     />
                   </Form.Item>
                   {!isNullable && (
@@ -708,6 +768,24 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
                       message="Required Field"
                       description="Non-nullable columns must have a default value to ensure data integrity. Common defaults: 0 for numbers, empty string ('') for text, CURRENT_TIMESTAMP() for timestamps."
                       type="warning"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                  )}
+                  {dataType === 'DATE' && (
+                    <Alert
+                      message="DATE Column"
+                      description="For DATE columns, use CURRENT_DATE() for current date, not CURRENT_TIMESTAMP()."
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                  )}
+                  {dataType?.startsWith('TIMESTAMP') && (
+                    <Alert
+                      message="TIMESTAMP Column"
+                      description="For TIMESTAMP columns, use CURRENT_TIMESTAMP() for current timestamp, not CURRENT_DATE()."
+                      type="info"
                       showIcon
                       style={{ marginBottom: 16 }}
                     />

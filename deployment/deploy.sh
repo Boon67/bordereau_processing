@@ -660,6 +660,12 @@ fi
 echo ""
 echo -e "${CYAN}🥇 Deploying Gold Layer...${NC}"
 
+# Export variables for child script
+export DATABASE_NAME
+export BRONZE_SCHEMA_NAME
+export SILVER_SCHEMA_NAME
+export GOLD_SCHEMA_NAME="${GOLD_SCHEMA_NAME:-GOLD}"
+
 if bash "${SCRIPT_DIR}/deploy_gold.sh" "$CONNECTION_NAME"; then
     log_message SUCCESS "Gold layer deployed successfully"
 else

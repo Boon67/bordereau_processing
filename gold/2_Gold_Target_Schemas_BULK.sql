@@ -5,8 +5,8 @@
 -- individual procedure calls for better performance
 -- ============================================
 
-USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
-USE SCHEMA GOLD;
+USE DATABASE &{DATABASE_NAME};
+USE SCHEMA &{GOLD_SCHEMA_NAME};
 
 -- ============================================
 -- HELPER PROCEDURE: Create Target Schema
