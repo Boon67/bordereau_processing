@@ -32,8 +32,6 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   const [createTableModalVisible, setCreateTableModalVisible] = useState(false)
   const [selectedTableForCreation, setSelectedTableForCreation] = useState<string>('')
   const [createPhysicalTableForm] = Form.useForm()
-  const [tpas, setTpas] = useState<Array<{ TPA_CODE: string; TPA_NAME: string }>>([])
-  const [loadingTpas, setLoadingTpas] = useState(false)
   const [createdTables, setCreatedTables] = useState<any[]>([])
   const [loadingCreatedTables, setLoadingCreatedTables] = useState(false)
   const [viewSchemaModalVisible, setViewSchemaModalVisible] = useState(false)
@@ -45,7 +43,6 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   useEffect(() => {
     // Load schemas once on mount (TPA-agnostic)
     loadSchemas()
-    loadTpas()
     loadCreatedTables()
     loadQualityData()
   }, [])
@@ -79,17 +76,6 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
     setTableExistence(existenceMap)
   }
 
-  const loadTpas = async () => {
-    setLoadingTpas(true)
-    try {
-      const data = await apiService.getTpas()
-      setTpas(data)
-    } catch (error) {
-      message.error('Failed to load TPAs')
-    } finally {
-      setLoadingTpas(false)
-    }
-  }
 
   const loadCreatedTables = async () => {
     setLoadingCreatedTables(true)
@@ -1018,7 +1004,6 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
           >
             <Select
               placeholder="Select provider"
-              loading={loadingTpas}
               options={tpas.map(tpa => ({
                 label: `${tpa.TPA_NAME} (${tpa.TPA_CODE})`,
                 value: tpa.TPA_CODE
