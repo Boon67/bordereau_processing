@@ -917,3 +917,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
         </Form>
       </Modal>
     </div>
+  )
+}
+
+export default SilverMappings

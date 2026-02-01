@@ -1,0 +1,49 @@
+# Docker Compose configuration using pre-built images from GitHub Container Registry
+# 
+# SETUP INSTRUCTIONS:
+# 1. Replace YOUR_USERNAME with your GitHub username (or use deploy_local_ghcr.sh)
+# 2. Create a .env file with your Snowflake credentials (see .env.example)
+# 3. If images are private, login first: echo YOUR_TOKEN | docker login ghcr.io -u YOUR_USERNAME --password-stdin
+# 4. Run: docker-compose -f docker-compose.ghcr.yml up -d
+#
+# OR USE THE AUTOMATED SCRIPT:
+# ./deployment/deploy_local_ghcr.sh YOUR_USERNAME [version]
+
+version: '3.8'
+
+services:
+  frontend:
+    # Replace YOUR_USERNAME with your GitHub username
+    image: ghcr.io/YOUR_USERNAME/bordereau/frontend:latest
+    container_name: bordereau-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - bordereau-network
+
+  backend:
+    # Replace YOUR_USERNAME with your GitHub username
+    image: ghcr.io/YOUR_USERNAME/bordereau/backend:latest
+    container_name: bordereau-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - bordereau-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  bordereau-network:
+    driver: bridge

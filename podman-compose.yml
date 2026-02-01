@@ -1,0 +1,59 @@
+# Podman Compose configuration for local development
+# Usage: podman-compose up -d
+# Or with podman-compose: pip install podman-compose && podman-compose up -d
+
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: bordereau-frontend-podman
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - bordereau-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: bordereau-backend-podman
+    ports:
+      - "8000:8000"
+    environment:
+      # Snowflake connection details
+      - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT}
+      - SNOWFLAKE_USER=${SNOWFLAKE_USER}
+      - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD}
+      - SNOWFLAKE_WAREHOUSE=${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}
+      - SNOWFLAKE_DATABASE=${SNOWFLAKE_DATABASE:-FILE_PROCESSING_PIPELINE}
+      - SNOWFLAKE_ROLE=${SNOWFLAKE_ROLE:-SYSADMIN}
+      - SNOWFLAKE_BRONZE_SCHEMA=${SNOWFLAKE_BRONZE_SCHEMA:-BRONZE}
+      - SNOWFLAKE_SILVER_SCHEMA=${SNOWFLAKE_SILVER_SCHEMA:-SILVER}
+      - SNOWFLAKE_GOLD_SCHEMA=${SNOWFLAKE_GOLD_SCHEMA:-GOLD}
+    restart: unless-stopped
+    networks:
+      - bordereau-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  bordereau-network:
+    driver: bridge
