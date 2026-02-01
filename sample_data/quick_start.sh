@@ -21,9 +21,14 @@ OUTPUT_DIR="${SCRIPT_DIR}/output"
 NUM_CLAIMS=${1:-1000}  # Default 1000 claims
 CONNECTION=${2:-DEPLOYMENT}  # Default connection
 
-# Database configuration
-DATABASE_NAME="BORDEREAU_PROCESSING_PIPELINE"
-GOLD_SCHEMA_NAME="GOLD"
+# Load configuration from default.config
+if [ -f "${PROJECT_ROOT}/deployment/default.config" ]; then
+    source "${PROJECT_ROOT}/deployment/default.config"
+fi
+
+# Database configuration (with fallback defaults)
+DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
+GOLD_SCHEMA_NAME="${GOLD_SCHEMA_NAME:-GOLD}"
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}  🎲 Bordereau Sample Data Generator - Quick Start${NC}"

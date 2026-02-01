@@ -20,10 +20,17 @@ echo -e "${BLUE}Upgrade Snowpark Container Service${NC}"
 echo -e "${BLUE}================================${NC}"
 echo ""
 
-# Default values
-DATABASE_NAME="BORDEREAU_PROCESSING_PIPELINE"
-SCHEMA_NAME="PUBLIC"
-SERVICE_NAME="BORDEREAU_APP"
+# Get script directory and load config
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Load configuration
+[ -f "$SCRIPT_DIR/default.config" ] && source "$SCRIPT_DIR/default.config"
+[ -f "$SCRIPT_DIR/custom.config" ] && source "$SCRIPT_DIR/custom.config"
+
+# Default values (with fallback)
+DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
+SCHEMA_NAME="${SCHEMA_NAME:-PUBLIC}"
+SERVICE_NAME="${SERVICE_NAME:-BORDEREAU_APP}"
 SPEC_FILE="/tmp/bordereau_service_spec_fixed.yaml"
 
 # Parse command line arguments

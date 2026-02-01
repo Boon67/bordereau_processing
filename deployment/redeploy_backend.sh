@@ -30,6 +30,14 @@ source "$SCRIPT_DIR/default.config" 2>/dev/null || true
 
 SNOWFLAKE_CONNECTION="${SNOWFLAKE_CONNECTION:-}"
 USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
+DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
+REPOSITORY_NAME="${REPOSITORY_NAME:-BORDEREAU_REPOSITORY}"
+BACKEND_IMAGE_NAME="${BACKEND_IMAGE_NAME:-bordereau_backend}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+SCHEMA_NAME="${SCHEMA_NAME:-PUBLIC}"
+
+# Get registry URL from snow CLI
+REGISTRY_URL=$(snow spcs image-registry url --connection "${SNOWFLAKE_CONNECTION}" 2>/dev/null | grep -o '[^/]*\.snowflakecomputing\.com' || echo "registry.snowflakecomputing.com")
 
 login_cmd="snow spcs image-registry login"
 if [ -n "$SNOWFLAKE_CONNECTION" ]; then
@@ -40,16 +48,18 @@ $login_cmd
 
 echo
 echo -e "${YELLOW}[2/6]${NC} Building backend Docker image..."
-docker build -f docker/Dockerfile.backend -t bordereau_backend:latest .
+docker build -f docker/Dockerfile.backend -t ${BACKEND_IMAGE_NAME}:${IMAGE_TAG} .
 
 echo
 echo -e "${YELLOW}[3/6]${NC} Tagging image for Snowflake registry..."
-docker tag bordereau_backend:latest \
-  sfsenorthamerica-tboon-aws2.registry.snowflakecomputing.com/bordereau_processing_pipeline/public/bordereau_repository/bordereau_backend:latest
+# Convert database name to lowercase for registry path
+DB_LOWER=$(echo "$DATABASE_NAME" | tr '[:upper:]' '[:lower:]')
+FULL_IMAGE_PATH="${REGISTRY_URL}/${DB_LOWER}/${SCHEMA_NAME,,}/${REPOSITORY_NAME,,}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+docker tag ${BACKEND_IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE_PATH}
 
 echo
 echo -e "${YELLOW}[4/6]${NC} Pushing to Snowflake registry..."
-docker push sfsenorthamerica-tboon-aws2.registry.snowflakecomputing.com/bordereau_processing_pipeline/public/bordereau_repository/bordereau_backend:latest
+docker push ${FULL_IMAGE_PATH}
 
 echo
 echo -e "${YELLOW}[5/6]${NC} Restarting backend service..."

@@ -122,8 +122,8 @@ def generate_sql_load_script(output_dir: Path):
         f.write("""-- Load Sample Silver Target Schemas
 -- This script loads sample schema definitions for demonstration
 
-USE DATABASE BORDEREAU_PROCESSING_PIPELINE;
-USE SCHEMA SILVER;
+USE DATABASE &{DATABASE_NAME};
+USE SCHEMA &{SILVER_SCHEMA_NAME};
 
 -- Create stage for config files if not exists
 CREATE STAGE IF NOT EXISTS SILVER_CONFIG;
