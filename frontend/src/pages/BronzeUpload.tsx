@@ -1,17 +1,21 @@
 import React, { useState } from 'react'
-import { Upload, Button, Card, message, Progress, List, Checkbox } from 'antd'
+import { Upload, Button, Card, message, Progress, List, Checkbox, Select, Typography } from 'antd'
 import { InboxOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import { apiService } from '../services/api'
+import type { TPA } from '../types'
 
 const { Dragger } = Upload
+const { Title } = Typography
 
 interface Props {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: TPA[]
   selectedTpaName?: string
 }
 
-const BronzeUpload: React.FC<Props> = ({ selectedTpa, selectedTpaName }) => {
+const BronzeUpload: React.FC<Props> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -91,25 +95,34 @@ const BronzeUpload: React.FC<Props> = ({ selectedTpa, selectedTpaName }) => {
     },
   }
 
-  if (!selectedTpa) {
-    return (
-      <div>
-        <h2>📤 Upload Files</h2>
-        <Card style={{ marginTop: 16 }}>
-          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            Please select a TPA from the dropdown in the header to upload files.
-          </p>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div>
-      <h2>📤 Upload Files</h2>
-      <p>Upload CSV or Excel files for TPA: <strong>{selectedTpaName || selectedTpa}</strong></p>
+      <Title level={2}>📤 Upload Files</Title>
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
 
-      <Card style={{ marginTop: 16 }}>
+      {!selectedTpa ? (
+        <Card>
+          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            Please select a TPA to upload files.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <p style={{ marginBottom: 16 }}>Upload CSV or Excel files for: <strong>{selectedTpaName || selectedTpa}</strong></p>
+
+          <Card style={{ marginTop: 16 }}>
         <Dragger {...uploadProps} accept=".csv,.xlsx,.xls">
           <p className="ant-upload-drag-icon">
             <InboxOutlined />
@@ -173,6 +186,8 @@ const BronzeUpload: React.FC<Props> = ({ selectedTpa, selectedTpaName }) => {
           <li>Processing status can be monitored in the "Processing Status" page</li>
         </ul>
       </Card>
+        </>
+      )}
     </div>
   )
 }

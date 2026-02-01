@@ -13,15 +13,18 @@ import {
 } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FileQueueItem } from '../services/api'
+import type { TPA } from '../types'
 
 const { Title } = Typography
 
 interface BronzeStatusProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: TPA[]
   selectedTpaName?: string
 }
 
-const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaName }) => {
+const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [queue, setQueue] = useState<FileQueueItem[]>([])
   const [statusFilter, setStatusFilter] = useState<string[]>([])
@@ -71,10 +74,10 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
     }
   }
 
-  const handleDeleteFileData = async (fileName: string) => {
+  const handleDeleteFileData = async (fileName: string, tpa: string) => {
     try {
-      const result = await apiService.deleteFileData(fileName)
-      message.success(result.message || `Data deleted for file: ${fileName}`)
+      const result = await apiService.deleteFileData(fileName, tpa)
+      message.success(result.message || `Data deleted for file: ${fileName} (TPA: ${tpa})`)
       loadQueue() // Refresh the queue
       loadStats() // Refresh stats
     } catch (error: any) {
@@ -197,8 +200,8 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
           {record.STATUS === 'SUCCESS' && (
             <Popconfirm
               title="Delete File Data"
-              description={`This will delete all ${record.PROCESS_RESULT?.match(/\d+/)?.[0] || 'data'} rows for this file. Continue?`}
-              onConfirm={() => handleDeleteFileData(record.FILE_NAME)}
+              description={`This will delete all ${record.PROCESS_RESULT?.match(/\d+/)?.[0] || 'data'} rows for this file (TPA: ${record.TPA}). Continue?`}
+              onConfirm={() => handleDeleteFileData(record.FILE_NAME, record.TPA)}
               okText="Yes, Delete"
               cancelText="Cancel"
               okButtonProps={{ danger: true }}
@@ -220,8 +223,24 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, selectedTpaNam
 
   return (
     <div>
+      <Title level={2}>Processing Status</Title>
+      
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={2}>Processing Status</Title>
+        <div />
         <Button 
           icon={<ReloadOutlined />} 
           onClick={loadQueue}

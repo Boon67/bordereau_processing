@@ -72,5 +72,5 @@ open http://localhost:8000/api/docs
 - `backend/README.md` - Backend API
 - `deployment/README.md` - Deployment guide
 
-**Total**: **13 markdown files** (down from 19)  
-**Reduction**: 32% fewer files | **100% information preserved** | ⚡ **Faster navigation**
+**Total**: **15 markdown files** (clean and organized)  
+**Structure**: 2 root + 6 core docs + 7 component READMEs | ⚡ **Fast navigation**

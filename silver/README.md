@@ -91,6 +91,96 @@ See [docs/guides/SILVER_METADATA_COLUMNS.md](../docs/guides/SILVER_METADATA_COLU
 | `3_Silver_Field_Mappings.sql` | Field mapping tables |
 | `4_Silver_Transformation_Rules.sql` | Transformation rules |
 | `5_Silver_Transformation_Logic.sql` | MERGE-based transformation |
+| `6_Silver_Tasks.sql` | Automated transformation tasks |
+| `8_Load_Sample_Schemas.sql` | Load sample schema definitions (optional) |
+| `7_Data_Quality_Checks.sql` | Comprehensive data quality validation |
+
+---
+
+## Data Quality Checks (v3.2)
+
+### Overview
+Comprehensive data quality validation runs on transformed Silver tables.
+
+### Quality Checks Performed
+
+**1. Row Count Validation**
+- Ensures table has data
+
+**2. Null Value Analysis**
+- Checks null percentage for each column
+- Threshold: < 50% nulls per column
+
+**3. Duplicate Detection**
+- Identifies duplicate `_RECORD_ID` values
+
+**4. Completeness Score**
+- Overall data completeness across all columns
+- Threshold: ≥ 80%
+
+**5. Data Freshness**
+- Hours since last data load
+- Threshold: ≤ 24 hours
+
+**6. Range Validation**
+- Checks for negative values in amount columns
+- Validates numeric ranges
+
+**7. Date Validation**
+- Identifies future dates in date columns
+
+**8. Overall Quality Score**
+- Aggregate score: (passed checks / total checks) × 100
+- Threshold: ≥ 80%
+
+### Run Quality Checks
+
+**Single Table:**
+```sql
+CALL SILVER.run_data_quality_checks('DENTAL_CLAIMS', 'provider_a');
+```
+
+**All Tables for TPA:**
+```sql
+CALL SILVER.run_data_quality_checks_all('provider_a');
+```
+
+**Via API:**
+```bash
+# Single table
+POST /api/silver/quality/check?table_name=DENTAL_CLAIMS&tpa=provider_a
+
+# All tables
+POST /api/silver/quality/check-all?tpa=provider_a
+
+# Get summary
+GET /api/silver/quality/summary?tpa=provider_a
+
+# Get failures
+GET /api/silver/quality/failures?tpa=provider_a
+
+# Get trends
+GET /api/silver/quality/trends?tpa=provider_a&table_name=DENTAL_CLAIMS
+```
+
+### View Quality Metrics
+
+**Summary View:**
+```sql
+SELECT * FROM SILVER.v_data_quality_summary WHERE tpa = 'provider_a';
+```
+
+**Failed Checks:**
+```sql
+SELECT * FROM SILVER.v_data_quality_failures WHERE tpa = 'provider_a';
+```
+
+**Quality Trends:**
+```sql
+SELECT * FROM SILVER.v_data_quality_trends 
+WHERE tpa = 'provider_a' 
+ORDER BY measured_timestamp DESC;
+```
 
 ---
 

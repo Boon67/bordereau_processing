@@ -114,17 +114,18 @@ def process_csv_file(session, file_path, tpa):
         
         log_stage(session, queue_id, file_name, tpa, 'PARSING', 'SUCCESS', len(df), 0, None, f'{{"columns": {df.shape[1]}, "rows": {df.shape[0]}}}')
         
-        # Check if file already processed (prevent duplicate processing)
+        # Check if file already processed for this TPA (prevent duplicate processing)
         check_query = f"""
             SELECT COUNT(*) as cnt 
             FROM RAW_DATA_TABLE 
             WHERE FILE_NAME = '{file_name}'
+              AND TPA = '{tpa}'
         """
         existing_count = session.sql(check_query).collect()[0]['CNT']
         
         if existing_count > 0:
-            log_stage(session, queue_id, file_name, tpa, 'VALIDATION', 'SKIPPED', 0, 0, 'File already processed', f'{{"existing_rows": {existing_count}}}')
-            return f"SKIPPED: File {file_name} already processed ({existing_count} rows exist)"
+            log_stage(session, queue_id, file_name, tpa, 'VALIDATION', 'SKIPPED', 0, 0, f'File already processed for TPA {tpa}', f'{{"existing_rows": {existing_count}}}')
+            return f"SKIPPED: File {file_name} already processed for TPA {tpa} ({existing_count} rows exist)"
         
         # Log: Start data preparation
         log_stage(session, queue_id, file_name, tpa, 'PREPARATION', 'STARTED', 0, 0, None, None)
@@ -182,7 +183,9 @@ def process_csv_file(session, file_path, tpa):
                     FILE_TYPE
                 FROM {temp_table_name}
             ) s
-            ON t.FILE_NAME = s.FILE_NAME AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER
+            ON t.FILE_NAME = s.FILE_NAME 
+               AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER 
+               AND t.TPA = s.TPA
             WHEN NOT MATCHED THEN 
                 INSERT (FILE_NAME, FILE_ROW_NUMBER, TPA, RAW_DATA, FILE_TYPE)
                 VALUES (s.FILE_NAME, s.FILE_ROW_NUMBER, s.TPA, s.RAW_DATA, s.FILE_TYPE)
@@ -263,7 +266,9 @@ def process_excel_file(session, file_path, tpa):
                             PARSE_JSON('{row_json_escaped}') AS RAW_DATA,
                             'EXCEL' AS FILE_TYPE
                     ) s
-                    ON t.FILE_NAME = s.FILE_NAME AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER
+                    ON t.FILE_NAME = s.FILE_NAME 
+                       AND t.FILE_ROW_NUMBER = s.FILE_ROW_NUMBER 
+                       AND t.TPA = s.TPA
                     WHEN NOT MATCHED THEN INSERT (FILE_NAME, FILE_ROW_NUMBER, TPA, RAW_DATA, FILE_TYPE)
                         VALUES (s.FILE_NAME, s.FILE_ROW_NUMBER, s.TPA, s.RAW_DATA, s.FILE_TYPE)
                 """
@@ -664,7 +669,7 @@ $$;
 -- PROCEDURE: Delete File Data
 -- ============================================
 
-CREATE OR REPLACE PROCEDURE delete_file_data(p_file_name VARCHAR)
+CREATE OR REPLACE PROCEDURE delete_file_data(p_file_name VARCHAR, p_tpa VARCHAR)
 RETURNS VARCHAR
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.11'
@@ -672,25 +677,25 @@ PACKAGES = ('snowflake-snowpark-python')
 HANDLER = 'delete_file_data'
 AS
 $$
-def delete_file_data(session, p_file_name):
-    """Delete all data for a specific file from RAW_DATA_TABLE"""
+def delete_file_data(session, p_file_name, p_tpa):
+    """Delete all data for a specific file and TPA from RAW_DATA_TABLE"""
     
     # Get the file name without path if full path provided
     file_name = p_file_name.split('/')[-1]
     
-    # Delete from RAW_DATA_TABLE
-    delete_query = f"DELETE FROM RAW_DATA_TABLE WHERE FILE_NAME = '{file_name}'"
+    # Delete from RAW_DATA_TABLE for specific TPA
+    delete_query = f"DELETE FROM RAW_DATA_TABLE WHERE FILE_NAME = '{file_name}' AND TPA = '{p_tpa}'"
     delete_result = session.sql(delete_query).collect()
     rows_deleted = delete_result[0]['number of rows deleted'] if delete_result else 0
     
-    # Update queue status
+    # Update queue status for this specific TPA
     update_query = f"""
         UPDATE file_processing_queue
         SET status = 'DELETED',
             processed_timestamp = CURRENT_TIMESTAMP(),
-            process_result = 'Data deleted: {rows_deleted} rows removed'
-        WHERE file_name LIKE '%{file_name}%'
-           OR SPLIT_PART(file_name, '/', -1) = '{file_name}'
+            process_result = 'Data deleted for TPA {p_tpa}: {rows_deleted} rows removed'
+        WHERE (file_name LIKE '%{file_name}%' OR SPLIT_PART(file_name, '/', -1) = '{file_name}')
+          AND tpa = '{p_tpa}'
     """
     session.sql(update_query).collect()
     

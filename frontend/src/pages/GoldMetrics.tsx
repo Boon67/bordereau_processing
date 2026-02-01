@@ -23,10 +23,12 @@ const { Title, Text } = Typography
 
 interface GoldMetricsProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: Array<{ TPA_CODE: string; TPA_NAME: string }>
   selectedTpaName?: string
 }
 
-const GoldMetrics: React.FC<GoldMetricsProps> = ({ selectedTpa, selectedTpaName }) => {
+const GoldMetrics: React.FC<GoldMetricsProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [metrics, setMetrics] = useState<any[]>([])
 
@@ -150,10 +152,26 @@ const GoldMetrics: React.FC<GoldMetricsProps> = ({ selectedTpa, selectedTpaName 
 
   return (
     <div>
+      <Title level={2}>📈 Business Metrics</Title>
+      
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
+
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <Title level={2} style={{ margin: 0 }}>
+            <Title level={4} style={{ margin: 0 }}>
               📊 Business Metrics
             </Title>
             <Text type="secondary">

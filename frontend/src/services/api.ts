@@ -176,8 +176,10 @@ export const apiService = {
     return response.data
   },
 
-  deleteFileData: async (fileName: string): Promise<any> => {
-    const response = await api.delete(`/bronze/data/file/${encodeURIComponent(fileName)}`)
+  deleteFileData: async (fileName: string, tpa: string): Promise<any> => {
+    const response = await api.delete(`/bronze/data/file/${encodeURIComponent(fileName)}`, {
+      params: { tpa }
+    })
     return response.data
   },
 

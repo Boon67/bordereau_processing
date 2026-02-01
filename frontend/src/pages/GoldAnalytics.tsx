@@ -27,10 +27,12 @@ const { Option } = Select
 
 interface GoldAnalyticsProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: Array<{ TPA_CODE: string; TPA_NAME: string }>
   selectedTpaName?: string
 }
 
-const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, selectedTpaName }) => {
+const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [selectedTable, setSelectedTable] = useState<string>('CLAIMS_ANALYTICS')
   const [tableData, setTableData] = useState<any[]>([])
@@ -216,10 +218,26 @@ const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, selectedTpaN
 
   return (
     <div>
+      <Title level={2}>📊 Gold Analytics</Title>
+      
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
+
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <Title level={2} style={{ margin: 0 }}>
+            <Title level={4} style={{ margin: 0 }}>
               🏆 Gold Layer Analytics
             </Title>
             <Text type="secondary">

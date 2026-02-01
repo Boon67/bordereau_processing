@@ -1040,3 +1040,235 @@ async def update_silver_task_schedule(request: Request, task_name: str, schedule
     except Exception as e:
         logger.error(f"Failed to update Silver task schedule: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# DATA QUALITY ENDPOINTS
+# ============================================
+
+@router.post("/quality/check")
+async def run_quality_checks(
+    request: Request,
+    table_name: str,
+    tpa: str,
+    batch_id: Optional[str] = None
+):
+    """
+    Run data quality checks on a Silver table
+    
+    Performs comprehensive quality validation including:
+    - Row count validation
+    - Null value analysis
+    - Duplicate detection
+    - Completeness score
+    - Data freshness
+    - Range validation
+    - Date validation
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        logger.info(f"Running data quality checks: table={table_name}, tpa={tpa}")
+        
+        # Call the stored procedure
+        proc_name = "SILVER.run_data_quality_checks"
+        result = await sf_service.execute_procedure(
+            proc_name,
+            table_name,
+            tpa,
+            batch_id
+        )
+        
+        logger.info(f"Quality check result: {result}")
+        
+        return {
+            "success": True,
+            "message": result,
+            "table_name": table_name,
+            "tpa": tpa
+        }
+        
+    except Exception as e:
+        logger.error(f"Error running quality checks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/quality/check-all")
+async def run_quality_checks_all(
+    request: Request,
+    tpa: str,
+    batch_id: Optional[str] = None
+):
+    """
+    Run data quality checks on all Silver tables for a TPA
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        logger.info(f"Running data quality checks for all tables: tpa={tpa}")
+        
+        # Call the stored procedure
+        proc_name = "SILVER.run_data_quality_checks_all"
+        result = await sf_service.execute_procedure(
+            proc_name,
+            tpa,
+            batch_id
+        )
+        
+        logger.info(f"Quality check result: {result}")
+        
+        return {
+            "success": True,
+            "message": result,
+            "tpa": tpa
+        }
+        
+    except Exception as e:
+        logger.error(f"Error running quality checks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quality/summary")
+async def get_quality_summary(
+    request: Request,
+    tpa: Optional[str] = None
+):
+    """
+    Get data quality summary for all tables or a specific TPA
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        query = "SELECT * FROM SILVER.v_data_quality_summary"
+        if tpa:
+            query += f" WHERE tpa = '{tpa}'"
+        query += " ORDER BY quality_score ASC, tpa, target_table"
+        
+        results = await sf_service.execute_query(query)
+        
+        return {
+            "success": True,
+            "data": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting quality summary: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quality/failures")
+async def get_quality_failures(
+    request: Request,
+    tpa: Optional[str] = None,
+    table_name: Optional[str] = None
+):
+    """
+    Get all failed data quality checks
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        query = "SELECT * FROM SILVER.v_data_quality_failures WHERE 1=1"
+        if tpa:
+            query += f" AND tpa = '{tpa}'"
+        if table_name:
+            query += f" AND target_table LIKE '%{table_name.upper()}%'"
+        query += " ORDER BY measured_timestamp DESC LIMIT 100"
+        
+        results = await sf_service.execute_query(query)
+        
+        return {
+            "success": True,
+            "data": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting quality failures: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quality/trends")
+async def get_quality_trends(
+    request: Request,
+    tpa: str,
+    table_name: Optional[str] = None
+):
+    """
+    Get quality score trends over time
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        query = f"SELECT * FROM SILVER.v_data_quality_trends WHERE tpa = '{tpa}'"
+        if table_name:
+            query += f" AND target_table LIKE '%{table_name.upper()}%'"
+        query += " ORDER BY measured_timestamp DESC LIMIT 50"
+        
+        results = await sf_service.execute_query(query)
+        
+        return {
+            "success": True,
+            "data": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting quality trends: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quality/metrics")
+async def get_quality_metrics(
+    request: Request,
+    tpa: str,
+    table_name: str,
+    batch_id: Optional[str] = None
+):
+    """
+    Get detailed quality metrics for a specific table
+    """
+    try:
+        sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Construct full table name
+        full_table_name = f"{tpa.upper()}_{table_name.upper()}"
+        
+        query = f"""
+            SELECT 
+                metric_name,
+                metric_value,
+                metric_threshold,
+                passed,
+                description,
+                measured_timestamp
+            FROM SILVER.data_quality_metrics
+            WHERE tpa = '{tpa}'
+              AND target_table = '{full_table_name}'
+        """
+        
+        if batch_id:
+            query += f" AND batch_id = '{batch_id}'"
+        else:
+            # Get latest batch
+            query += f"""
+                AND batch_id = (
+                    SELECT MAX(batch_id)
+                    FROM SILVER.data_quality_metrics
+                    WHERE tpa = '{tpa}'
+                      AND target_table = '{full_table_name}'
+                )
+            """
+        
+        query += " ORDER BY metric_name"
+        
+        results = await sf_service.execute_query(query)
+        
+        return {
+            "success": True,
+            "table_name": full_table_name,
+            "tpa": tpa,
+            "metrics": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting quality metrics: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

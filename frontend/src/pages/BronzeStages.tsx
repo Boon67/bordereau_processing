@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Space, message, Tabs, Popconfirm } from 'antd'
+import { Card, Typography, Table, Button, Space, message, Tabs, Popconfirm, Select } from 'antd'
 import { ReloadOutlined, FolderOutlined, FileOutlined, DeleteOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
+import type { TPA } from '../types'
 
 const { Title } = Typography
 const { TabPane } = Tabs
@@ -14,11 +15,13 @@ interface StageFile {
 }
 
 interface BronzeStagesProps {
-  selectedTpa?: string
+  selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: TPA[]
   selectedTpaName?: string
 }
 
-const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
+const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [srcFiles, setSrcFiles] = useState<StageFile[]>([])
   const [processingFiles, setProcessingFiles] = useState<StageFile[]>([])
@@ -224,6 +227,20 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpaName }) => {
         >
           Refresh All
         </Button>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>

@@ -20,6 +20,20 @@ else
     PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 fi
 
+# Load configuration files
+if [ -f "$SCRIPT_DIR/default.config" ]; then
+    source "$SCRIPT_DIR/default.config"
+fi
+
+if [ -f "$SCRIPT_DIR/custom.config" ]; then
+    source "$SCRIPT_DIR/custom.config"
+fi
+
+# Load custom config file if passed from parent deploy.sh
+if [ -n "$DEPLOY_CONFIG_FILE" ] && [ -f "$DEPLOY_CONFIG_FILE" ]; then
+    source "$DEPLOY_CONFIG_FILE"
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -27,8 +41,19 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-CONNECTION_NAME="${1:-DEPLOYMENT}"
+# Configuration with fallbacks
+if [[ -n "${1}" ]]; then
+    CONNECTION_NAME="${1}"
+elif [[ -n "${SNOWFLAKE_CONNECTION}" ]]; then
+    CONNECTION_NAME="${SNOWFLAKE_CONNECTION}"
+else
+    # Get the default connection from snow CLI
+    CONNECTION_NAME=$(snow connection list --format json 2>/dev/null | jq -r '.[] | select(.is_default == true) | .connection_name // empty' 2>/dev/null)
+    if [[ -z "$CONNECTION_NAME" ]]; then
+        CONNECTION_NAME="DEPLOYMENT"
+    fi
+fi
+
 DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
 SILVER_SCHEMA_NAME="${SILVER_SCHEMA_NAME:-SILVER}"
 GOLD_SCHEMA_NAME="${GOLD_SCHEMA_NAME:-GOLD}"
@@ -113,25 +138,40 @@ else
 fi
 echo ""
 
-# 4. Gold Transformation Procedures (Optional - requires Silver data)
-echo -e "${YELLOW}[4/5]${NC} Skipping Gold transformation procedures..."
-echo -e "${BLUE}Note: Transformation procedures require Silver tables with data${NC}"
-echo -e "${BLUE}Deploy these after loading data: ./deploy_gold.sh --procedures-only${NC}"
-# snow sql -f gold/4_Gold_Transformation_Procedures.sql --enable-templating LEGACY \
-#     --connection "$CONNECTION_NAME" \
-#     -D "DATABASE_NAME=$DATABASE_NAME" \
-#     -D "SILVER_SCHEMA_NAME=$SILVER_SCHEMA_NAME" \
-#     -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"
+# 4. Gold Transformation Procedures
+echo -e "${YELLOW}[4/6]${NC} Creating Gold transformation procedures..."
+execute_sql "$PROJECT_ROOT/gold/4_Gold_Transformation_Procedures.sql"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Gold transformation procedures created${NC}"
+else
+    echo -e "${RED}✗ Failed to create Gold transformation procedures${NC}"
+    exit 1
+fi
 echo ""
 
-# 5. Gold Tasks (Optional - depend on procedures)
-echo -e "${YELLOW}[5/5]${NC} Creating Gold tasks..."
-echo -e "${BLUE}Note: Skipping Gold tasks (depend on transformation procedures)${NC}"
-echo -e "${BLUE}These can be created after procedures are deployed${NC}"
-# snow sql -f "$PROJECT_ROOT/gold/5_Gold_Tasks.sql" --enable-templating LEGACY \
-#     --connection "$CONNECTION_NAME" \
-#     -D "DATABASE_NAME=$DATABASE_NAME" \
-#     -D "GOLD_SCHEMA_NAME=$GOLD_SCHEMA_NAME"
+# 5. Gold Tasks
+echo -e "${YELLOW}[5/6]${NC} Creating Gold tasks..."
+execute_sql "$PROJECT_ROOT/gold/5_Gold_Tasks.sql"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Gold tasks created${NC}"
+else
+    echo -e "${RED}✗ Failed to create Gold tasks${NC}"
+    exit 1
+fi
+echo ""
+
+# 6. Member Journeys
+echo -e "${YELLOW}[6/6]${NC} Creating Member Journeys tables..."
+execute_sql "$PROJECT_ROOT/gold/6_Member_Journeys.sql"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Member Journeys tables created${NC}"
+else
+    echo -e "${RED}✗ Failed to create Member Journeys tables${NC}"
+    exit 1
+fi
 echo ""
 
 # Summary

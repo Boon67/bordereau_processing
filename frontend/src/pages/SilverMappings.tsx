@@ -3,16 +3,19 @@ import { Card, Typography, Table, Button, Select, Space, message, Tag, Progress,
 import { ReloadOutlined, ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, RobotOutlined, ThunderboltOutlined, PlusOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FieldMapping } from '../services/api'
+import type { TPA } from '../types'
 
 const { Title } = Typography
 const { TextArea } = Input
 
 interface SilverMappingsProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: TPA[]
   selectedTpaName?: string
 }
 
-const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTpaName }) => {
+const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [mappings, setMappings] = useState<FieldMapping[]>([])
   const [tables, setTables] = useState<string[]>([])
@@ -469,21 +472,32 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
     hasMappings: !!mappingsByTable[table.name],
   }))
 
-  if (!selectedTpa) {
-    return (
-      <div>
-        <Title level={2}>🔗 Field Mappings</Title>
-        <Card style={{ marginTop: 16 }}>
-          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            Please select a TPA from the dropdown in the header to view field mappings.
-          </p>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div>
+      <Title level={2}>🔗 Field Mappings</Title>
+      
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
+
+      {!selectedTpa ? (
+        <Card>
+          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            Please select a TPA to view field mappings.
+          </p>
+        </Card>
+      ) : (
+        <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={2}>🔗 Field Mappings</Title>
         <Space>
@@ -941,6 +955,8 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, selectedTp
           </Form.Item>
         </Form>
       </Modal>
+        </>
+      )}
     </div>
   )
 }

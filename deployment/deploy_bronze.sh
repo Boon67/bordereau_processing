@@ -18,31 +18,44 @@ else
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-# Connection name (optional argument)
-CONNECTION_NAME="${1:-default}"
+# Load configuration files
+if [ -f "$SCRIPT_DIR/default.config" ]; then
+    source "$SCRIPT_DIR/default.config"
+fi
+
+if [ -f "$SCRIPT_DIR/custom.config" ]; then
+    source "$SCRIPT_DIR/custom.config"
+fi
+
+# Load custom config file if passed from parent deploy.sh
+if [ -n "$DEPLOY_CONFIG_FILE" ] && [ -f "$DEPLOY_CONFIG_FILE" ]; then
+    source "$DEPLOY_CONFIG_FILE"
+fi
+
+# Connection name (optional argument or from config)
+if [[ -n "${1}" ]]; then
+    CONNECTION_NAME="${1}"
+elif [[ -n "${SNOWFLAKE_CONNECTION}" ]]; then
+    CONNECTION_NAME="${SNOWFLAKE_CONNECTION}"
+else
+    # Get the default connection from snow CLI
+    CONNECTION_NAME=$(snow connection list --format json 2>/dev/null | jq -r '.[] | select(.is_default == true) | .connection_name // empty' 2>/dev/null)
+    if [[ -z "$CONNECTION_NAME" ]]; then
+        CONNECTION_NAME="default"
+    fi
+fi
 
 echo -e "${CYAN}Deploying Bronze Layer using connection: ${CONNECTION_NAME}${NC}"
 
-# Use environment variables from deploy.sh if set, otherwise query snow CLI
-if [[ -n "$DEPLOY_DATABASE" ]]; then
-    DATABASE="$DEPLOY_DATABASE"
-else
-    DATABASE=$(snow connection list --format json | jq -r ".[] | select(.connection_name == \"$CONNECTION_NAME\") | .database // empty" 2>/dev/null)
-    DATABASE=${DATABASE:-FILE_PROCESSING_PIPELINE}
-fi
-
-if [[ -n "$DEPLOY_WAREHOUSE" ]]; then
-    WAREHOUSE="$DEPLOY_WAREHOUSE"
-else
-    WAREHOUSE=$(snow connection list --format json | jq -r ".[] | select(.connection_name == \"$CONNECTION_NAME\") | .warehouse // empty" 2>/dev/null)
-    WAREHOUSE=${WAREHOUSE:-COMPUTE_WH}
-fi
-
-BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-BRONZE}"
-SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-SILVER}"
-BRONZE_DISCOVERY_SCHEDULE="${DEPLOY_DISCOVERY_SCHEDULE:-60 MINUTE}"
-ROLE="${DEPLOY_ROLE:-SYSADMIN}"
-AUTO_RESUME_TASKS="${DEPLOY_AUTO_RESUME_TASKS:-true}"
+# Use configuration values with fallbacks
+# Priority: DEPLOY_* env vars > config file > defaults
+DATABASE="${DEPLOY_DATABASE:-${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}}"
+WAREHOUSE="${DEPLOY_WAREHOUSE:-${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}}"
+BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-${BRONZE_SCHEMA_NAME:-BRONZE}}"
+SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-${SILVER_SCHEMA_NAME:-SILVER}}"
+BRONZE_DISCOVERY_SCHEDULE="${DEPLOY_DISCOVERY_SCHEDULE:-${BRONZE_DISCOVERY_SCHEDULE:-60 MINUTE}}"
+ROLE="${DEPLOY_ROLE:-${SNOWFLAKE_ROLE:-SYSADMIN}}"
+AUTO_RESUME_TASKS="${DEPLOY_AUTO_RESUME_TASKS:-${AUTO_RESUME_TASKS:-true}}"
 
 echo -e "${CYAN}  Database: ${DATABASE}${NC}"
 echo -e "${CYAN}  Bronze Schema: ${BRONZE_SCHEMA}${NC}"
@@ -86,8 +99,8 @@ execute_sql() {
 
 # Execute Bronze SQL scripts in order
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-execute_sql "${PROJECT_ROOT}/bronze/1_Setup_Database_Roles.sql"
 execute_sql "${PROJECT_ROOT}/bronze/0_Setup_Logging.sql"
+execute_sql "${PROJECT_ROOT}/bronze/1_Setup_Database_Roles.sql"
 execute_sql "${PROJECT_ROOT}/bronze/2_Bronze_Schema_Tables.sql"
 execute_sql "${PROJECT_ROOT}/bronze/3_Bronze_Setup_Logic.sql"
 execute_sql "${PROJECT_ROOT}/bronze/4_Bronze_Tasks.sql"

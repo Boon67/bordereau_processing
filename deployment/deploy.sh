@@ -160,6 +160,9 @@ CONFIG_FILE="${2:-}"
 # Export verbose flag for child scripts
 export DEPLOY_VERBOSE="$VERBOSE"
 
+# Export config file path for child scripts
+export DEPLOY_CONFIG_FILE="$CONFIG_FILE"
+
 # Load configuration files in order (later files override earlier ones)
 # 1. Load default.config
 if [[ -f "${SCRIPT_DIR}/default.config" ]]; then

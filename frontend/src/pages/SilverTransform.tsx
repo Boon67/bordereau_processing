@@ -9,10 +9,12 @@ const { Step } = Steps
 
 interface SilverTransformProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: Array<{ TPA_CODE: string; TPA_NAME: string }>
   selectedTpaName?: string
 }
 
-const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selectedTpaName }) => {
+const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   // Add CSS for pending mapping rows
   React.useEffect(() => {
     const style = document.createElement('style')
@@ -221,6 +223,20 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, selected
     <div>
       <Title level={2}>⚡ Transform Bronze to Silver</Title>
       
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
+
       <p style={{ marginBottom: 24, color: '#666' }}>
         Transform raw data from Bronze layer to structured tables in Silver layer. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>

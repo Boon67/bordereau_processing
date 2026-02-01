@@ -10,10 +10,12 @@ const { Panel } = Collapse
 
 interface SilverSchemasProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: Array<{ TPA_CODE: string; TPA_NAME: string }>
   selectedTpaName?: string
 }
 
-const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaName }) => {
+const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [schemas, setSchemas] = useState<TargetSchema[]>([])
   const [allSchemas, setAllSchemas] = useState<TargetSchema[]>([])
@@ -37,12 +39,15 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
   const [viewSchemaModalVisible, setViewSchemaModalVisible] = useState(false)
   const [selectedTableSchema, setSelectedTableSchema] = useState<TargetSchema[]>([])
   const [selectedTableName, setSelectedTableName] = useState<string>('')
+  const [qualityData, setQualityData] = useState<Record<string, any>>({})
+  const [loadingQuality, setLoadingQuality] = useState(false)
 
   useEffect(() => {
     // Load schemas once on mount (TPA-agnostic)
     loadSchemas()
     loadTpas()
     loadCreatedTables()
+    loadQualityData()
   }, [])
 
   useEffect(() => {
@@ -95,6 +100,49 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
       message.error('Failed to load created tables')
     } finally {
       setLoadingCreatedTables(false)
+    }
+  }
+
+  const loadQualityData = async () => {
+    setLoadingQuality(true)
+    try {
+      const response = await fetch(`${apiService.baseURL}/silver/quality/summary`)
+      if (response.ok) {
+        const data = await response.json()
+        // Create a map of table_name -> quality data
+        const qualityMap = data.reduce((acc: any, item: any) => {
+          const key = `${item.TPA}_${item.TARGET_TABLE}`
+          acc[key] = item
+          return acc
+        }, {})
+        setQualityData(qualityMap)
+      }
+    } catch (error) {
+      console.error('Failed to load quality data:', error)
+    } finally {
+      setLoadingQuality(false)
+    }
+  }
+
+  const runQualityCheck = async (tableName: string, tpa: string) => {
+    try {
+      message.loading({ content: 'Running quality checks...', key: 'quality-check' })
+      const response = await fetch(`${apiService.baseURL}/silver/quality/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table_name: tableName, tpa })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        message.success({ content: result.message || 'Quality check completed', key: 'quality-check' })
+        // Reload quality data
+        await loadQualityData()
+      } else {
+        throw new Error('Quality check failed')
+      }
+    } catch (error: any) {
+      message.error({ content: `Failed to run quality check: ${error.message}`, key: 'quality-check' })
     }
   }
 
@@ -413,6 +461,22 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
 
   return (
     <div>
+      <Title level={2}>Target Schemas</Title>
+      
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
+      </div>
+
       <Card>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -597,6 +661,41 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, selectedTpaN
                   if (!date) return <span style={{ color: '#999' }}>-</span>
                   const d = new Date(date)
                   return d.toLocaleString()
+                },
+              },
+              {
+                title: 'Quality Score',
+                key: 'quality_score',
+                width: 150,
+                render: (_: any, record: any) => {
+                  const qualityKey = `${record.TPA}_${record.TABLE_NAME}`
+                  const quality = qualityData[qualityKey]
+                  
+                  if (!quality) {
+                    return (
+                      <Button
+                        size="small"
+                        onClick={() => runQualityCheck(record.SCHEMA_TABLE, record.TPA)}
+                        loading={loadingQuality}
+                      >
+                        Run Check
+                      </Button>
+                    )
+                  }
+                  
+                  const score = quality.QUALITY_SCORE || 0
+                  const color = score >= 80 ? 'green' : score >= 60 ? 'orange' : 'red'
+                  
+                  return (
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Tag color={color} style={{ width: '100%', textAlign: 'center' }}>
+                        {score.toFixed(1)}%
+                      </Tag>
+                      <div style={{ fontSize: '11px', color: '#666' }}>
+                        {quality.CHECKS_PASSED}/{quality.TOTAL_CHECKS} checks
+                      </div>
+                    </Space>
+                  )
                 },
               },
               {

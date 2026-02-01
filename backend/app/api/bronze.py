@@ -723,13 +723,14 @@ async def clear_all_data(request: Request):
 
 
 @router.delete("/data/file/{file_name}")
-async def delete_file_data(request: Request, file_name: str):
+async def delete_file_data(request: Request, file_name: str, tpa: str):
     """
-    Delete all data records for a specific file from RAW_DATA_TABLE.
+    Delete all data records for a specific file and TPA from RAW_DATA_TABLE.
     Updates the queue status to 'DELETED'.
     
     Args:
         file_name: Name of the file (with or without path)
+        tpa: TPA code to delete data for
     
     Returns:
         Success message with number of rows deleted
@@ -737,17 +738,18 @@ async def delete_file_data(request: Request, file_name: str):
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
-        # Call the stored procedure to delete file data
-        query = f"CALL {settings.BRONZE_SCHEMA_NAME}.delete_file_data('{file_name}')"
+        # Call the stored procedure to delete file data for specific TPA
+        query = f"CALL {settings.BRONZE_SCHEMA_NAME}.delete_file_data('{file_name}', '{tpa}')"
         result = await sf_service.execute_query(query)
         
-        result_message = result[0][0] if result and len(result) > 0 else "File data deleted"
+        result_message = result[0][0] if result and len(result) > 0 else f"File data deleted for TPA {tpa}"
         
-        logger.info(f"Deleted data for file: {file_name} - {result_message}")
+        logger.info(f"Deleted data for file: {file_name}, TPA: {tpa} - {result_message}")
         
         return {
             "message": result_message,
-            "file_name": file_name
+            "file_name": file_name,
+            "tpa": tpa
         }
         
     except Exception as e:

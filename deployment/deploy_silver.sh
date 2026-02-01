@@ -18,23 +18,42 @@ else
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-# Connection name (optional argument)
-CONNECTION_NAME="${1:-default}"
+# Load configuration files
+if [ -f "$SCRIPT_DIR/default.config" ]; then
+    source "$SCRIPT_DIR/default.config"
+fi
+
+if [ -f "$SCRIPT_DIR/custom.config" ]; then
+    source "$SCRIPT_DIR/custom.config"
+fi
+
+# Load custom config file if passed from parent deploy.sh
+if [ -n "$DEPLOY_CONFIG_FILE" ] && [ -f "$DEPLOY_CONFIG_FILE" ]; then
+    source "$DEPLOY_CONFIG_FILE"
+fi
+
+# Connection name (optional argument or from config)
+if [[ -n "${1}" ]]; then
+    CONNECTION_NAME="${1}"
+elif [[ -n "${SNOWFLAKE_CONNECTION}" ]]; then
+    CONNECTION_NAME="${SNOWFLAKE_CONNECTION}"
+else
+    # Get the default connection from snow CLI
+    CONNECTION_NAME=$(snow connection list --format json 2>/dev/null | jq -r '.[] | select(.is_default == true) | .connection_name // empty' 2>/dev/null)
+    if [[ -z "$CONNECTION_NAME" ]]; then
+        CONNECTION_NAME="default"
+    fi
+fi
 
 echo -e "${CYAN}Deploying Silver Layer using connection: ${CONNECTION_NAME}${NC}"
 
-# Use environment variables from deploy.sh if set, otherwise query snow CLI
-if [[ -n "$DEPLOY_DATABASE" ]]; then
-    DATABASE="$DEPLOY_DATABASE"
-else
-    DATABASE=$(snow connection list --format json | jq -r ".[] | select(.connection_name == \"$CONNECTION_NAME\") | .database // empty" 2>/dev/null)
-    DATABASE=${DATABASE:-FILE_PROCESSING_PIPELINE}
-fi
-
-BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-BRONZE}"
-SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-SILVER}"
-ROLE="${DEPLOY_ROLE:-SYSADMIN}"
-WAREHOUSE="${DEPLOY_WAREHOUSE:-COMPUTE_WH}"
+# Use configuration values with fallbacks
+# Priority: DEPLOY_* env vars > config file > defaults
+DATABASE="${DEPLOY_DATABASE:-${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}}"
+BRONZE_SCHEMA="${DEPLOY_BRONZE_SCHEMA:-${BRONZE_SCHEMA_NAME:-BRONZE}}"
+SILVER_SCHEMA="${DEPLOY_SILVER_SCHEMA:-${SILVER_SCHEMA_NAME:-SILVER}}"
+ROLE="${DEPLOY_ROLE:-${SNOWFLAKE_ROLE:-SYSADMIN}}"
+WAREHOUSE="${DEPLOY_WAREHOUSE:-${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}}"
 
 echo -e "${CYAN}  Database: ${DATABASE}${NC}"
 echo -e "${CYAN}  Silver Schema: ${SILVER_SCHEMA}${NC}"
@@ -77,6 +96,7 @@ execute_sql "${PROJECT_ROOT}/silver/3_Silver_Mapping_Procedures.sql"
 execute_sql "${PROJECT_ROOT}/silver/4_Silver_Rules_Engine.sql"
 execute_sql "${PROJECT_ROOT}/silver/5_Silver_Transformation_Logic.sql"
 execute_sql "${PROJECT_ROOT}/silver/6_Silver_Tasks.sql"
+execute_sql "${PROJECT_ROOT}/silver/7_Data_Quality_Checks.sql"
 
 # Optionally resume tasks
 if [[ "$DEPLOY_RESUME_TASKS" == "true" ]]; then

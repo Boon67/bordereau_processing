@@ -277,16 +277,6 @@ function App() {
           <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
           <h1 style={{ color: '#fff', margin: 0 }}>Snowflake Pipeline</h1>
         </div>
-        <Select
-          value={selectedTpa}
-          onChange={setSelectedTpa}
-          style={{ width: 250 }}
-          placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
-        />
       </Header>
       <Layout>
         <Sider width={250} theme="light">
@@ -318,18 +308,18 @@ function App() {
           >
             <Routes>
               <Route path="/" element={<Navigate to="/bronze/upload" replace />} />
-              <Route path="/bronze/upload" element={<BronzeUpload selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/bronze/status" element={<BronzeStatus selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/bronze/stages" element={<BronzeStages selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/bronze/data" element={<BronzeData selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/silver/schemas" element={<SilverSchemas selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/silver/mappings" element={<SilverMappings selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/silver/transform" element={<SilverTransform selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/silver/data" element={<SilverData selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/gold/analytics" element={<GoldAnalytics selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/gold/metrics" element={<GoldMetrics selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/gold/quality" element={<GoldQuality selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
-              <Route path="/gold/rules" element={<GoldRules selectedTpa={selectedTpa} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/upload" element={<BronzeUpload selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/status" element={<BronzeStatus selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/stages" element={<BronzeStages selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/bronze/data" element={<BronzeData selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/schemas" element={<SilverSchemas selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/mappings" element={<SilverMappings selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/transform" element={<SilverTransform selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/silver/data" element={<SilverData selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/analytics" element={<GoldAnalytics selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/metrics" element={<GoldMetrics selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/quality" element={<GoldQuality selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
+              <Route path="/gold/rules" element={<GoldRules selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/admin/tasks" element={<TaskManagement />} />
               <Route path="/admin/tpas" element={<TPAManagement onTpaChange={loadTpas} />} />
               <Route path="/admin/logs" element={<AdminLogs />} />

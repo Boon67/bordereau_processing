@@ -3,12 +3,15 @@ import { Card, Typography, Table, Button, Select, Input, Space, message, Tag, St
 import { ReloadOutlined, SearchOutlined, DatabaseOutlined, FileTextOutlined, TableOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { RawDataRecord } from '../services/api'
+import type { TPA } from '../types'
 
 const { Title } = Typography
 const { Search } = Input
 
 interface BronzeDataProps {
   selectedTpa: string
+  setSelectedTpa: (tpa: string) => void
+  tpas: TPA[]
   selectedTpaName?: string
 }
 
@@ -19,7 +22,7 @@ interface DataStats {
   dateRange: { earliest: string; latest: string } | null
 }
 
-const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, selectedTpaName }) => {
+const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<RawDataRecord[]>([])
   const [stats, setStats] = useState<DataStats>({
@@ -166,6 +169,20 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, selectedTpaName })
         >
           Refresh
         </Button>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
+        <Select
+          value={selectedTpa}
+          onChange={setSelectedTpa}
+          style={{ width: 300 }}
+          placeholder="Select TPA"
+          options={tpas.map(tpa => ({
+            value: tpa.TPA_CODE,
+            label: tpa.TPA_NAME,
+          }))}
+        />
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
