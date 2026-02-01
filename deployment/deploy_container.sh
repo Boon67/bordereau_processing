@@ -375,6 +375,8 @@ build_backend_image() {
     
     docker build \
         --platform linux/amd64 \
+        --build-arg APP_NAME="${APP_NAME}" \
+        --build-arg ALLOWED_LLM_MODELS="${ALLOWED_LLM_MODELS}" \
         -f docker/Dockerfile.backend \
         -t "$full_image_name" \
         -t "${BACKEND_IMAGE_NAME}:${IMAGE_TAG}" \
@@ -485,6 +487,7 @@ EOF
     
     docker build \
         --platform linux/amd64 \
+        --build-arg APP_NAME="${APP_NAME}" \
         -f Dockerfile.frontend.unified \
         -t "$full_image_name" \
         -t "${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}" \

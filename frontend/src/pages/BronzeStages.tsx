@@ -28,6 +28,11 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
   const [completedFiles, setCompletedFiles] = useState<StageFile[]>([])
   const [errorFiles, setErrorFiles] = useState<StageFile[]>([])
   const [archiveFiles, setArchiveFiles] = useState<StageFile[]>([])
+  const [allSrcFiles, setAllSrcFiles] = useState<StageFile[]>([])
+  const [allProcessingFiles, setAllProcessingFiles] = useState<StageFile[]>([])
+  const [allCompletedFiles, setAllCompletedFiles] = useState<StageFile[]>([])
+  const [allErrorFiles, setAllErrorFiles] = useState<StageFile[]>([])
+  const [allArchiveFiles, setAllArchiveFiles] = useState<StageFile[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<Record<string, React.Key[]>>({
     SRC: [],
     PROCESSING: [],
@@ -36,6 +41,17 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
     ARCHIVE: []
   })
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [tpaFilter, setTpaFilter] = useState<string[]>([selectedTpa])
+
+  useEffect(() => {
+    if (selectedTpa) {
+      setTpaFilter([selectedTpa])
+    }
+  }, [selectedTpa])
+
+  useEffect(() => {
+    applyFilters()
+  }, [tpaFilter, allSrcFiles, allProcessingFiles, allCompletedFiles, allErrorFiles, allArchiveFiles])
 
   useEffect(() => {
     loadAllStages()
@@ -45,11 +61,11 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
     setLoading(true)
     try {
       await Promise.all([
-        loadStage('SRC', setSrcFiles),
-        loadStage('PROCESSING', setProcessingFiles),
-        loadStage('COMPLETED', setCompletedFiles),
-        loadStage('ERROR', setErrorFiles),
-        loadStage('ARCHIVE', setArchiveFiles),
+        loadStage('SRC', setAllSrcFiles),
+        loadStage('PROCESSING', setAllProcessingFiles),
+        loadStage('COMPLETED', setAllCompletedFiles),
+        loadStage('ERROR', setAllErrorFiles),
+        loadStage('ARCHIVE', setAllArchiveFiles),
       ])
     } finally {
       setLoading(false)
@@ -64,6 +80,23 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
       message.error(`Failed to load ${stageName} stage`)
       setter([])
     }
+  }
+
+  const applyFilters = () => {
+    const filterByTpa = (files: StageFile[]) => {
+      if (tpaFilter.length === 0) return files
+      return files.filter(file => {
+        // Extract TPA from file path (e.g., "provider_a/file.csv" -> "provider_a")
+        const tpa = file.name.split('/')[0]
+        return tpaFilter.includes(tpa)
+      })
+    }
+
+    setSrcFiles(filterByTpa(allSrcFiles))
+    setProcessingFiles(filterByTpa(allProcessingFiles))
+    setCompletedFiles(filterByTpa(allCompletedFiles))
+    setErrorFiles(filterByTpa(allErrorFiles))
+    setArchiveFiles(filterByTpa(allArchiveFiles))
   }
 
   const formatBytes = (bytes: number) => {
@@ -117,11 +150,11 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
   }
 
   const reloadStage = (stageName: string) => {
-    if (stageName === 'SRC') loadStage('SRC', setSrcFiles)
-    else if (stageName === 'PROCESSING') loadStage('PROCESSING', setProcessingFiles)
-    else if (stageName === 'COMPLETED') loadStage('COMPLETED', setCompletedFiles)
-    else if (stageName === 'ERROR') loadStage('ERROR', setErrorFiles)
-    else if (stageName === 'ARCHIVE') loadStage('ARCHIVE', setArchiveFiles)
+    if (stageName === 'SRC') loadStage('SRC', setAllSrcFiles)
+    else if (stageName === 'PROCESSING') loadStage('PROCESSING', setAllProcessingFiles)
+    else if (stageName === 'COMPLETED') loadStage('COMPLETED', setAllCompletedFiles)
+    else if (stageName === 'ERROR') loadStage('ERROR', setAllErrorFiles)
+    else if (stageName === 'ARCHIVE') loadStage('ARCHIVE', setAllArchiveFiles)
   }
 
   const getColumns = (stageName: string) => [
@@ -144,10 +177,11 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
       title: 'TPA',
       dataIndex: 'name',
       key: 'tpa',
-      width: 120,
+      width: 200,
       render: (name: string) => {
-        const parts = name.split('/')
-        return parts.length > 1 ? parts[1] : '-'
+        const tpaCode = name.split('/')[0]
+        const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+        return tpa ? tpa.TPA_NAME : tpaCode
       },
     },
     {
@@ -229,23 +263,29 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
         </Button>
       </div>
 
-      <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
-          value={selectedTpa}
-          onChange={setSelectedTpa}
-          style={{ width: 300 }}
-          placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
-        />
-      </div>
-
       <p style={{ marginBottom: 24, color: '#666' }}>
         View files in different processing stages. Files move through these stages as they are processed.
       </p>
+
+      <Card style={{ marginBottom: 16 }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
+            Filter by TPA
+          </label>
+          <Select
+            mode="multiple"
+            style={{ width: '100%' }}
+            placeholder="All TPAs"
+            value={tpaFilter}
+            onChange={setTpaFilter}
+            options={tpas.map(tpa => ({
+              label: tpa.TPA_NAME,
+              value: tpa.TPA_CODE
+            }))}
+            allowClear
+          />
+        </div>
+      </Card>
 
       <Tabs defaultActiveKey="SRC">
         <TabPane 

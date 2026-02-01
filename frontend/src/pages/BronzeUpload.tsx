@@ -105,10 +105,12 @@ const BronzeUpload: React.FC<Props> = ({ selectedTpa, setSelectedTpa, tpas, sele
           onChange={setSelectedTpa}
           style={{ width: 300 }}
           placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
+          options={[...tpas]
+            .sort((a, b) => a.TPA_NAME.localeCompare(b.TPA_NAME))
+            .map(tpa => ({
+              value: tpa.TPA_CODE,
+              label: tpa.TPA_NAME,
+            }))}
         />
       </div>
 

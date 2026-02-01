@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     BRONZE_SCHEMA_NAME: str = "BRONZE"
     SILVER_SCHEMA_NAME: str = "SILVER"
     
+    # LLM Configuration
+    ALLOWED_LLM_MODELS: str = "CLAUDE-4-SONNET,OPENAI-GPT-4.1"
+    
+    @property
+    def allowed_llm_models_list(self) -> List[str]:
+        """Parse ALLOWED_LLM_MODELS string into list"""
+        if isinstance(self.ALLOWED_LLM_MODELS, list):
+            return self.ALLOWED_LLM_MODELS
+        return [model.strip() for model in self.ALLOWED_LLM_MODELS.split(",")]
+    
     # API Configuration
     API_PREFIX: str = "/api"
     # CORS origins - supports both local dev and SPCS deployment

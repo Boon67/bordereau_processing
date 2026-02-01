@@ -225,20 +225,6 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa
     <div>
       <Title level={2}>Processing Status</Title>
       
-      <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
-          value={selectedTpa}
-          onChange={setSelectedTpa}
-          style={{ width: 300 }}
-          placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
-        />
-      </div>
-
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div />
         <Button 
@@ -314,6 +300,18 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa
       <Card style={{ marginBottom: 16 }}>
         <Row gutter={16}>
           <Col span={8}>
+            <div style={{ marginBottom: 8 }}><strong>Filter by TPA</strong></div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="All TPAs"
+              value={tpaFilter}
+              onChange={setTpaFilter}
+              options={tpaOptions}
+              allowClear
+            />
+          </Col>
+          <Col span={8}>
             <div style={{ marginBottom: 8 }}><strong>Filter by Status</strong></div>
             <Select
               mode="multiple"
@@ -334,18 +332,6 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa
               value={typeFilter}
               onChange={setTypeFilter}
               options={typeOptions}
-              allowClear
-            />
-          </Col>
-          <Col span={8}>
-            <div style={{ marginBottom: 8 }}><strong>Filter by TPA</strong></div>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder="All TPAs"
-              value={tpaFilter}
-              onChange={setTpaFilter}
-              options={tpaOptions}
               allowClear
             />
           </Col>

@@ -149,7 +149,7 @@ async def get_target_columns(request: Request, table_name: str):
 
 @router.get("/cortex-models")
 async def get_cortex_models(request: Request):
-    """Get list of available Cortex LLM models"""
+    """Get list of available Cortex LLM models (filtered by allowed models)"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
@@ -163,17 +163,21 @@ async def get_cortex_models(request: Request):
                ORDER BY "name" """
         ]
         result = await sf_service.execute_queries_same_session(queries)
-        return [row['MODEL_NAME'] for row in result]
+        all_models = [row['MODEL_NAME'] for row in result]
+        
+        # Filter by allowed models from configuration
+        allowed_models = settings.allowed_llm_models_list
+        filtered_models = [model for model in all_models if model.upper() in [m.upper() for m in allowed_models]]
+        
+        # If no models match, return the allowed list anyway (they might not be available yet)
+        if not filtered_models:
+            return allowed_models
+        
+        return filtered_models
     except Exception as e:
         logger.error(f"Failed to get Cortex models: {str(e)}")
-        # Return a default list if the query fails
-        return [
-            'llama3.1-70b',
-            'llama3.1-8b',
-            'mistral-large',
-            'mixtral-8x7b',
-            'gemma-7b'
-        ]
+        # Return the configured allowed models as fallback
+        return settings.allowed_llm_models_list
 
 @router.post("/schemas")
 async def create_target_schema(request: Request, schema: TargetSchemaCreate):
@@ -546,38 +550,92 @@ async def get_silver_data(request: Request, tpa: str, table_name: str, limit: in
 
 @router.get("/data/stats")
 async def get_silver_data_stats(request: Request, tpa: str, table_name: str):
-    """Get statistics for a Silver layer table"""
+    """Get statistics for a Silver layer table with data quality metrics"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
         # Construct the physical table name
         physical_table_name = f"{tpa.upper()}_{table_name.upper()}"
         
-        # Get table statistics
+        # Get table statistics - simple count query
         stats_query = f"""
             SELECT 
-                COUNT(*) as TOTAL_RECORDS,
-                MAX(CREATED_TIMESTAMP) as LAST_UPDATED
+                COUNT(*) as TOTAL_RECORDS
             FROM {settings.SILVER_SCHEMA_NAME}.{physical_table_name}
         """
         
         result = await sf_service.execute_query_dict(stats_query)
         
+        # Get data quality metrics
+        quality_query = f"""
+            SELECT 
+                metric_name,
+                metric_value,
+                metric_threshold,
+                passed,
+                description,
+                measured_timestamp
+            FROM {settings.SILVER_SCHEMA_NAME}.data_quality_metrics
+            WHERE target_table = '{physical_table_name}'
+              AND tpa = '{tpa.upper()}'
+            ORDER BY measured_timestamp DESC
+            LIMIT 20
+        """
+        
+        quality_metrics = await sf_service.execute_query_dict(quality_query)
+        
+        # Calculate overall quality score from metrics
+        if quality_metrics:
+            passed_count = sum(1 for m in quality_metrics if m.get('PASSED'))
+            total_count = len(quality_metrics)
+            quality_score = round((passed_count / total_count) * 100, 1) if total_count > 0 else 0
+        else:
+            quality_score = 0
+        
+        # Get last updated timestamp from quality metrics if available
+        last_updated = None
+        if quality_metrics:
+            last_updated = max(m['MEASURED_TIMESTAMP'] for m in quality_metrics if m.get('MEASURED_TIMESTAMP'))
+        
         if result and len(result) > 0:
             return {
                 "total_records": result[0]['TOTAL_RECORDS'] or 0,
-                "last_updated": result[0]['LAST_UPDATED'],
-                "data_quality_score": 95  # Placeholder - could be calculated from validation rules
+                "last_updated": last_updated,
+                "data_quality_score": quality_score,
+                "quality_metrics": [
+                    {
+                        "metric_name": m['METRIC_NAME'],
+                        "metric_value": m['METRIC_VALUE'],
+                        "metric_threshold": m['METRIC_THRESHOLD'],
+                        "passed": m['PASSED'],
+                        "description": m['DESCRIPTION'],
+                        "measured_timestamp": m['MEASURED_TIMESTAMP']
+                    }
+                    for m in quality_metrics
+                ] if quality_metrics else []
             }
         else:
             return {
                 "total_records": 0,
                 "last_updated": None,
-                "data_quality_score": 0
+                "data_quality_score": 0,
+                "quality_metrics": []
             }
     except Exception as e:
         logger.error(f"Failed to get Silver data stats: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return basic stats on error
+        try:
+            # Fallback to simple count query
+            simple_query = f"SELECT COUNT(*) as TOTAL_RECORDS FROM {settings.SILVER_SCHEMA_NAME}.{physical_table_name}"
+            simple_result = await sf_service.execute_query_dict(simple_query)
+            return {
+                "total_records": simple_result[0]['TOTAL_RECORDS'] if simple_result else 0,
+                "last_updated": None,
+                "data_quality_score": 0,
+                "quality_metrics": []
+            }
+        except:
+            raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/mappings")
 async def get_field_mappings(request: Request, tpa: str, target_table: Optional[str] = None):

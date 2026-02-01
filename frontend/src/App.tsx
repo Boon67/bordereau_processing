@@ -275,7 +275,7 @@ function App() {
       <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
-          <h1 style={{ color: '#fff', margin: 0 }}>Snowflake Pipeline</h1>
+          <h1 style={{ color: '#fff', margin: 0 }}>{import.meta.env.VITE_APP_NAME || 'Snowflake Pipeline'}</h1>
         </div>
       </Header>
       <Layout>

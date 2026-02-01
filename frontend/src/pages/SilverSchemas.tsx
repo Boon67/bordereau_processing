@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Typography, Table, Button, Select, Space, message, Tag, Descriptions, Modal, Form, Input, Switch, Drawer, Alert, Popconfirm, Collapse, Spin } from 'antd'
-import { ReloadOutlined, TableOutlined, PlusOutlined, EditOutlined, DatabaseOutlined, DeleteOutlined, DownOutlined, EyeOutlined } from '@ant-design/icons'
+import { ReloadOutlined, TableOutlined, PlusOutlined, EditOutlined, DatabaseOutlined, DeleteOutlined, DownOutlined, EyeOutlined, LinkOutlined, DisconnectOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { TargetSchema } from '../services/api'
 
@@ -39,12 +39,14 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   const [selectedTableName, setSelectedTableName] = useState<string>('')
   const [qualityData, setQualityData] = useState<Record<string, any>>({})
   const [loadingQuality, setLoadingQuality] = useState(false)
+  const [tableMappings, setTableMappings] = useState<Record<string, number>>({})
 
   useEffect(() => {
     // Load schemas once on mount (TPA-agnostic)
     loadSchemas()
     loadCreatedTables()
     loadQualityData()
+    loadTableMappings()
   }, [])
 
   useEffect(() => {
@@ -82,6 +84,10 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
     try {
       const data = await apiService.getSilverTables()
       setCreatedTables(data)
+      // Load mappings after tables are loaded
+      if (data.length > 0) {
+        await loadTableMappingsForTables(data)
+      }
     } catch (error) {
       message.error('Failed to load created tables')
     } finally {
@@ -92,7 +98,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   const loadQualityData = async () => {
     setLoadingQuality(true)
     try {
-      const response = await fetch(`${apiService.baseURL}/silver/quality/summary`)
+      const response = await fetch('/api/silver/quality/summary')
       if (response.ok) {
         const data = await response.json()
         // Create a map of table_name -> quality data
@@ -113,7 +119,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   const runQualityCheck = async (tableName: string, tpa: string) => {
     try {
       message.loading({ content: 'Running quality checks...', key: 'quality-check' })
-      const response = await fetch(`${apiService.baseURL}/silver/quality/check`, {
+      const response = await fetch('/api/silver/quality/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table_name: tableName, tpa })
@@ -129,6 +135,41 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
       }
     } catch (error: any) {
       message.error({ content: `Failed to run quality check: ${error.message}`, key: 'quality-check' })
+    }
+  }
+
+  const loadTableMappings = async () => {
+    // This is called on mount, but createdTables might be empty
+    // The actual loading happens in loadTableMappingsForTables
+  }
+
+  const loadTableMappingsForTables = async (tables: any[]) => {
+    try {
+      // Load all mappings for all TPAs
+      const allMappings: Record<string, number> = {}
+      
+      // Get all unique TPAs from created tables
+      const uniqueTpas = Array.from(new Set(tables.map((t: any) => t.TPA)))
+      
+      // Load mappings for each TPA
+      await Promise.all(
+        uniqueTpas.map(async (tpa) => {
+          try {
+            const mappings = await apiService.getFieldMappings(tpa)
+            // Count mappings per table
+            mappings.forEach((mapping: any) => {
+              const key = `${tpa}_${mapping.TARGET_TABLE}`
+              allMappings[key] = (allMappings[key] || 0) + 1
+            })
+          } catch (error) {
+            console.error(`Failed to load mappings for TPA ${tpa}:`, error)
+          }
+        })
+      )
+      
+      setTableMappings(allMappings)
+    } catch (error) {
+      console.error('Failed to load table mappings:', error)
     }
   }
 
@@ -608,6 +649,31 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
                 key: 'TPA',
                 width: 150,
                 render: (text: string) => <Tag color="green">{text}</Tag>,
+              },
+              {
+                title: 'Mappings',
+                key: 'mappings',
+                width: 120,
+                render: (_: any, record: any) => {
+                  const mappingKey = `${record.TPA}_${record.SCHEMA_TABLE}`
+                  const mappingCount = tableMappings[mappingKey] || 0
+                  
+                  if (mappingCount > 0) {
+                    return (
+                      <Space>
+                        <LinkOutlined style={{ color: '#52c41a' }} />
+                        <Tag color="success">{mappingCount} mappings</Tag>
+                      </Space>
+                    )
+                  } else {
+                    return (
+                      <Space>
+                        <DisconnectOutlined style={{ color: '#d9d9d9' }} />
+                        <Tag color="default">No mappings</Tag>
+                      </Space>
+                    )
+                  }
+                },
               },
               {
                 title: 'Rows',

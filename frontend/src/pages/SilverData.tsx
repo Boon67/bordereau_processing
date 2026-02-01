@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Select, Space, message, Statistic, Row, Col, Input, Tag } from 'antd'
-import { ReloadOutlined, DatabaseOutlined, SearchOutlined, BarChartOutlined } from '@ant-design/icons'
+import { Card, Typography, Table, Button, Select, Space, message, Statistic, Row, Col, Input, Tag, Collapse, Tooltip } from 'antd'
+import { ReloadOutlined, DatabaseOutlined, SearchOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 
 const { Title } = Typography
+const { Panel } = Collapse
 
 interface SilverDataProps {
   selectedTpa: string
@@ -100,6 +101,7 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
         totalRecords: stats.total_records || 0,
         lastUpdated: stats.last_updated,
         dataQualityScore: stats.data_quality_score || 0,
+        qualityMetrics: stats.quality_metrics || [],
       })
     } catch (error: any) {
       console.error('Failed to load statistics:', error)
@@ -107,6 +109,7 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
         totalRecords: 0,
         lastUpdated: null,
         dataQualityScore: 0,
+        qualityMetrics: [],
       })
     }
   }
@@ -192,21 +195,110 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
               />
             </Col>
             <Col span={6}>
-              <Statistic
-                title="Data Quality Score"
-                value={statistics.dataQualityScore}
-                suffix="%"
-                prefix={<BarChartOutlined />}
-                valueStyle={{ color: statistics.dataQualityScore >= 90 ? '#3f8600' : '#cf1322' }}
-              />
+              <Tooltip title="Click to view quality metrics details">
+                <Statistic
+                  title={
+                    <Space>
+                      Data Quality Score
+                      {statistics.qualityMetrics && statistics.qualityMetrics.length > 0 && (
+                        <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                      )}
+                    </Space>
+                  }
+                  value={statistics.dataQualityScore}
+                  suffix="%"
+                  prefix={<BarChartOutlined />}
+                  valueStyle={{ color: statistics.dataQualityScore >= 90 ? '#3f8600' : statistics.dataQualityScore >= 70 ? '#faad14' : '#cf1322' }}
+                />
+              </Tooltip>
             </Col>
             <Col span={12}>
               <Statistic
                 title="Last Updated"
-                value={new Date(statistics.lastUpdated).toLocaleString()}
+                value={statistics.lastUpdated ? new Date(statistics.lastUpdated).toLocaleString() : 'N/A'}
               />
             </Col>
           </Row>
+          
+          {/* Quality Metrics Details */}
+          {statistics.qualityMetrics && statistics.qualityMetrics.length > 0 && (
+            <Collapse 
+              style={{ marginTop: 16 }}
+              items={[
+                {
+                  key: 'quality-metrics',
+                  label: (
+                    <Space>
+                      <BarChartOutlined />
+                      <strong>Data Quality Metrics</strong>
+                      <Tag color={statistics.dataQualityScore >= 90 ? 'success' : statistics.dataQualityScore >= 70 ? 'warning' : 'error'}>
+                        {statistics.qualityMetrics.filter((m: any) => m.passed).length} / {statistics.qualityMetrics.length} Passed
+                      </Tag>
+                    </Space>
+                  ),
+                  children: (
+                    <Table
+                      dataSource={statistics.qualityMetrics}
+                      rowKey="metric_name"
+                      pagination={false}
+                      size="small"
+                      columns={[
+                        {
+                          title: 'Status',
+                          dataIndex: 'passed',
+                          key: 'passed',
+                          width: 80,
+                          render: (passed: boolean) => (
+                            passed ? (
+                              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '18px' }} />
+                            ) : (
+                              <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: '18px' }} />
+                            )
+                          ),
+                        },
+                        {
+                          title: 'Metric',
+                          dataIndex: 'metric_name',
+                          key: 'metric_name',
+                          render: (text: string) => <strong>{text.replace(/_/g, ' ')}</strong>,
+                        },
+                        {
+                          title: 'Description',
+                          dataIndex: 'description',
+                          key: 'description',
+                        },
+                        {
+                          title: 'Value',
+                          dataIndex: 'metric_value',
+                          key: 'metric_value',
+                          width: 120,
+                          render: (value: number) => (
+                            <Tag color="blue">{value !== null && value !== undefined ? value.toLocaleString() : 'N/A'}</Tag>
+                          ),
+                        },
+                        {
+                          title: 'Threshold',
+                          dataIndex: 'metric_threshold',
+                          key: 'metric_threshold',
+                          width: 120,
+                          render: (threshold: number) => (
+                            <Tag color="default">{threshold !== null && threshold !== undefined ? threshold.toLocaleString() : 'N/A'}</Tag>
+                          ),
+                        },
+                        {
+                          title: 'Measured',
+                          dataIndex: 'measured_timestamp',
+                          key: 'measured_timestamp',
+                          width: 180,
+                          render: (timestamp: string) => timestamp ? new Date(timestamp).toLocaleString() : 'N/A',
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]}
+            />
+          )}
         </Card>
       )}
 

@@ -1,6 +1,10 @@
 # Multi-stage build for React frontend
 FROM node:18-alpine AS builder
 
+# Build arguments
+ARG APP_NAME="Snowflake Pipeline"
+ARG API_URL="/api"
+
 WORKDIR /app
 
 # Copy package files
@@ -12,7 +16,11 @@ RUN npm ci
 # Copy source code
 COPY frontend/ .
 
-# Build application
+# Create .env file with build arguments
+RUN echo "VITE_APP_NAME=${APP_NAME}" > .env && \
+    echo "VITE_API_URL=${API_URL}" >> .env
+
+# Build application (Vite will read .env file)
 RUN npm run build
 
 # Production stage

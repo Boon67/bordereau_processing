@@ -1,6 +1,12 @@
 # Backend Dockerfile for FastAPI middleware
 FROM python:3.11-slim
 
+# Build arguments
+ARG ALLOWED_LLM_MODELS="CLAUDE-4-SONNET,OPENAI-GPT-4.1"
+
+# Environment variables
+ENV ALLOWED_LLM_MODELS=${ALLOWED_LLM_MODELS}
+
 WORKDIR /app
 
 # Install system dependencies

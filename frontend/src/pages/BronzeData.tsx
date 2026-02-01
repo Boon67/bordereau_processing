@@ -25,6 +25,7 @@ interface DataStats {
 const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<RawDataRecord[]>([])
+  const [allData, setAllData] = useState<RawDataRecord[]>([])
   const [stats, setStats] = useState<DataStats>({
     totalRecords: 0,
     uniqueFiles: 0,
@@ -33,12 +34,17 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
   })
   const [fileName, setFileName] = useState<string>('')
   const [limit, setLimit] = useState(100)
+  const [tpaFilter, setTpaFilter] = useState<string[]>([selectedTpa])
 
   useEffect(() => {
     if (selectedTpa) {
-      loadData()
+      setTpaFilter([selectedTpa])
     }
   }, [selectedTpa])
+
+  useEffect(() => {
+    applyFilters()
+  }, [tpaFilter, allData])
 
   const loadData = async () => {
     if (!selectedTpa) {
@@ -49,34 +55,44 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
     setLoading(true)
     try {
       const result = await apiService.getRawData(selectedTpa, fileName || undefined, limit)
-      setData(result)
-      
-      // Calculate statistics
-      const uniqueFiles = new Set(result.map(r => r.FILE_NAME)).size
-      const fileTypes = result.reduce((acc, r) => {
-        acc[r.FILE_TYPE] = (acc[r.FILE_TYPE] || 0) + 1
-        return acc
-      }, {} as Record<string, number>)
-      
-      const timestamps = result.map(r => new Date(r.LOAD_TIMESTAMP).getTime()).filter(t => !isNaN(t))
-      const dateRange = timestamps.length > 0 ? {
-        earliest: new Date(Math.min(...timestamps)).toLocaleDateString(),
-        latest: new Date(Math.max(...timestamps)).toLocaleDateString(),
-      } : null
-      
-      setStats({
-        totalRecords: result.length,
-        uniqueFiles,
-        fileTypes,
-        dateRange,
-      })
-      
-      message.success(`Loaded ${result.length} records from ${uniqueFiles} files`)
+      setAllData(result)
+      message.success(`Loaded ${result.length} records`)
     } catch (error) {
       message.error('Failed to load raw data')
     } finally {
       setLoading(false)
     }
+  }
+
+  const applyFilters = () => {
+    let filtered = allData
+
+    // Apply TPA filter
+    if (tpaFilter.length > 0) {
+      filtered = filtered.filter(item => tpaFilter.includes(item.TPA))
+    }
+
+    setData(filtered)
+
+    // Calculate statistics
+    const uniqueFiles = new Set(filtered.map(r => r.FILE_NAME)).size
+    const fileTypes = filtered.reduce((acc, r) => {
+      acc[r.FILE_TYPE] = (acc[r.FILE_TYPE] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const timestamps = filtered.map(r => new Date(r.LOAD_TIMESTAMP).getTime()).filter(t => !isNaN(t))
+    const dateRange = timestamps.length > 0 ? {
+      earliest: new Date(Math.min(...timestamps)).toLocaleDateString(),
+      latest: new Date(Math.max(...timestamps)).toLocaleDateString(),
+    } : null
+    
+    setStats({
+      totalRecords: filtered.length,
+      uniqueFiles,
+      fileTypes,
+      dateRange,
+    })
   }
 
   const columns = [
@@ -171,20 +187,6 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
         </Button>
       </div>
 
-      <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
-          value={selectedTpa}
-          onChange={setSelectedTpa}
-          style={{ width: 300 }}
-          placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
-        />
-      </div>
-
       <p style={{ marginBottom: 24, color: '#666' }}>
         View raw data records loaded from files. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
       </p>
@@ -244,6 +246,24 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
 
       <Card style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <div>
+            <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
+              Filter by TPA
+            </label>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="All TPAs"
+              value={tpaFilter}
+              onChange={setTpaFilter}
+              options={Array.from(new Set(allData.map(r => r.TPA))).map(tpa => ({
+                label: tpa,
+                value: tpa
+              }))}
+              allowClear
+            />
+          </div>
+
           <div>
             <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
               Filter by File Name (optional)
