@@ -140,8 +140,44 @@ echo -e "  Gold Schema:       ${CYAN}$GOLD_SCHEMA${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
+# Verify warehouse exists and is accessible
+echo ""
+echo -e "${CYAN}Checking warehouse: $WAREHOUSE${NC}"
+
+# Check if warehouse exists
+WAREHOUSE_EXISTS=$(snow sql --connection "$CONNECTION_NAME" -q "SHOW WAREHOUSES LIKE '$WAREHOUSE'" 2>&1)
+
+if echo "$WAREHOUSE_EXISTS" | grep -q "does not exist\|no rows"; then
+    echo -e "${RED}✗ Warehouse does not exist or is not accessible: $WAREHOUSE${NC}"
+    echo ""
+    echo "Available warehouses:"
+    snow sql --connection "$CONNECTION_NAME" -q "SHOW WAREHOUSES" 2>/dev/null | head -20 || echo "  (Could not list warehouses)"
+    echo ""
+    echo "Solutions:"
+    echo "  1. Create the warehouse:"
+    echo "     CREATE WAREHOUSE $WAREHOUSE WITH WAREHOUSE_SIZE = 'X-SMALL' AUTO_SUSPEND = 300 AUTO_RESUME = TRUE;"
+    echo "  2. Or specify an existing warehouse in custom.config:"
+    echo "     SNOWFLAKE_WAREHOUSE=\"YOUR_WAREHOUSE_NAME\""
+    echo "  3. Or grant access to $WAREHOUSE:"
+    echo "     GRANT USAGE ON WAREHOUSE $WAREHOUSE TO ROLE $ROLE;"
+    exit 1
+fi
+
+# Check if warehouse is accessible (can we use it?)
+if ! snow sql --connection "$CONNECTION_NAME" -q "USE WAREHOUSE $WAREHOUSE;" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Cannot use warehouse: $WAREHOUSE${NC}"
+    echo "You may not have USAGE privilege on this warehouse"
+    echo ""
+    echo "Solution: Grant USAGE privilege:"
+    echo "  GRANT USAGE ON WAREHOUSE $WAREHOUSE TO ROLE $ROLE;"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Warehouse check passed${NC}"
+
 # Confirm deployment
 if [[ "${AUTO_APPROVE}" != "true" ]]; then
+    echo ""
     read -p "Continue with deployment? (y/n): " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then

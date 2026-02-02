@@ -498,11 +498,64 @@ log_message INFO "Checking required roles: SYSADMIN, SECURITYADMIN"
 check_role "SYSADMIN" "$CONNECTION_NAME"
 check_role "SECURITYADMIN" "$CONNECTION_NAME"
 
-# Verify warehouse exists
-if ! snow sql --connection "$CONNECTION_NAME" -q "SHOW WAREHOUSES LIKE '$WAREHOUSE';" >/dev/null 2>&1; then
+# Verify warehouse exists and is accessible
+log_message INFO "Checking warehouse: $WAREHOUSE"
+
+# Check if warehouse exists
+WAREHOUSE_INFO=$(snow sql --connection "$CONNECTION_NAME" --format json -q "SHOW WAREHOUSES LIKE '$WAREHOUSE'" 2>/dev/null)
+
+if [[ -z "$WAREHOUSE_INFO" ]] || [[ "$WAREHOUSE_INFO" == "[]" ]]; then
     log_message ERROR "Warehouse does not exist or is not accessible: $WAREHOUSE"
+    log_message ERROR ""
+    log_message ERROR "Available warehouses:"
+    snow sql --connection "$CONNECTION_NAME" -q "SHOW WAREHOUSES" 2>/dev/null | head -20 || echo "  (Could not list warehouses)"
+    log_message ERROR ""
+    log_message ERROR "Solutions:"
+    log_message ERROR "  1. Create the warehouse:"
+    log_message ERROR "     CREATE WAREHOUSE $WAREHOUSE WITH WAREHOUSE_SIZE = 'X-SMALL' AUTO_SUSPEND = 300 AUTO_RESUME = TRUE;"
+    log_message ERROR "  2. Or specify an existing warehouse in custom.config:"
+    log_message ERROR "     SNOWFLAKE_WAREHOUSE=\"YOUR_WAREHOUSE_NAME\""
+    log_message ERROR "  3. Or grant access to $WAREHOUSE:"
+    log_message ERROR "     GRANT USAGE ON WAREHOUSE $WAREHOUSE TO ROLE $ROLE;"
     exit 1
 fi
+
+# Get warehouse state
+WAREHOUSE_STATE=$(echo "$WAREHOUSE_INFO" | jq -r '.[0].state // empty' 2>/dev/null)
+WAREHOUSE_SIZE=$(echo "$WAREHOUSE_INFO" | jq -r '.[0].size // empty' 2>/dev/null)
+AUTO_RESUME=$(echo "$WAREHOUSE_INFO" | jq -r '.[0].auto_resume // empty' 2>/dev/null)
+
+log_message SUCCESS "Warehouse exists: $WAREHOUSE"
+log_verbose "  State: $WAREHOUSE_STATE"
+log_verbose "  Size: $WAREHOUSE_SIZE"
+log_verbose "  Auto Resume: $AUTO_RESUME"
+
+# Check if warehouse is accessible (can we use it?)
+if ! snow sql --connection "$CONNECTION_NAME" -q "USE WAREHOUSE $WAREHOUSE;" >/dev/null 2>&1; then
+    log_message ERROR "Cannot use warehouse: $WAREHOUSE"
+    log_message ERROR "You may not have USAGE privilege on this warehouse"
+    log_message ERROR ""
+    log_message ERROR "Solution: Grant USAGE privilege:"
+    log_message ERROR "  GRANT USAGE ON WAREHOUSE $WAREHOUSE TO ROLE $ROLE;"
+    exit 1
+fi
+
+# Warn if warehouse is suspended and auto_resume is disabled
+if [[ "$WAREHOUSE_STATE" == "SUSPENDED" ]] && [[ "$AUTO_RESUME" == "false" ]]; then
+    log_message WARNING "Warehouse is SUSPENDED and AUTO_RESUME is disabled"
+    log_message WARNING "You may need to manually resume it: ALTER WAREHOUSE $WAREHOUSE RESUME;"
+    log_message WARNING ""
+    read -p "Do you want to continue anyway? (y/n): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_message INFO "Deployment cancelled by user"
+        exit 0
+    fi
+elif [[ "$WAREHOUSE_STATE" == "SUSPENDED" ]]; then
+    log_message INFO "Warehouse is SUSPENDED but AUTO_RESUME is enabled - it will start automatically"
+fi
+
+log_message SUCCESS "Warehouse check passed"
 
 # Check EXECUTE TASK privilege for SYSADMIN
 log_message INFO "Checking EXECUTE TASK privilege for SYSADMIN..."
