@@ -52,21 +52,25 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
 
   useEffect(() => {
     // Set default values when selectedTable changes
+    // Extract schema table name from physical table name
+    const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
+    const schemaTableName = tableInfo?.name || ''
+    
     autoMLForm.setFieldsValue({
       source_table: 'RAW_DATA_TABLE',
-      target_table: selectedTable
+      target_table: schemaTableName
     })
     
     autoLLMForm.setFieldsValue({
       source_table: 'RAW_DATA_TABLE',
-      target_table: selectedTable
+      target_table: schemaTableName
     })
     
     manualForm.setFieldsValue({
       source_table: 'RAW_DATA_TABLE',
-      target_table: selectedTable
+      target_table: schemaTableName
     })
-  }, [selectedTable])
+  }, [selectedTable, availableTargetTables])
 
   useEffect(() => {
     // Set default model when cortex models are loaded
@@ -233,13 +237,10 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const handleAutoMapML = async (values: any) => {
     setLoading(true)
     try {
-      // Get the schema table name (without TPA prefix) for the procedure
-      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
-      const schemaTableName = tableInfo?.name || selectedTable
-      
+      // Use the target_table from form values (already a schema table name)
       const result = await apiService.autoMapFieldsML(
         values.source_table,
-        schemaTableName,  // Use schema table name, not physical name
+        values.target_table,  // Schema table name from dropdown
         selectedTpa,
         values.top_n,
         values.min_confidence / 100
@@ -247,9 +248,15 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
       
       // Check if mapping was successful
       if (result.mappings_created > 0) {
-        message.success(`Created ${result.mappings_created} ML-based mappings`)
+        message.success(`Created ${result.mappings_created} ML-based mappings for ${values.target_table}`)
         setIsAutoMLDrawerVisible(false)
-        loadMappings()
+        
+        // Switch to the table that was just mapped
+        const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
+        if (tableInfo) {
+          setSelectedTable(tableInfo.physicalName)
+        }
+        // loadMappings will be called automatically by the selectedTable useEffect
       } else {
         // Show the actual error/info message from the procedure
         const errorMsg = result.message || result.result || 'No mappings created'
@@ -266,22 +273,25 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const handleAutoMapLLM = async (values: any) => {
     setLoading(true)
     try {
-      // Get the schema table name (without TPA prefix) for the procedure
-      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
-      const schemaTableName = tableInfo?.name || selectedTable
-      
+      // Use the target_table from form values (already a schema table name)
       const result = await apiService.autoMapFieldsLLM(
         values.source_table,
-        schemaTableName,  // Use schema table name, not physical name
+        values.target_table,  // Schema table name from dropdown
         selectedTpa,
         values.model_name
       )
       
       // Check if mapping was successful
       if (result.mappings_created > 0) {
-        message.success(`Created ${result.mappings_created} LLM-based mappings`)
+        message.success(`Created ${result.mappings_created} LLM-based mappings for ${values.target_table}`)
         setIsAutoLLMDrawerVisible(false)
-        loadMappings()
+        
+        // Switch to the table that was just mapped
+        const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
+        if (tableInfo) {
+          setSelectedTable(tableInfo.physicalName)
+        }
+        // loadMappings will be called automatically by the selectedTable useEffect
       } else {
         // Show the actual error/info message from the procedure
         const errorMsg = result.message || result.result || 'No mappings created'
@@ -523,7 +533,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
             icon={<RobotOutlined />} 
             onClick={() => setIsAutoMLDrawerVisible(true)}
             type="primary"
-            disabled={!selectedTable}
+            disabled={!selectedTpa}
           >
             Auto-Map (ML)
           </Button>
@@ -534,7 +544,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
               loadCortexModels() // Load models when drawer opens
             }}
             type="primary"
-            disabled={!selectedTable}
+            disabled={!selectedTpa}
           >
             Auto-Map (LLM)
           </Button>
@@ -762,6 +772,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
           onFinish={handleAutoMapML}
           initialValues={{ 
             source_table: 'RAW_DATA_TABLE',
+            target_table: selectedTable,
             top_n: 3, 
             min_confidence: 60 
           }}
@@ -772,6 +783,22 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
             rules={[{ required: true, message: 'Please enter source table' }]}
           >
             <Input placeholder="RAW_DATA_TABLE" />
+          </Form.Item>
+
+          <Form.Item
+            name="target_table"
+            label="Target Table"
+            rules={[{ required: true, message: 'Please select target table' }]}
+            tooltip="Select the schema table to map fields to"
+          >
+            <Select
+              placeholder="Select target table"
+              options={availableTargetTables.map(table => ({
+                label: `${table.name} (${table.columns} columns)`,
+                value: table.name
+              }))}
+              showSearch
+            />
           </Form.Item>
 
           <Form.Item
@@ -825,6 +852,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
           onFinish={handleAutoMapLLM}
           initialValues={{ 
             source_table: 'RAW_DATA_TABLE',
+            target_table: selectedTable,
           }}
         >
           <Form.Item
@@ -833,6 +861,22 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
             rules={[{ required: true, message: 'Please enter source table' }]}
           >
             <Input placeholder="RAW_DATA_TABLE" />
+          </Form.Item>
+
+          <Form.Item
+            name="target_table"
+            label="Target Table"
+            rules={[{ required: true, message: 'Please select target table' }]}
+            tooltip="Select the schema table to map fields to"
+          >
+            <Select
+              placeholder="Select target table"
+              options={availableTargetTables.map(table => ({
+                label: `${table.name} (${table.columns} columns)`,
+                value: table.name
+              }))}
+              showSearch
+            />
           </Form.Item>
 
           <Form.Item
