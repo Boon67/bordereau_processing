@@ -23,6 +23,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 cd "$PROJECT_ROOT"
 
+# Create tmp directory in project root
+TMP_DIR="${PROJECT_ROOT}/tmp"
+mkdir -p "${TMP_DIR}"
+
 # Load configuration
 source "$SCRIPT_DIR/default.config" 2>/dev/null || true
 [ -f "$SCRIPT_DIR/custom.config" ] && source "$SCRIPT_DIR/custom.config"
@@ -211,7 +215,7 @@ grant_container_privileges() {
     
     log_info "Granting CREATE SERVICE privileges to ${SNOWFLAKE_ROLE}..."
     
-    cat > /tmp/grant_container_privs.sql << EOF
+    cat > ${TMP_DIR}/grant_container_privs.sql << EOF
 -- Use SYSADMIN to grant container service privileges
 USE ROLE SYSADMIN;
 
@@ -222,7 +226,7 @@ GRANT CREATE SERVICE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLA
 -- These should be granted once during initial setup via bronze/1_Setup_Database_Roles.sql
 EOF
     
-    execute_sql_file /tmp/grant_container_privs.sql || {
+    execute_sql_file ${TMP_DIR}/grant_container_privs.sql || {
         log_warning "Some privileges may already be granted (this is OK)"
     }
     
@@ -252,7 +256,7 @@ create_compute_pool() {
         
         # Ensure permissions are granted even if pool exists
         log_info "Granting permissions on existing compute pool..."
-        cat > /tmp/grant_pool_perms.sql << EOF
+        cat > ${TMP_DIR}/grant_pool_perms.sql << EOF
 USE ROLE SYSADMIN;
 
 -- Grant permissions on compute pool to admin role
@@ -260,7 +264,7 @@ GRANT USAGE ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
 GRANT MONITOR ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
 GRANT OPERATE ON COMPUTE POOL ${COMPUTE_POOL_NAME} TO ROLE ${SNOWFLAKE_ROLE};
 EOF
-        execute_sql_file /tmp/grant_pool_perms.sql || {
+        execute_sql_file ${TMP_DIR}/grant_pool_perms.sql || {
             log_warning "Failed to grant permissions (may already exist)"
         }
         
@@ -269,7 +273,7 @@ EOF
     
     log_info "Creating compute pool: $COMPUTE_POOL_NAME"
     
-    cat > /tmp/create_pool.sql << EOF
+    cat > ${TMP_DIR}/create_pool.sql << EOF
 -- Create compute pool with SYSADMIN
 USE ROLE SYSADMIN;
 
@@ -292,7 +296,7 @@ USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
 EOF
     
-    execute_sql_file /tmp/create_pool.sql || {
+    execute_sql_file ${TMP_DIR}/create_pool.sql || {
         log_error "Failed to create compute pool"
         exit 1
     }
@@ -323,7 +327,7 @@ create_image_repository() {
         
         # Ensure permissions are granted even if repository exists
         log_info "Granting permissions on existing image repository..."
-        cat > /tmp/grant_repo_perms.sql << EOF
+        cat > ${TMP_DIR}/grant_repo_perms.sql << EOF
 USE ROLE SYSADMIN;
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
@@ -331,7 +335,7 @@ USE SCHEMA ${SCHEMA_NAME};
 -- Grant permissions on image repository to admin role
 GRANT READ, WRITE ON IMAGE REPOSITORY ${REPOSITORY_NAME} TO ROLE ${SNOWFLAKE_ROLE};
 EOF
-        execute_sql_file /tmp/grant_repo_perms.sql || {
+        execute_sql_file ${TMP_DIR}/grant_repo_perms.sql || {
             log_warning "Failed to grant permissions (may already exist)"
         }
         
@@ -340,7 +344,7 @@ EOF
     
     log_info "Creating image repository: $REPOSITORY_NAME"
     
-    cat > /tmp/create_repo.sql << EOF
+    cat > ${TMP_DIR}/create_repo.sql << EOF
 -- Use SYSADMIN to create image repository
 USE ROLE SYSADMIN;
 USE DATABASE ${DATABASE_NAME};
@@ -356,7 +360,7 @@ GRANT READ, WRITE ON IMAGE REPOSITORY ${REPOSITORY_NAME} TO ROLE ${SNOWFLAKE_ROL
 USE ROLE ${SNOWFLAKE_ROLE};
 EOF
     
-    execute_sql_file /tmp/create_repo.sql || {
+    execute_sql_file ${TMP_DIR}/create_repo.sql || {
         log_error "Failed to create image repository"
         exit 1
     }
@@ -452,7 +456,7 @@ build_frontend_image() {
     
     # Create nginx config that proxies to backend on localhost:8000
     log_info "Creating nginx configuration..."
-    cat > /tmp/nginx-unified.conf << 'EOF'
+    cat > ${TMP_DIR}/nginx-unified.conf << 'EOF'
 server {
     listen 80;
     server_name _;
@@ -531,7 +535,7 @@ CMD ["nginx", "-g", "daemon off;"]
 EOF
     
     # Copy nginx config to build context (project root)
-    cp /tmp/nginx-unified.conf "$PROJECT_ROOT/nginx-unified.conf"
+    cp ${TMP_DIR}/nginx-unified.conf "$PROJECT_ROOT/nginx-unified.conf"
     
     log_info "Building frontend image: $full_image_name"
     log_info "Build context: $PROJECT_ROOT"
@@ -588,9 +592,8 @@ push_images() {
 create_service_spec() {
     log_step "10/11: Creating unified service specification..."
     
-    # Determine temp directory (works on both Linux/Mac and Windows Git Bash)
-    TEMP_DIR="${TMPDIR:-${TEMP:-/tmp}}"
-    SPEC_FILE="${TEMP_DIR}/unified_service_spec.yaml"
+    # Use the project's tmp directory
+    SPEC_FILE="${TMP_DIR}/unified_service_spec.yaml"
     
     log_info "Creating service specification at: ${SPEC_FILE}"
     
@@ -759,7 +762,7 @@ deploy_service() {
         # Create new service
         log_info "Creating new service '$SERVICE_NAME'..."
         
-        cat > /tmp/create_service.sql << EOF
+        cat > ${TMP_DIR}/create_service.sql << EOF
 USE ROLE ${SNOWFLAKE_ROLE};
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SCHEMA_NAME};
@@ -774,14 +777,14 @@ CREATE SERVICE ${SERVICE_NAME}
 EOF
         
         # Execute with error output visible
-        local create_cmd="snow sql -f /tmp/create_service.sql"
+        local create_cmd="snow sql -f ${TMP_DIR}/create_service.sql"
         if [ -n "$SNOWFLAKE_CONNECTION" ]; then
             create_cmd="$create_cmd --connection $SNOWFLAKE_CONNECTION"
         fi
         
-        if ! $create_cmd 2>&1 | tee /tmp/create_service_error.log; then
+        if ! $create_cmd 2>&1 | tee ${TMP_DIR}/create_service_error.log; then
             log_error "Failed to create service. Error details:"
-            cat /tmp/create_service_error.log | grep -i "error\|failed" || cat /tmp/create_service_error.log | tail -20
+            cat ${TMP_DIR}/create_service_error.log | grep -i "error\|failed" || cat ${TMP_DIR}/create_service_error.log | tail -20
             exit 1
         fi
         log_success "Service created: $SERVICE_NAME"
