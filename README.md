@@ -75,21 +75,9 @@ deploy.bat
 
 ## 📖 Documentation
 
-### Quick Start
-- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** 🚀 - Complete deployment instructions
-- **[Quick Reference](docs/QUICK_REFERENCE.md)** ⚡ - One-page cheat sheet
-- **[Windows Guide](WINDOWS_DEPLOYMENT.md)** 🪟 - Windows-specific instructions
-
-### Core Documentation
-- **[User Guide](docs/USER_GUIDE.md)** - Application usage
+- **[DEPLOY.md](DEPLOY.md)** - Complete deployment guide
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and data flow
-- **[Technical Reference](docs/TECHNICAL_REFERENCE.md)** - Advanced topics
-- **[Configuration](deployment/DEPLOYMENT_CONFIG.md)** - Configuration options
-
-### Deployment Guides
-- **[GHCR to Snowflake](deployment/GHCR_DEPLOYMENT.md)** - Deploy from GitHub Container Registry
-- **[Local Deployment](deployment/GHCR_LOCAL_DEPLOYMENT.md)** - Run locally with Docker
-- **[Script Reference](DEPLOYMENT_SCRIPTS.md)** - All deployment scripts
+- **[User Guide](docs/USER_GUIDE.md)** - Application usage
 
 ## 📦 Deployment Options
 
