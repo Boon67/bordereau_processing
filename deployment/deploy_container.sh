@@ -58,14 +58,45 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+check_privileges() {
+    log_info "Checking role privileges..."
+    
+    # Check if role can create stages in the schema
+    local can_create_stage=$(execute_sql "
+        SHOW GRANTS ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME};
+    " | grep -i "CREATE STAGE" | grep -i "${SNOWFLAKE_ROLE}" || echo "")
+    
+    if [ -z "$can_create_stage" ]; then
+        log_warning "Role ${SNOWFLAKE_ROLE} may not have CREATE STAGE privilege on ${DATABASE_NAME}.${SCHEMA_NAME}"
+        log_warning "If deployment fails, run as SYSADMIN:"
+        log_warning "  GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
+    else
+        log_success "Role has CREATE STAGE privilege"
+    fi
+}
+
 execute_sql() {
     local sql="$1"
-    if [ -n "$SNOWFLAKE_CONNECTION" ]; then
-        snow sql -q "$sql" --connection "$SNOWFLAKE_CONNECTION" 2>/dev/null
-    elif [ "$USE_DEFAULT_CONNECTION" = "true" ]; then
-        snow sql -q "$sql" 2>/dev/null
+    local show_errors="${2:-false}"
+    
+    if [ "$show_errors" = "true" ]; then
+        # Show errors for debugging
+        if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+            snow sql -q "$sql" --connection "$SNOWFLAKE_CONNECTION"
+        elif [ "$USE_DEFAULT_CONNECTION" = "true" ]; then
+            snow sql -q "$sql"
+        else
+            snow sql -q "$sql"
+        fi
     else
-        snow sql -q "$sql" 2>/dev/null
+        # Suppress errors (default behavior)
+        if [ -n "$SNOWFLAKE_CONNECTION" ]; then
+            snow sql -q "$sql" --connection "$SNOWFLAKE_CONNECTION" 2>/dev/null
+        elif [ "$USE_DEFAULT_CONNECTION" = "true" ]; then
+            snow sql -q "$sql" 2>/dev/null
+        else
+            snow sql -q "$sql" 2>/dev/null
+        fi
     fi
 }
 
@@ -601,8 +632,10 @@ deploy_service() {
         USE SCHEMA ${SCHEMA_NAME};
         CREATE STAGE IF NOT EXISTS SERVICE_SPECS
             COMMENT = 'Stage for Snowpark Container Service specifications';
-    " || {
+    " "true" || {
         log_error "Failed to create stage"
+        log_error "Please ensure your role has CREATE STAGE privilege on schema ${DATABASE_NAME}.${SCHEMA_NAME}"
+        log_error "Run: GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
         exit 1
     }
     
@@ -910,6 +943,7 @@ print_summary() {
 main() {
     print_header
     validate_prerequisites
+    check_privileges
     grant_container_privileges
     create_compute_pool
     create_image_repository
