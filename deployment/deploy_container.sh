@@ -693,8 +693,23 @@ deploy_service() {
         exit 1
     fi
     
-    # Convert path for Snowflake PUT command (handle Windows paths)
-    SPEC_FILE_UPLOAD=$(echo "${SPEC_FILE}" | sed 's|\\|/|g')
+    # Convert path for Snowflake PUT command (handle Windows Git Bash paths)
+    # Git Bash uses /c/, /d/, /z/ etc. for drive letters
+    # Snowflake needs C:/, D:/, Z:/ format
+    SPEC_FILE_UPLOAD="${SPEC_FILE}"
+    
+    # Convert Git Bash path to Windows path if needed
+    if [[ "$SPEC_FILE_UPLOAD" =~ ^/([a-z])/ ]]; then
+        # Extract drive letter and convert to Windows format
+        DRIVE_LETTER="${BASH_REMATCH[1]}"
+        SPEC_FILE_UPLOAD=$(echo "${SPEC_FILE}" | sed "s|^/${DRIVE_LETTER}/|${DRIVE_LETTER}:/|")
+    fi
+    
+    # Replace backslashes with forward slashes
+    SPEC_FILE_UPLOAD=$(echo "${SPEC_FILE_UPLOAD}" | sed 's|\\|/|g')
+    
+    log_info "Original path: ${SPEC_FILE}"
+    log_info "Upload path: ${SPEC_FILE_UPLOAD}"
     
     execute_sql "
         USE ROLE ${CONTAINER_ROLE};
@@ -704,6 +719,7 @@ deploy_service() {
     " "true" || {
         log_error "Failed to upload service specification"
         log_error "File: ${SPEC_FILE}"
+        log_error "Upload path: ${SPEC_FILE_UPLOAD}"
         log_error "Please ensure role ${CONTAINER_ROLE} has WRITE privilege on stage SERVICE_SPECS"
         exit 1
     }
