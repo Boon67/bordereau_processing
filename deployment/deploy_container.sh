@@ -588,7 +588,13 @@ push_images() {
 create_service_spec() {
     log_step "10/11: Creating unified service specification..."
     
-    cat > /tmp/unified_service_spec.yaml << EOF
+    # Determine temp directory (works on both Linux/Mac and Windows Git Bash)
+    TEMP_DIR="${TMPDIR:-${TEMP:-/tmp}}"
+    SPEC_FILE="${TEMP_DIR}/unified_service_spec.yaml"
+    
+    log_info "Creating service specification at: ${SPEC_FILE}"
+    
+    cat > "${SPEC_FILE}" << EOF
 spec:
   containers:
   # Backend container (internal only, no public endpoint)
@@ -637,7 +643,16 @@ spec:
     public: true
 EOF
 
-    log_success "Service specification created"
+    # Verify file was created
+    if [ -f "${SPEC_FILE}" ]; then
+        log_success "Service specification created: ${SPEC_FILE}"
+        log_info "File size: $(wc -c < "${SPEC_FILE}") bytes"
+    else
+        log_error "Failed to create service specification file"
+        log_error "Expected location: ${SPEC_FILE}"
+        log_error "Temp directory: ${TEMP_DIR}"
+        exit 1
+    fi
 }
 
 # ============================================
@@ -667,13 +682,25 @@ deploy_service() {
     
     # Upload spec file (using CONTAINER_ROLE)
     log_info "Uploading service specification..."
+    
+    # Verify file exists before uploading
+    if [ ! -f "${SPEC_FILE}" ]; then
+        log_error "Service specification file not found: ${SPEC_FILE}"
+        log_error "The create_service_spec step may have failed"
+        exit 1
+    fi
+    
+    # Convert path for Snowflake PUT command (handle Windows paths)
+    SPEC_FILE_UPLOAD=$(echo "${SPEC_FILE}" | sed 's|\\|/|g')
+    
     execute_sql "
         USE ROLE ${CONTAINER_ROLE};
         USE DATABASE ${DATABASE_NAME};
         USE SCHEMA ${SCHEMA_NAME};
-        PUT file:///tmp/unified_service_spec.yaml @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+        PUT file://${SPEC_FILE_UPLOAD} @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
     " "true" || {
         log_error "Failed to upload service specification"
+        log_error "File: ${SPEC_FILE}"
         log_error "Please ensure role ${CONTAINER_ROLE} has WRITE privilege on stage SERVICE_SPECS"
         exit 1
     }
@@ -708,7 +735,7 @@ deploy_service() {
         snow spcs service upgrade "${SERVICE_NAME}" \
             --database "${DATABASE_NAME}" \
             --schema "${SCHEMA_NAME}" \
-            --spec-path /tmp/unified_service_spec.yaml || {
+            --spec-path "${SPEC_FILE}" || {
             log_error "Failed to upgrade service"
             exit 1
         }
