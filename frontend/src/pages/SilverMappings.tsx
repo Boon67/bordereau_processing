@@ -132,21 +132,19 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   }
 
   const loadMappings = async () => {
-    if (!selectedTable) {
+    if (!selectedTable || !selectedTpa) {
       return
     }
 
     setLoading(true)
     try {
-      // Extract TPA from selected table name (e.g., "PROVIDER_A_DENTAL_CLAIMS" -> "provider_a")
-      const tableParts = selectedTable.split('_')
-      const tpa = tableParts[0] + '_' + tableParts[1] // Get first two parts (e.g., "provider_a")
+      // Get the schema table name (without TPA prefix)
+      // Mappings are stored with the schema table name (e.g., "PHARMACY_CLAIMS")
+      // not the physical table name (e.g., "PROVIDER_A_PHARMACY_CLAIMS")
+      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
+      const schemaTableName = tableInfo?.name || selectedTable
       
-      // Get the schema table name (e.g., "DENTAL_CLAIMS")
-      const schemaTable = tableParts.slice(2).join('_')
-      
-      // Load mappings for this TPA and table
-      const data = await apiService.getFieldMappings(tpa.toLowerCase(), schemaTable)
+      const data = await apiService.getFieldMappings(selectedTpa, schemaTableName)
       setMappings(data)
       
       // Extract unique target tables from mappings
@@ -235,18 +233,31 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const handleAutoMapML = async (values: any) => {
     setLoading(true)
     try {
+      // Get the schema table name (without TPA prefix) for the procedure
+      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
+      const schemaTableName = tableInfo?.name || selectedTable
+      
       const result = await apiService.autoMapFieldsML(
         values.source_table,
-        selectedTable,
+        schemaTableName,  // Use schema table name, not physical name
         selectedTpa,
         values.top_n,
         values.min_confidence / 100
       )
-      message.success(`Created ${result.mappings_created || 0} ML-based mappings`)
-      setIsAutoMLDrawerVisible(false)
-      loadMappings()
+      
+      // Check if mapping was successful
+      if (result.mappings_created > 0) {
+        message.success(`Created ${result.mappings_created} ML-based mappings`)
+        setIsAutoMLDrawerVisible(false)
+        loadMappings()
+      } else {
+        // Show the actual error/info message from the procedure
+        const errorMsg = result.message || result.result || 'No mappings created'
+        message.warning(errorMsg, 10) // Show for 10 seconds
+      }
     } catch (error: any) {
-      message.error(`Auto-mapping failed: ${error.response?.data?.detail || error.message}`)
+      const errorDetail = error.response?.data?.detail || error.message
+      message.error(`Auto-mapping failed: ${errorDetail}`, 10)
     } finally {
       setLoading(false)
     }
@@ -255,17 +266,30 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const handleAutoMapLLM = async (values: any) => {
     setLoading(true)
     try {
+      // Get the schema table name (without TPA prefix) for the procedure
+      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
+      const schemaTableName = tableInfo?.name || selectedTable
+      
       const result = await apiService.autoMapFieldsLLM(
         values.source_table,
-        selectedTable,
+        schemaTableName,  // Use schema table name, not physical name
         selectedTpa,
         values.model_name
       )
-      message.success(`Created ${result.mappings_created || 0} LLM-based mappings`)
-      setIsAutoLLMDrawerVisible(false)
-      loadMappings()
+      
+      // Check if mapping was successful
+      if (result.mappings_created > 0) {
+        message.success(`Created ${result.mappings_created} LLM-based mappings`)
+        setIsAutoLLMDrawerVisible(false)
+        loadMappings()
+      } else {
+        // Show the actual error/info message from the procedure
+        const errorMsg = result.message || result.result || 'No mappings created'
+        message.warning(errorMsg, 10) // Show for 10 seconds
+      }
     } catch (error: any) {
-      message.error(`Auto-mapping failed: ${error.response?.data?.detail || error.message}`)
+      const errorDetail = error.response?.data?.detail || error.message
+      message.error(`Auto-mapping failed: ${errorDetail}`, 10)
     } finally {
       setLoading(false)
     }
@@ -273,10 +297,14 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
 
   const handleManualMapping = async (values: any) => {
     try {
+      // Get the schema table name (without TPA prefix)
+      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
+      const schemaTableName = tableInfo?.name || selectedTable
+      
       await apiService.createFieldMapping({
         SOURCE_TABLE: values.source_table,
         SOURCE_FIELD: values.source_field,
-        TARGET_TABLE: selectedTable,
+        TARGET_TABLE: schemaTableName,  // Use schema table name, not physical name
         TARGET_COLUMN: values.target_column,
         TPA: selectedTpa,
         MAPPING_METHOD: 'MANUAL',

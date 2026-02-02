@@ -78,6 +78,7 @@ deploy.bat
 - **[DEPLOY.md](DEPLOY.md)** - Complete deployment guide
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and data flow
 - **[User Guide](docs/USER_GUIDE.md)** - Application usage
+- **[Auto-Mapping Guide](docs/AUTO_MAPPING_GUIDE.md)** - ML/LLM field mapping troubleshooting
 
 ## 📦 Deployment Options
 

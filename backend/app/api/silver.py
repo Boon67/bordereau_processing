@@ -825,7 +825,22 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
             mapping_request.min_confidence
         )
         logger.info(f"ML auto-mapping completed: {result}")
-        return {"message": "ML auto-mapping completed", "result": result}
+        
+        # Parse the result string to extract number of mappings created
+        # Result format: "Successfully generated X ML-based field mappings..."
+        mappings_created = 0
+        if result and isinstance(result, str):
+            import re
+            match = re.search(r'generated (\d+)', result)
+            if match:
+                mappings_created = int(match.group(1))
+        
+        return {
+            "message": result if result else "ML auto-mapping completed",
+            "result": result,
+            "mappings_created": mappings_created,
+            "success": mappings_created > 0 or (result and "successfully" in result.lower())
+        }
     except asyncio.TimeoutError:
         logger.error(f"ML auto-mapping timed out for TPA {mapping_request.tpa}")
         raise HTTPException(
@@ -856,7 +871,22 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
             "DEFAULT_FIELD_MAPPING"
         )
         logger.info(f"LLM auto-mapping completed: {result}")
-        return {"message": "LLM auto-mapping completed", "result": result}
+        
+        # Parse the result string to extract number of mappings created
+        # Result format: "Successfully generated X LLM-based field mappings..."
+        mappings_created = 0
+        if result and isinstance(result, str):
+            import re
+            match = re.search(r'generated (\d+)', result)
+            if match:
+                mappings_created = int(match.group(1))
+        
+        return {
+            "message": result if result else "LLM auto-mapping completed",
+            "result": result,
+            "mappings_created": mappings_created,
+            "success": mappings_created > 0 or (result and "successfully" in result.lower())
+        }
     except asyncio.TimeoutError:
         logger.error(f"LLM auto-mapping timed out for TPA {mapping_request.tpa}")
         raise HTTPException(
