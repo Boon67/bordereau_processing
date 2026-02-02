@@ -62,8 +62,16 @@ command_exists() {
 check_privileges() {
     log_info "Checking role privileges..."
     
-    # Try to create a test stage to verify permissions
+    # SYSADMIN and ACCOUNTADMIN have all privileges by default
+    if [[ "${CONTAINER_ROLE}" == "SYSADMIN" ]] || [[ "${CONTAINER_ROLE}" == "ACCOUNTADMIN" ]]; then
+        log_success "Using ${CONTAINER_ROLE} - has all required privileges"
+        return 0
+    fi
+    
+    # For custom roles, try to create a test stage to verify permissions
+    log_info "Testing CREATE STAGE privilege for role ${CONTAINER_ROLE}..."
     local test_result=$(execute_sql "
+        USE ROLE ${CONTAINER_ROLE};
         USE DATABASE ${DATABASE_NAME};
         USE SCHEMA ${SCHEMA_NAME};
         CREATE OR REPLACE STAGE PRIVILEGE_TEST_STAGE COMMENT = 'Temporary stage for privilege check';
@@ -72,17 +80,17 @@ check_privileges() {
     " 2>&1)
     
     if echo "$test_result" | grep -q "SUCCESS"; then
-        log_success "Role ${SNOWFLAKE_ROLE} has required privileges"
+        log_success "Role ${CONTAINER_ROLE} has required privileges"
     else
-        log_warning "Role ${SNOWFLAKE_ROLE} may not have sufficient privileges"
+        log_warning "Role ${CONTAINER_ROLE} may not have sufficient privileges"
         log_warning "If deployment fails with stage creation errors, try one of these solutions:"
         log_warning ""
-        log_warning "Option 1: Grant privileges to your current role (run as SYSADMIN):"
-        log_warning "  GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
-        log_warning "  GRANT ALL PRIVILEGES ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
+        log_warning "Option 1: Use SYSADMIN for container operations (recommended):"
+        log_warning "  Set CONTAINER_ROLE=\"SYSADMIN\" in deployment/custom.config"
         log_warning ""
-        log_warning "Option 2: Use SYSADMIN role for deployment:"
-        log_warning "  Set SNOWFLAKE_ROLE=\"SYSADMIN\" in deployment/custom.config"
+        log_warning "Option 2: Grant privileges to your current role (run as SYSADMIN):"
+        log_warning "  GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${CONTAINER_ROLE};"
+        log_warning "  GRANT ALL PRIVILEGES ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${CONTAINER_ROLE};"
         log_warning ""
     fi
 }
