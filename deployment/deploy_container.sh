@@ -33,6 +33,7 @@ USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
 SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-SFSENORTHAMERICA-TBOON_AWS2}"
 SNOWFLAKE_USER="${SNOWFLAKE_USER:-DEMO_SVC}"
 SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-BORDEREAU_PROCESSING_PIPELINE_ADMIN}"
+CONTAINER_ROLE="${CONTAINER_ROLE:-${SNOWFLAKE_ROLE}}"  # Use SNOWFLAKE_ROLE if not specified
 SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
 DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
 SCHEMA_NAME="${SCHEMA_NAME:-PUBLIC}"
@@ -61,17 +62,28 @@ command_exists() {
 check_privileges() {
     log_info "Checking role privileges..."
     
-    # Check if role can create stages in the schema
-    local can_create_stage=$(execute_sql "
-        SHOW GRANTS ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME};
-    " | grep -i "CREATE STAGE" | grep -i "${SNOWFLAKE_ROLE}" || echo "")
+    # Try to create a test stage to verify permissions
+    local test_result=$(execute_sql "
+        USE DATABASE ${DATABASE_NAME};
+        USE SCHEMA ${SCHEMA_NAME};
+        CREATE OR REPLACE STAGE PRIVILEGE_TEST_STAGE COMMENT = 'Temporary stage for privilege check';
+        DROP STAGE IF EXISTS PRIVILEGE_TEST_STAGE;
+        SELECT 'SUCCESS' as result;
+    " 2>&1)
     
-    if [ -z "$can_create_stage" ]; then
-        log_warning "Role ${SNOWFLAKE_ROLE} may not have CREATE STAGE privilege on ${DATABASE_NAME}.${SCHEMA_NAME}"
-        log_warning "If deployment fails, run as SYSADMIN:"
-        log_warning "  GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
+    if echo "$test_result" | grep -q "SUCCESS"; then
+        log_success "Role ${SNOWFLAKE_ROLE} has required privileges"
     else
-        log_success "Role has CREATE STAGE privilege"
+        log_warning "Role ${SNOWFLAKE_ROLE} may not have sufficient privileges"
+        log_warning "If deployment fails with stage creation errors, try one of these solutions:"
+        log_warning ""
+        log_warning "Option 1: Grant privileges to your current role (run as SYSADMIN):"
+        log_warning "  GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
+        log_warning "  GRANT ALL PRIVILEGES ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
+        log_warning ""
+        log_warning "Option 2: Use SYSADMIN role for deployment:"
+        log_warning "  Set SNOWFLAKE_ROLE=\"SYSADMIN\" in deployment/custom.config"
+        log_warning ""
     fi
 }
 
@@ -125,6 +137,8 @@ print_header() {
     echo "  Service:         $SERVICE_NAME"
     echo "  Account:         $SNOWFLAKE_ACCOUNT"
     echo "  Database:        $DATABASE_NAME"
+    echo "  Role:            $SNOWFLAKE_ROLE"
+    echo "  Container Role:  $CONTAINER_ROLE"
     echo "  Compute Pool:    $COMPUTE_POOL_NAME"
     echo "  Repository:      $REPOSITORY_NAME"
     echo ""
@@ -625,28 +639,34 @@ EOF
 deploy_service() {
     log_step "11/11: Deploying unified service..."
     
-    # Create stage
-    log_info "Creating stage for service specifications..."
+    # Create stage (using CONTAINER_ROLE which may be SYSADMIN)
+    log_info "Creating stage for service specifications (using role: ${CONTAINER_ROLE})..."
     execute_sql "
+        USE ROLE ${CONTAINER_ROLE};
         USE DATABASE ${DATABASE_NAME};
         USE SCHEMA ${SCHEMA_NAME};
         CREATE STAGE IF NOT EXISTS SERVICE_SPECS
             COMMENT = 'Stage for Snowpark Container Service specifications';
     " "true" || {
         log_error "Failed to create stage"
-        log_error "Please ensure your role has CREATE STAGE privilege on schema ${DATABASE_NAME}.${SCHEMA_NAME}"
-        log_error "Run: GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${SNOWFLAKE_ROLE};"
+        log_error "Please ensure role ${CONTAINER_ROLE} has CREATE STAGE privilege on schema ${DATABASE_NAME}.${SCHEMA_NAME}"
+        log_error ""
+        log_error "Solutions:"
+        log_error "1. Grant privilege: GRANT CREATE STAGE ON SCHEMA ${DATABASE_NAME}.${SCHEMA_NAME} TO ROLE ${CONTAINER_ROLE};"
+        log_error "2. Or set CONTAINER_ROLE=\"SYSADMIN\" in deployment/custom.config"
         exit 1
     }
     
-    # Upload spec file
+    # Upload spec file (using CONTAINER_ROLE)
     log_info "Uploading service specification..."
     execute_sql "
+        USE ROLE ${CONTAINER_ROLE};
         USE DATABASE ${DATABASE_NAME};
         USE SCHEMA ${SCHEMA_NAME};
         PUT file:///tmp/unified_service_spec.yaml @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-    " || {
+    " "true" || {
         log_error "Failed to upload service specification"
+        log_error "Please ensure role ${CONTAINER_ROLE} has WRITE privilege on stage SERVICE_SPECS"
         exit 1
     }
     

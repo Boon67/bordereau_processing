@@ -29,13 +29,28 @@ GRANT ALL PRIVILEGES ON SCHEMA BORDEREAU_PROCESSING_PIPELINE.PUBLIC
 TO ROLE BORDEREAU_PROCESSING_PIPELINE_ADMIN;
 ```
 
-### Solution 2: Use SYSADMIN Role
+### Solution 2: Use SYSADMIN for Container Operations (Recommended)
 
-Temporarily use SYSADMIN for deployment:
+Use SYSADMIN only for container/stage operations while keeping your custom role for data operations:
+
+```bash
+# Edit or create deployment/custom.config
+echo 'CONTAINER_ROLE="SYSADMIN"' >> deployment/custom.config
+
+# Then run deployment
+./deployment/deploy_container.sh
+```
+
+This allows your custom role to manage data while SYSADMIN handles container infrastructure.
+
+### Solution 3: Use SYSADMIN for Everything
+
+Temporarily use SYSADMIN for all deployment operations:
 
 ```bash
 # Edit deployment/custom.config
 SNOWFLAKE_ROLE="SYSADMIN"
+CONTAINER_ROLE="SYSADMIN"
 
 # Or set environment variable
 export SNOWFLAKE_ROLE="SYSADMIN"
@@ -44,7 +59,7 @@ export SNOWFLAKE_ROLE="SYSADMIN"
 ./deployment/deploy_container.sh
 ```
 
-### Solution 3: Create Stage Manually
+### Solution 4: Create Stage Manually
 
 ```sql
 USE ROLE SYSADMIN;
