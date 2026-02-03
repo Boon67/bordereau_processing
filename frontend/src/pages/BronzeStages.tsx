@@ -86,8 +86,11 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
     const filterByTpa = (files: StageFile[]) => {
       if (tpaFilter.length === 0) return files
       return files.filter(file => {
-        // Extract TPA from file path (e.g., "provider_a/file.csv" -> "provider_a")
+        // Extract TPA from file path
+        // Expected format: "provider_a/file.csv" (stage prefix already stripped by backend)
         const parts = file.name.split('/')
+        
+        // TPA is the first part of the path
         const tpa = parts.length > 1 ? parts[0] : null
         
         // If no TPA prefix, don't show this file when filtering
@@ -185,9 +188,16 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
       width: 200,
       render: (name: string) => {
         // Extract TPA code from file path
-        // Expected format: "provider_a/file.csv" or just "file.csv"
+        // Expected format: "provider_a/file.csv" (stage prefix already stripped by backend)
         const parts = name.split('/')
-        const tpaCode = parts.length > 1 ? parts[0] : null
+        
+        // TPA is the first part of the path
+        let tpaCode: string | null = null
+        
+        if (parts.length > 1) {
+          // Format: "provider_a/file.csv" - TPA is first part
+          tpaCode = parts[0]
+        }
         
         if (!tpaCode) {
           // No TPA prefix in path - file might be in root or incorrectly uploaded

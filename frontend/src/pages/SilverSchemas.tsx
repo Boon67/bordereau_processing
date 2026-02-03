@@ -34,6 +34,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   const [createPhysicalTableForm] = Form.useForm()
   const [createdTables, setCreatedTables] = useState<any[]>([])
   const [loadingCreatedTables, setLoadingCreatedTables] = useState(false)
+  const [creatingTable, setCreatingTable] = useState(false)
   const [viewSchemaModalVisible, setViewSchemaModalVisible] = useState(false)
   const [selectedTableSchema, setSelectedTableSchema] = useState<TargetSchema[]>([])
   const [selectedTableName, setSelectedTableName] = useState<string>('')
@@ -371,11 +372,33 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
 
   const showCreateTableModal = (tableName: string) => {
     setSelectedTableForCreation(tableName)
-    createPhysicalTableForm.setFieldsValue({ tpa: selectedTpa })
+    
+    // Check if there are any available TPAs (ones that don't have ANY table created yet)
+    // A TPA can only have ONE target table total, not one per schema
+    const availableTpas = tpas.filter(tpa => {
+      const hasAnyTable = createdTables.some(
+        table => table.TPA === tpa.TPA_CODE
+      )
+      return !hasAnyTable
+    })
+    
+    if (availableTpas.length === 0) {
+      message.warning(`All TPAs already have a table created. Each TPA can only have one target table.`)
+      return
+    }
+    
+    // Pre-select TPA if only one is available
+    if (availableTpas.length === 1) {
+      createPhysicalTableForm.setFieldsValue({ tpa: availableTpas[0].TPA_CODE })
+    } else {
+      createPhysicalTableForm.setFieldsValue({ tpa: selectedTpa })
+    }
+    
     setCreateTableModalVisible(true)
   }
 
   const handleCreateTable = async (values: any) => {
+    setCreatingTable(true)
     try {
       const result = await apiService.createSilverTable(selectedTableForCreation, values.tpa)
       const physicalTableName = result.physical_table_name || `${values.tpa.toUpperCase()}_${selectedTableForCreation.toUpperCase()}`
@@ -388,8 +411,11 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
       await loadCreatedTables()
       
       setCreateTableModalVisible(false)
+      createPhysicalTableForm.resetFields()
     } catch (error: any) {
       message.error(`Failed to create table: ${error.response?.data?.detail || error.message}`)
+    } finally {
+      setCreatingTable(false)
     }
   }
 
@@ -1056,6 +1082,9 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
               <div>
                 <p>This will create the actual Snowflake table in the Silver layer based on the schema definition.</p>
                 <p style={{ marginTop: 8 }}>Select the provider (TPA) for which to create the table.</p>
+                <p style={{ marginTop: 8, fontWeight: 'bold', color: '#ff4d4f' }}>
+                  ⚠️ Each TPA can only have ONE target table. Once created, the TPA will not be available for other schemas.
+                </p>
               </div>
             }
             type="info"
@@ -1077,10 +1106,19 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
           >
             <Select
               placeholder="Select provider"
-              options={tpas.map(tpa => ({
-                label: tpa.TPA_NAME,
-                value: tpa.TPA_CODE
-              }))}
+              options={tpas
+                .filter(tpa => {
+                  // Only show TPAs that don't have ANY table created yet
+                  // Each TPA can only have ONE target table total
+                  const hasAnyTable = createdTables.some(
+                    table => table.TPA === tpa.TPA_CODE
+                  )
+                  return !hasAnyTable
+                })
+                .map(tpa => ({
+                  label: tpa.TPA_NAME,
+                  value: tpa.TPA_CODE
+                }))}
               showSearch
               filterOption={(input, option) =>
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
@@ -1089,6 +1127,12 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
                 // Force re-render to update the physical table name preview
                 createPhysicalTableForm.validateFields(['tpa'])
               }}
+              notFoundContent={
+                <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                  <p>All TPAs already have a table created.</p>
+                  <p style={{ fontSize: '12px', marginTop: 8 }}>Each TPA can only have one target table.</p>
+                </div>
+              }
             />
           </Form.Item>
 
@@ -1118,10 +1162,19 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
 
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit" icon={<DatabaseOutlined />}>
-                Create Table
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                icon={<DatabaseOutlined />}
+                loading={creatingTable}
+                disabled={creatingTable}
+              >
+                {creatingTable ? 'Creating Table...' : 'Create Table'}
               </Button>
-              <Button onClick={() => setCreateTableModalVisible(false)}>
+              <Button 
+                onClick={() => setCreateTableModalVisible(false)}
+                disabled={creatingTable}
+              >
                 Cancel
               </Button>
             </Space>

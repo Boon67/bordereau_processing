@@ -236,12 +236,16 @@ async def delete_tpa(request: Request, tpa_code: str):
         logger.info(f"Deleting TPA '{tpa_code}' and all related data")
         
         # 1. Get list of physical tables for this TPA
-        tables_query = f"""
-            SELECT physical_table_name 
-            FROM {settings.SILVER_SCHEMA_NAME}.created_tables 
-            WHERE tpa = '{tpa_code}' AND active = TRUE
-        """
-        tables_result = await sf_service.execute_query_dict(tables_query)
+        tables_result = []
+        try:
+            tables_query = f"""
+                SELECT physical_table_name 
+                FROM {settings.SILVER_SCHEMA_NAME}.created_tables 
+                WHERE tpa = '{tpa_code}' AND active = TRUE
+            """
+            tables_result = await sf_service.execute_query_dict(tables_query)
+        except Exception as e:
+            logger.warning(f"Failed to query created_tables (table may not exist): {e}")
         
         # 2. Drop physical tables
         for table_row in tables_result:
@@ -254,46 +258,72 @@ async def delete_tpa(request: Request, tpa_code: str):
                 logger.warning(f"Failed to drop table {table_name}: {e}")
         
         # 3. Delete from created_tables tracking
-        delete_tables_query = f"""
-            DELETE FROM {settings.SILVER_SCHEMA_NAME}.created_tables 
-            WHERE tpa = '{tpa_code}'
-        """
-        await sf_service.execute_query(delete_tables_query)
-        logger.info(f"Deleted created_tables records for TPA '{tpa_code}'")
+        try:
+            delete_tables_query = f"""
+                DELETE FROM {settings.SILVER_SCHEMA_NAME}.created_tables 
+                WHERE tpa = '{tpa_code}'
+            """
+            await sf_service.execute_query(delete_tables_query)
+            logger.info(f"Deleted created_tables records for TPA '{tpa_code}'")
+        except Exception as e:
+            logger.warning(f"Failed to delete created_tables records: {e}")
         
         # 4. Delete field mappings
-        delete_mappings_query = f"""
-            DELETE FROM {settings.SILVER_SCHEMA_NAME}.field_mappings 
-            WHERE tpa = '{tpa_code}'
-        """
-        await sf_service.execute_query(delete_mappings_query)
-        logger.info(f"Deleted field mappings for TPA '{tpa_code}'")
+        try:
+            delete_mappings_query = f"""
+                DELETE FROM {settings.SILVER_SCHEMA_NAME}.field_mappings 
+                WHERE tpa = '{tpa_code}'
+            """
+            await sf_service.execute_query(delete_mappings_query)
+            logger.info(f"Deleted field mappings for TPA '{tpa_code}'")
+        except Exception as e:
+            logger.warning(f"Failed to delete field mappings: {e}")
         
         # 5. Delete transformation rules (if any)
-        delete_rules_query = f"""
-            DELETE FROM {settings.SILVER_SCHEMA_NAME}.transformation_rules 
-            WHERE tpa = '{tpa_code}'
-        """
-        await sf_service.execute_query(delete_rules_query)
-        logger.info(f"Deleted transformation rules for TPA '{tpa_code}'")
+        try:
+            delete_rules_query = f"""
+                DELETE FROM {settings.SILVER_SCHEMA_NAME}.transformation_rules 
+                WHERE tpa = '{tpa_code}'
+            """
+            await sf_service.execute_query(delete_rules_query)
+            logger.info(f"Deleted transformation rules for TPA '{tpa_code}'")
+        except Exception as e:
+            logger.warning(f"Failed to delete transformation rules: {e}")
         
-        # 6. Delete processing logs
-        delete_logs_query = f"""
-            DELETE FROM {settings.SILVER_SCHEMA_NAME}.silver_processing_log 
-            WHERE tpa = '{tpa_code}'
-        """
-        await sf_service.execute_query(delete_logs_query)
-        logger.info(f"Deleted processing logs for TPA '{tpa_code}'")
+        # 6. Delete processing logs (if table exists)
+        try:
+            delete_logs_query = f"""
+                DELETE FROM {settings.SILVER_SCHEMA_NAME}.silver_processing_log 
+                WHERE tpa = '{tpa_code}'
+            """
+            await sf_service.execute_query(delete_logs_query)
+            logger.info(f"Deleted processing logs for TPA '{tpa_code}'")
+        except Exception as e:
+            logger.warning(f"Failed to delete processing logs (table may not exist): {e}")
         
         # 7. Delete Bronze raw data
-        delete_bronze_query = f"""
-            DELETE FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE 
-            WHERE TPA = '{tpa_code}'
-        """
-        await sf_service.execute_query(delete_bronze_query)
-        logger.info(f"Deleted Bronze raw data for TPA '{tpa_code}'")
+        try:
+            delete_bronze_query = f"""
+                DELETE FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE 
+                WHERE TPA = '{tpa_code}'
+            """
+            await sf_service.execute_query(delete_bronze_query)
+            logger.info(f"Deleted Bronze raw data for TPA '{tpa_code}'")
+        except Exception as e:
+            logger.warning(f"Failed to delete Bronze raw data: {e}")
         
-        # 8. Finally, delete the TPA from TPA_MASTER
+        # 8. Delete from file processing queue
+        try:
+            delete_queue_query = f"""
+                DELETE FROM {settings.BRONZE_SCHEMA_NAME}.file_processing_queue 
+                WHERE TPA = '{tpa_code}'
+            """
+            await sf_service.execute_query(delete_queue_query)
+            logger.info(f"Deleted file processing queue entries for TPA '{tpa_code}'")
+        except Exception as e:
+            logger.warning(f"Failed to delete file processing queue entries: {e}")
+        
+        # 9. Finally, delete the TPA from TPA_MASTER
         delete_tpa_query = f"""
             DELETE FROM BRONZE.TPA_MASTER 
             WHERE TPA_CODE = '{tpa_code}'

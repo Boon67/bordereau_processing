@@ -212,7 +212,16 @@ async def list_stage_files(request: Request, stage_name: str):
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         stage_path = f"@{settings.BRONZE_SCHEMA_NAME}.{stage_name.upper()}"
-        return await sf_service.list_stage_files(stage_path)
+        files = await sf_service.list_stage_files(stage_path)
+        
+        # Clean up file paths - remove stage prefix if present
+        # Snowflake LIST returns paths like "src/provider_a/file.csv" but we want "provider_a/file.csv"
+        stage_prefix = f"{stage_name.lower()}/"
+        for file in files:
+            if 'name' in file and file['name'].lower().startswith(stage_prefix):
+                file['name'] = file['name'][len(stage_prefix):]
+        
+        return files
     except Exception as e:
         logger.error(f"Failed to list stage files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

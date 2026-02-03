@@ -527,10 +527,11 @@ def move_processed_files(session):
         try:
             # Copy file to @COMPLETED (source is @SRC/tpa/filename)
             src_path = f"@SRC/{file_name}"
-            dest_path = f"@COMPLETED/{file_name}"
+            # Destination should preserve TPA folder structure
+            dest_path = f"@COMPLETED/{tpa}/"
             
-            # Use COPY FILES command (simplified)
-            copy_cmd = f"COPY FILES INTO {dest_path} FROM {src_path}"
+            # Use COPY FILES command - destination must be a directory path ending with /
+            copy_cmd = f"COPY FILES INTO '{dest_path}' FROM '{src_path}'"
             try:
                 session.sql(copy_cmd).collect()
             except Exception as copy_error:
@@ -539,7 +540,7 @@ def move_processed_files(session):
                 error_details.append(f"{file_name}: Copy error (continuing to remove): {str(copy_error)[:100]}")
             
             # Remove file from @SRC after copy attempt
-            remove_cmd = f"REMOVE {src_path}"
+            remove_cmd = f"REMOVE '{src_path}'"
             session.sql(remove_cmd).collect()
             
             files_moved += 1
@@ -621,11 +622,11 @@ def move_failed_files(session):
             # Copy file to @ERROR (source is @SRC/tpa/filename)
             src_path = f"@SRC/{file_name}"
             dest_path = f"@ERROR/{tpa}/"
-            copy_cmd = f"COPY FILES INTO {dest_path} FROM {src_path}"
+            copy_cmd = f"COPY FILES INTO '{dest_path}' FROM '{src_path}'"
             session.sql(copy_cmd).collect()
             
             # Remove file from @SRC after successful copy
-            remove_cmd = f"REMOVE {src_path}"
+            remove_cmd = f"REMOVE '{src_path}'"
             session.sql(remove_cmd).collect()
             
             files_moved += 1

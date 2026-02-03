@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Select, Spin, message, Button, Popconfirm, Modal } from 'antd'
+import { Layout, Menu, Select, Spin, message, Button, Popconfirm, Modal, Input } from 'antd'
 import {
   DatabaseOutlined,
   CloudUploadOutlined,
@@ -131,7 +131,9 @@ function App() {
   }
 
   const handleClearAllData = () => {
-    Modal.confirm({
+    let confirmText = ''
+    
+    const modal = Modal.confirm({
       title: <span style={{ color: '#d4380d' }}>⚠️ Clear All Bronze Data</span>,
       icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
       content: (
@@ -146,7 +148,21 @@ function App() {
           <p style={{ color: '#ff4d4f', fontWeight: 'bold', marginTop: 16 }}>
             ⚠️ This action CANNOT be undone!
           </p>
-          <p style={{ marginTop: 8 }}>Type "DELETE" below to confirm:</p>
+          <p style={{ marginTop: 16, marginBottom: 8 }}>Type "DELETE" below to confirm:</p>
+          <Input
+            placeholder="Type DELETE to confirm"
+            onChange={(e) => {
+              confirmText = e.target.value
+            }}
+            onPressEnter={() => {
+              if (confirmText === 'DELETE') {
+                modal.update({
+                  okButtonProps: { loading: true }
+                })
+                handleConfirmClear(modal)
+              }
+            }}
+          />
         </div>
       ),
       okText: 'Yes, Delete Everything',
@@ -154,45 +170,58 @@ function App() {
       cancelText: 'Cancel',
       width: 600,
       onOk: async () => {
-        try {
-          const result = await apiService.clearAllData()
-          message.success(result.message || 'All data cleared successfully')
-          
-          // Show detailed results if available
-          if (result.results) {
-            const { stages_cleared, tables_truncated, silver_tables_dropped, errors } = result.results
-            if (errors && errors.length > 0) {
-              Modal.warning({
-                title: 'Some operations failed',
-                content: (
-                  <div>
-                    <p>Cleared stages: {stages_cleared?.join(', ') || 'None'}</p>
-                    <p>Truncated tables: {tables_truncated?.join(', ') || 'None'}</p>
-                    <p>Dropped Silver tables: {silver_tables_dropped?.length || 0}</p>
-                    <p style={{ color: '#ff4d4f', marginTop: 8 }}>Errors:</p>
-                    <ul>
-                      {errors.map((err: string, idx: number) => (
-                        <li key={idx}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ),
-              })
-            }
-          }
-          
-          // Return resolved promise to close the modal
-          return Promise.resolve()
-        } catch (error: any) {
-          message.error(`Failed to clear data: ${error.message || 'Unknown error'}`)
-          // Return rejected promise to keep modal open on error
-          return Promise.reject(error)
+        if (confirmText !== 'DELETE') {
+          message.warning('Please type "DELETE" to confirm')
+          return Promise.reject(new Error('Confirmation text does not match'))
         }
+        return handleConfirmClear(modal)
       },
       onCancel: () => {
         // Modal will close automatically
       },
     })
+  }
+
+  const handleConfirmClear = async (modal: any) => {
+    try {
+      const result = await apiService.clearAllData()
+      message.success(result.message || 'All data cleared successfully')
+      
+      // Show detailed results if available
+      if (result.results) {
+        const { stages_cleared, tables_truncated, silver_tables_dropped, errors } = result.results
+        if (errors && errors.length > 0) {
+          // Close the confirm modal first
+          modal.destroy()
+          
+          // Then show warning modal
+          Modal.warning({
+            title: 'Some operations failed',
+            content: (
+              <div>
+                <p>Cleared stages: {stages_cleared?.join(', ') || 'None'}</p>
+                <p>Truncated tables: {tables_truncated?.join(', ') || 'None'}</p>
+                <p>Dropped Silver tables: {silver_tables_dropped?.length || 0}</p>
+                <p style={{ color: '#ff4d4f', marginTop: 8 }}>Errors:</p>
+                <ul>
+                  {errors.map((err: string, idx: number) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            ),
+          })
+          return Promise.resolve()
+        }
+      }
+      
+      // Return resolved promise to close the modal
+      return Promise.resolve()
+    } catch (error: any) {
+      message.error(`Failed to clear data: ${error.message || 'Unknown error'}`)
+      // Return rejected promise to keep modal open on error
+      return Promise.reject(error)
+    }
   }
 
   // Get the selected TPA object

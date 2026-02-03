@@ -194,10 +194,10 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       
       if (isError) {
         message.error(`Transformation failed: ${resultMessage}`)
-      } else if (recordCount !== null) {
+      } else if (recordCount !== null && recordCount > 0) {
         message.success(`Transformation completed! ${recordCount} record(s) processed.`)
       } else {
-        message.warning(`Transformation completed, but record count could not be determined. Result: ${resultMessage}`)
+        message.success(`Transformation job has been started successfully. Data is being processed.`)
       }
       setCurrentStep(3)
     } catch (error: any) {
@@ -600,7 +600,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
           <Alert
             style={{ marginBottom: 16 }}
             message="Ready to Transform"
-            description={`Click the button below to start transforming data from ${sourceTable} to ${targetTable} for TPA ${selectedTpa}.`}
+            description={`Click the button below to start transforming data from ${sourceTable} to ${targetTable} for TPA ${selectedTpaName || selectedTpa}.`}
             type="success"
             showIcon
           />
@@ -630,7 +630,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
               transformResult.status === 'success'
                 ? (transformResult.recordCount !== null && transformResult.recordCount > 0
                     ? `Successfully transformed ${transformResult.recordCount} record(s) from Bronze to Silver layer.`
-                    : transformResult.resultMessage || 'Data has been successfully transformed from Bronze to Silver layer.')
+                    : 'Transformation job has been started successfully. Data is being processed from Bronze to Silver layer.')
                 : transformResult.error || transformResult.resultMessage
             }
             type={transformResult.status === 'success' ? 'success' : 'error'}
