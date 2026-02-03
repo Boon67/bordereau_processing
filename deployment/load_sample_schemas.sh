@@ -16,7 +16,24 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-CONNECTION_NAME="${1:-DEPLOYMENT}"
+CONNECTION_NAME="${1:-}"
+
+# If no connection specified, check if DEPLOYMENT exists, otherwise use default
+if [[ -z "$CONNECTION_NAME" ]]; then
+    if snow connection list 2>/dev/null | grep -q "DEPLOYMENT"; then
+        CONNECTION_NAME="DEPLOYMENT"
+    else
+        # Use the default connection
+        CONNECTION_NAME=$(snow connection list 2>/dev/null | grep "True" | awk '{print $2}' | head -1)
+        if [[ -z "$CONNECTION_NAME" ]]; then
+            echo -e "${RED}✗ No Snowflake connection found${NC}"
+            echo -e "${YELLOW}Please configure a connection using: snow connection add${NC}"
+            exit 1
+        fi
+        echo -e "${YELLOW}Using default connection: ${CONNECTION_NAME}${NC}"
+        echo ""
+    fi
+fi
 
 # Handle Windows paths in Git Bash
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ -n "$WINDIR" ]]; then
@@ -91,12 +108,25 @@ echo ""
 
 # Step 3: Load into target_schemas table
 echo -e "${YELLOW}[3/3]${NC} Loading schemas into database..."
+
+# Create a temporary staging table and merge
+echo -e "${BLUE}   Merging schemas (upsert)...${NC}"
 LOAD_OUTPUT=$(snow sql --connection "$CONNECTION_NAME" -q "
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SILVER_SCHEMA_NAME};
 
--- Load schemas from CSV (TPA-agnostic)
-COPY INTO target_schemas (
+-- Create temporary staging table
+CREATE OR REPLACE TEMPORARY TABLE target_schemas_staging (
+    TABLE_NAME VARCHAR(500),
+    COLUMN_NAME VARCHAR(500),
+    DATA_TYPE VARCHAR(200),
+    NULLABLE BOOLEAN,
+    DEFAULT_VALUE VARCHAR(1000),
+    DESCRIPTION VARCHAR(5000)
+);
+
+-- Load CSV data into staging table
+COPY INTO target_schemas_staging (
     TABLE_NAME,
     COLUMN_NAME,
     DATA_TYPE,
@@ -123,6 +153,39 @@ FILE_FORMAT = (
     ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
 )
 ON_ERROR = ABORT_STATEMENT;
+
+-- Merge staging data into target_schemas
+MERGE INTO target_schemas AS target
+USING target_schemas_staging AS source
+ON target.TABLE_NAME = source.TABLE_NAME 
+   AND target.COLUMN_NAME = source.COLUMN_NAME
+WHEN MATCHED THEN
+    UPDATE SET
+        DATA_TYPE = source.DATA_TYPE,
+        NULLABLE = source.NULLABLE,
+        DEFAULT_VALUE = source.DEFAULT_VALUE,
+        DESCRIPTION = source.DESCRIPTION,
+        UPDATED_TIMESTAMP = CURRENT_TIMESTAMP()
+WHEN NOT MATCHED THEN
+    INSERT (
+        TABLE_NAME,
+        COLUMN_NAME,
+        DATA_TYPE,
+        NULLABLE,
+        DEFAULT_VALUE,
+        DESCRIPTION
+    )
+    VALUES (
+        source.TABLE_NAME,
+        source.COLUMN_NAME,
+        source.DATA_TYPE,
+        source.NULLABLE,
+        source.DEFAULT_VALUE,
+        source.DESCRIPTION
+    );
+
+-- Drop staging table
+DROP TABLE target_schemas_staging;
 " 2>&1)
 LOAD_EXIT_CODE=$?
 

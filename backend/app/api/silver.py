@@ -322,7 +322,11 @@ async def delete_target_schema(request: Request, schema_id: int):
 
 @router.delete("/schemas/table/{table_name}")
 async def delete_table_schema(request: Request, table_name: str, tpa: str):
-    """Delete entire table schema (all columns for a table)"""
+    """Delete entire table schema (all columns for a table)
+    
+    WARNING: This will delete the schema definition, all field mappings,
+    and all transformation rules for this table across ALL TPAs.
+    """
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         
@@ -341,16 +345,32 @@ async def delete_table_schema(request: Request, table_name: str, tpa: str):
         if not result or result[0]['COUNT'] == 0:
             raise HTTPException(status_code=404, detail=f"Table schema '{table_name}' not found")
         
-        # Delete all columns for this table
+        # 1. Delete all field mappings for this table (across all TPAs)
+        delete_mappings_query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
+            WHERE target_table = '{escaped_table_name}'
+        """
+        await sf_service.execute_query(delete_mappings_query)
+        logger.info(f"Deleted field mappings for table '{table_name}' across all TPAs")
+        
+        # 2. Delete all transformation rules for this table (across all TPAs)
+        delete_rules_query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.transformation_rules
+            WHERE target_table = '{escaped_table_name}'
+        """
+        await sf_service.execute_query(delete_rules_query)
+        logger.info(f"Deleted transformation rules for table '{table_name}' across all TPAs")
+        
+        # 3. Delete all columns for this table from target_schemas
         delete_query = f"""
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
             WHERE table_name = '{escaped_table_name}'
         """
         await sf_service.execute_query(delete_query)
         
-        logger.info(f"Deleted table schema '{table_name}' for TPA '{tpa}' ({result[0]['COUNT']} columns)")
+        logger.info(f"Deleted table schema '{table_name}' ({result[0]['COUNT']} columns)")
         return {
-            "message": f"Table schema '{table_name}' deleted successfully",
+            "message": f"Table schema '{table_name}' and all associated mappings and rules deleted successfully",
             "columns_deleted": result[0]['COUNT']
         }
     except HTTPException:
@@ -468,6 +488,7 @@ async def delete_physical_table(request: Request, table_name: str, tpa: str):
     Example: PROVIDER_A_MEDICAL_CLAIMS
     
     WARNING: This will permanently delete the table and all its data.
+    Also deletes all associated field mappings and transformation rules for this table.
     """
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
@@ -477,14 +498,35 @@ async def delete_physical_table(request: Request, table_name: str, tpa: str):
         
         logger.info(f"Attempting to delete physical table: {physical_table_name} for TPA: {tpa}")
         
-        # Drop the physical table
+        # Escape single quotes for SQL safety
+        escaped_table_name = physical_table_name.replace("'", "''")
+        escaped_tpa = tpa.replace("'", "''")
+        escaped_schema_table_name = table_name.upper().replace("'", "''")
+        
+        # 1. Delete field mappings for this table
+        delete_mappings_query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
+            WHERE target_table = '{escaped_schema_table_name}'
+              AND tpa = '{escaped_tpa}'
+        """
+        await sf_service.execute_query(delete_mappings_query)
+        logger.info(f"Deleted field mappings for table {table_name} and TPA {tpa}")
+        
+        # 2. Delete transformation rules for this table
+        delete_rules_query = f"""
+            DELETE FROM {settings.SILVER_SCHEMA_NAME}.transformation_rules
+            WHERE target_table = '{escaped_schema_table_name}'
+              AND tpa = '{escaped_tpa}'
+        """
+        await sf_service.execute_query(delete_rules_query)
+        logger.info(f"Deleted transformation rules for table {table_name} and TPA {tpa}")
+        
+        # 3. Drop the physical table
         drop_query = f"DROP TABLE IF EXISTS {settings.SILVER_SCHEMA_NAME}.{physical_table_name}"
         await sf_service.execute_query(drop_query)
         logger.info(f"Physical table {physical_table_name} dropped successfully")
         
-        # Remove from created_tables tracking (escape single quotes for SQL safety)
-        escaped_table_name = physical_table_name.replace("'", "''")
-        escaped_tpa = tpa.replace("'", "''")
+        # 4. Remove from created_tables tracking
         delete_tracking_query = f"""
             DELETE FROM {settings.SILVER_SCHEMA_NAME}.created_tables
             WHERE physical_table_name = '{escaped_table_name}'
@@ -496,7 +538,7 @@ async def delete_physical_table(request: Request, table_name: str, tpa: str):
         logger.info(f"Successfully deleted physical table {physical_table_name} for TPA {tpa}")
         
         return {
-            "message": f"Table {physical_table_name} deleted successfully",
+            "message": f"Table {physical_table_name} and associated mappings and rules deleted successfully",
             "physical_table_name": physical_table_name
         }
     except Exception as e:
