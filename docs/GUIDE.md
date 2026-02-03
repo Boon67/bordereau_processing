@@ -1,18 +1,18 @@
-# Complete Guide
+# Bordereau User Guide
 
-Healthcare claims processing pipeline with medallion architecture and AI-powered field mapping.
+Complete guide to healthcare claims processing with AI-powered field mapping.
 
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Architecture Overview](#architecture-overview)
-3. [Bronze Layer](#bronze-layer)
-4. [Silver Layer](#silver-layer)
-5. [Gold Layer](#gold-layer)
-6. [TPA Management](#tpa-management)
-7. [Technical Details](#technical-details)
+2. [TPA Management](#tpa-management)
+3. [Bronze Layer - Data Ingestion](#bronze-layer)
+4. [Silver Layer - Transformation](#silver-layer)
+5. [Gold Layer - Analytics](#gold-layer)
+6. [Technical Reference](#technical-reference)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -20,453 +20,441 @@ Healthcare claims processing pipeline with medallion architecture and AI-powered
 
 ### Prerequisites
 
-- Snowflake account with admin privileges
-- Python 3.10+, Node.js 18+
-- Snowflake CLI: `pip install snowflake-cli-labs`
+| Requirement | Version | Installation |
+|-------------|---------|--------------|
+| Snowflake account | Enterprise+ | Admin privileges required |
+| Python | 3.10+ | `python --version` |
+| Node.js | 18+ | `node --version` |
+| Snowflake CLI | Latest | `pip install snowflake-cli-labs` |
 
 ### First-Time Setup
 
 ```bash
 # 1. Configure Snowflake connection
 snow connection add
+# Enter: account, user, password/authenticator, warehouse, database, schema, role
 
-# 2. Deploy database layers
+# 2. Deploy database layers (Bronze, Silver, Gold)
 cd deployment
 ./deploy.sh YOUR_CONNECTION
 
-# 3. Start application
+# 3. Start application (backend + frontend)
 cd ..
 ./start.sh
 ```
 
-### Quick Workflow
-
-1. **Add TPA**: Admin → TPA Management → Add TPA
-2. **Upload Files**: Bronze → Upload Files → Select files
-3. **Define Schema**: Silver → Target Schemas → Add Schema
-4. **Create Mappings**: Silver → Field Mappings → Auto-Map
-5. **Transform**: Silver → Transform → Run Transformation
-6. **View Analytics**: Gold → Analytics
-
----
-
-## Architecture Overview
-
-### System Components
-
-```
-┌─────────────────┐
-│ React Frontend  │ Port 3000/80
-│ TypeScript + UI │
-└────────┬────────┘
-         │ REST API
-┌────────▼────────┐
-│ FastAPI Backend │ Port 8000
-│ Python 3.11     │
-└────────┬────────┘
-         │ Snowflake Connector
-┌────────▼────────────────────┐
-│ Snowflake Database          │
-│ ┌─────────────────────────┐ │
-│ │ Bronze (Raw Data)       │ │
-│ │ 8 tables, append-only   │ │
-│ └───────────┬─────────────┘ │
-│             │ Tasks (60min) │
-│ ┌───────────▼─────────────┐ │
-│ │ Silver (Cleaned Data)   │ │
-│ │ 12 hybrid tables        │ │
-│ └───────────┬─────────────┘ │
-│             │ Tasks (10min) │
-│ ┌───────────▼─────────────┐ │
-│ │ Gold (Analytics)        │ │
-│ │ 12 clustered tables     │ │
-│ └─────────────────────────┘ │
-└─────────────────────────────┘
-```
-
-### Data Flow
-
-1. **Upload** → Files to Bronze stage `@SRC/{tpa}/`
-2. **Ingest** → Bronze task processes files into `RAW_DATA_TABLE`
-3. **Map** → Define schemas and field mappings (Manual/ML/LLM)
-4. **Transform** → Silver task applies mappings and validation
-5. **Aggregate** → Gold task calculates analytics
-6. **Analyze** → View metrics in UI
-
-### Multi-Tenancy
-
-**TPA Isolation**:
-- Separate folders: `@SRC/{tpa}/`
-- Separate tables: `CLAIMS_{TPA}`
-- TPA column indexed in all tables
-- Complete data separation
-
----
-
-## Bronze Layer
-
-### Upload Files
-
-1. Navigate to **Bronze → Upload Files**
-2. Select TPA from searchable dropdown
-3. Drag and drop CSV/Excel files
-4. Click **Upload**
-5. Files auto-process via scheduled task
-
-**File Path**: `@SRC/{tpa}/filename.csv`
-
-### View Raw Data
-
-**Bronze → Raw Data**
-- Filter by TPA (searchable multi-select)
-- Search by filename
-- View all uploaded records
-- Check processing statistics
-
-### Monitor Processing
-
-**Bronze → Processing Status**
-- Shows all files across all TPAs by default
-- Filter by TPA (initially empty - select to filter)
-- Filter by status (Success/Failed/Processing/Pending)
-- Filter by file type
-- View statistics:
-  - Total files processed
-  - Success/failure counts and rates
-  - Files currently processing
-  - Total rows ingested
-- Actions:
-  - Reprocess failed files
-  - Delete file data for successful files
-- Real-time refresh button
-
-### File Stages
-
-**Bronze → File Stages**
-- **SRC**: Uploaded files awaiting processing
-- **PROCESSING**: Reserved for future use
-- **COMPLETED**: Successfully processed files
-- **ERROR**: Failed files (check logs)
-- **ARCHIVE**: Files older than 30 days
-
-**Actions**: Delete individual files or bulk delete selected files
-
-### Tasks
-
-**Bronze → Tasks**
-- **discover_files_task**: Scans stages for new files (60 min)
-- **process_files_task**: Processes files into raw table (60 min)
-
-**Actions**: Resume, suspend, or manually trigger tasks
-
----
-
-## Silver Layer
-
-### Target Schemas
-
-**Silver → Target Schemas**
-
-Define reusable table schemas:
-
-1. Click **Add Schema**
-2. Enter table name (e.g., `MEDICAL_CLAIMS`)
-3. Define columns:
-   - Column name
-   - Data type (VARCHAR, NUMBER, DATE, etc.)
-   - Nullable (yes/no)
-   - Description
-4. Click **Save Schema**
-
-**Create Physical Table**:
-1. Select schema from the list
-2. Click **Create Table**
-3. Select TPA from dropdown
-4. Table created as `{TPA}_{TABLE_NAME}` (e.g., `PROVIDER_A_MEDICAL_CLAIMS`)
-
-**Created Tables Section**:
-- Loading spinner displays while fetching created tables
-- Shows all physical tables across all TPAs
-- Displays: Table name, Schema, Provider (TPA), Mappings count, Row count, Size, Quality score
-- Actions: View schema definition, delete table
-
-**Schema Usage**: Shows count of physical tables created from each schema
-
-### Field Mappings
-
-**Silver → Field Mappings**
-
-Map source fields to target columns using three methods:
-
-**Initial Load**: Loading spinner displays while fetching tables and mappings
-
-#### Auto-Map with ML
-
-1. Expand a table card
-2. Click **Auto-Map (ML)** button
-3. Configure:
-   - Top N matches per field (default: 3)
-   - Confidence threshold (0-100%, default: 60%)
-   - Higher = stricter matching
-4. Wait for processing (30-60 seconds)
-5. Review suggested mappings with confidence scores
-6. Approve or decline each mapping
-
-**ML Algorithm**: TF-IDF + SequenceMatcher + word overlap for pattern matching
-
-#### Auto-Map with LLM
-
-1. Expand a table card
-2. Click **Auto-Map (LLM)** button
-3. Select Cortex AI model (default: llama3.1-70b)
-4. Wait for processing (30-90 seconds)
-5. AI generates intelligent mappings with reasoning
-6. Review suggestions
-7. Approve or edit mappings
-
-**LLM**: Snowflake Cortex AI for semantic understanding
-
-#### Manual Mapping
-
-1. Expand a table card
-2. Click **Add Mapping** button
-3. Fill in:
-   - Source field (from raw data)
-   - Target column (from schema)
-   - Transformation logic (optional SQL)
-   - Approved status (checkbox)
-4. Click **Save**
-
-**Features**:
-- Loading spinners for better UX feedback
-- Search tables by name, TPA, or schema
-- Filter by mapping status (All/With Mappings/No Mappings)
-- Duplicate detection (highlighted in yellow)
-- Bulk approve/delete mappings
-- Auto-refresh after changes
-- Shows mapping count and approval rate per table
-
-### Transform Data
-
-**Silver → Transform**
-
-Visual flow display shows source → target transformation:
-
-1. Select TPA (searchable dropdown)
-2. Wait for tables to load (loading spinner displayed)
-3. Source table auto-selected: `RAW_DATA_TABLE`
-4. Target table auto-selected if only one exists for TPA
-5. Click **Next** to verify mappings
-6. Review field mappings (shows all active mappings)
-   - Source field → Target column
-   - Mapping method (ML/LLM/Manual)
-   - Confidence scores
-   - Transformation logic
-7. Click **Next** to execute
-8. Click **Execute Transform**
-9. Monitor progress and view results
-
-**Transformation Steps**:
-1. **Select Tables** - Choose source and target (with loading feedback)
-2. **Verify Mappings** - Review all active mappings with details
-3. **Execute Transform** - Apply mappings and validation rules
-4. **Complete** - View results, statistics, and transformation history
-
-### View Silver Data
-
-**Silver → View Data**
-
-1. Select TPA (searchable dropdown)
-2. All tables for that TPA are displayed in an accordion view
-3. Click on any table to expand and view its data
-4. Use search box to filter records
-5. Adjust row limit (100/500/1000/5000 rows)
-6. Check data quality statistics:
-   - Total records
-   - Data quality score
-   - Last updated timestamp
-
-**Features**:
-- Accordion view - all TPA tables shown automatically
-- No need to select tables from dropdown (tables are TPA-specific)
-- Record count displayed in table header
-- Search across all columns
-- Adjustable row limits
-- Quality metrics per table
-
----
-
-## Gold Layer
-
-### Analytics
-
-**Gold → Analytics**
-
-View aggregated business metrics:
-
-**Claims Analytics**:
-- Total claims, amounts, averages
-- Claims by type, status, provider
-- Trend analysis
-
-**Member 360**:
-- Member demographics
-- Claim history
-- Provider relationships
-- Risk scores
-
-**Provider Performance**:
-- Claims processed
-- Average processing time
-- Approval rates
-- Payment metrics
-
-**Financial Summary**:
-- Total payments
-- Outstanding amounts
-- Payment trends
-- Cost analysis
-
-**Filters**: Date range, TPA selection
-
-### Quality Metrics
-
-**Gold → Quality**
-
-Data quality dashboard:
-- Validation rule results
-- Error rates by field
-- Quality trends over time
-- Failed record details
-
-### Transformation Rules
-
-**Gold → Rules**
-
-Define business rules:
-- Validation rules (e.g., amount > 0)
-- Transformation logic
-- Quality checks
-- Quarantine conditions
+**Access UI**: http://localhost:3000  
+**API Docs**: http://localhost:8000/docs
+
+### 5-Minute Quick Start
+
+1. **Add TPA**: Admin → TPA Management → Create TPA (`provider_a`)
+2. **Upload File**: Bronze → Upload Files → Select TPA → Drop CSV
+3. **Auto-Map**: Silver → Field Mappings → Select table → Auto-Map (ML)
+4. **Transform**: Silver → Transform → Select TPA → Execute
+5. **View Data**: Silver → View Data → Select TPA → Browse tables
 
 ---
 
 ## TPA Management
 
-### Add TPA
+### What is a TPA?
 
-**Admin → TPA Management**
+**Third Party Administrator** - The organizational unit for data isolation.
+
+Each TPA has:
+- Unique code (e.g., `provider_a`)
+- Separate file storage (`@SRC/provider_a/`)
+- Dedicated tables (`PROVIDER_A_MEDICAL_CLAIMS`)
+- Independent field mappings
+- Isolated transformation rules
+
+### Add New TPA
+
+**Location**: Admin → TPA Management
 
 1. Click **Add TPA**
-2. Enter:
-   - **TPA Code**: Lowercase with underscores (e.g., `provider_a`)
-   - **TPA Name**: Display name (e.g., `Provider A Healthcare`)
+2. Fill in details:
+   - **TPA Code**: `provider_a` (lowercase, underscores only)
+   - **TPA Name**: `Provider A Healthcare` (display name)
    - **Description**: Optional details
 3. Click **Create**
 
-### TPA Structure
-
-**Naming Convention**:
-- Code: `provider_a` (used in paths and table names)
-- Name: `Provider A Healthcare` (displayed in UI)
-- Tables: `CLAIMS_PROVIDER_A`
-- Paths: `@SRC/provider_a/file.csv`
-
-**Isolation**:
-- Separate field mappings
-- Separate target tables
-- Separate transformation rules
-- Independent processing pipelines
+**Naming Rules**:
+- Code: Used in paths and table names (lowercase, underscores)
+- Name: Displayed in UI (any format)
+- Tables: Auto-generated as `{TPA_CODE}_{TABLE_NAME}`
 
 ### TPA Selectors
 
-All TPA filters use searchable dropdowns:
-- Type to filter TPAs
-- Displays TPA names (stores TPA codes)
-- Alphabetically sorted
-- Single selection for Upload, Transform, View Data
-- Multi-select for Bronze Raw Data, File Stages
+All TPA dropdowns are searchable:
+- Type to filter by name
+- Stores TPA code internally
+- Single-select for uploads and transforms
+- Multi-select for data viewing and filtering
 
 ---
 
-## Technical Details
+## Bronze Layer - Data Ingestion
+
+**Purpose**: Land and parse raw files into Snowflake with TPA isolation.
+
+### 1. Upload Files
+
+**Location**: Bronze → Upload Files
+
+**Steps**:
+1. Select TPA from searchable dropdown
+2. Drag and drop CSV/Excel files (or click to browse)
+3. Click **Upload**
+4. Files land in `@SRC/{tpa}/filename.csv`
+5. Auto-processed by scheduled task (every 60 minutes)
+
+**Supported Formats**: CSV, Excel (.xlsx, .xls)  
+**File Size**: Up to 100MB per file  
+**Batch Size**: 10-20 files recommended
+
+### 2. View Raw Data
+
+**Location**: Bronze → Raw Data
+
+**Features**:
+- Filter by TPA (multi-select, searchable)
+- Search by filename
+- View all parsed records (VARIANT JSON format)
+- Check row counts and load timestamps
+
+**Use Case**: Verify files were parsed correctly before transformation.
+
+### 3. Monitor Processing
+
+**Location**: Bronze → Processing Status
+
+**Dashboard Metrics**:
+- Total files processed
+- Success/failure counts and rates
+- Files currently processing
+- Total rows ingested
+
+**Filters**:
+- TPA (multi-select)
+- Status (Success/Failed/Processing/Pending)
+- File type (CSV/Excel)
+
+**Actions**:
+- **Reprocess**: Retry failed files
+- **Delete**: Remove processed file data
+- **Refresh**: Update status in real-time
+
+### 4. File Stages
+
+**Location**: Bronze → File Stages
+
+**Stage Lifecycle**:
+
+| Stage | Purpose | Retention |
+|-------|---------|-----------|
+| **SRC** | Landing zone for uploads | Until processed |
+| **PROCESSING** | Reserved for future use | N/A |
+| **COMPLETED** | Successfully processed files | 30 days |
+| **ERROR** | Failed files (check logs) | 30 days |
+| **ARCHIVE** | Long-term storage | 90 days |
+
+**Actions**: Delete individual files or bulk delete selected files
+
+### 5. Automated Tasks
+
+**Location**: Bronze → Tasks
+
+| Task | Frequency | Purpose |
+|------|-----------|---------|
+| `discover_files_task` | Every 60 min | Scan stages for new files |
+| `process_files_task` | Every 60 min | Parse files into `RAW_DATA_TABLE` |
+
+**Actions**:
+- **Resume**: Start suspended task
+- **Suspend**: Pause task execution
+- **Execute Now**: Trigger immediate run
+
+**Tip**: Manually trigger tasks after bulk uploads for faster processing.
+
+---
+
+## Silver Layer - Transformation
+
+**Purpose**: Map and transform raw data into standardized, validated tables.
+
+### 1. Define Target Schemas
+
+**Location**: Silver → Target Schemas
+
+**Create Reusable Schema**:
+1. Click **Add Schema**
+2. Enter table name (e.g., `MEDICAL_CLAIMS`)
+3. Define columns:
+   - **Name**: Column identifier (e.g., `CLAIM_ID`)
+   - **Type**: VARCHAR, NUMBER, DATE, TIMESTAMP, BOOLEAN
+   - **Nullable**: Allow NULL values?
+   - **Description**: Business definition
+4. Click **Save Schema**
+
+**Create Physical Table**:
+1. Select schema from list
+2. Click **Create Table**
+3. Select TPA from dropdown
+4. Table created as `{TPA}_{TABLE_NAME}`
+
+**Example**: Schema `MEDICAL_CLAIMS` + TPA `provider_a` = Table `PROVIDER_A_MEDICAL_CLAIMS`
+
+**Created Tables View**:
+- Shows all physical tables across TPAs
+- Displays: Name, Schema, TPA, Mappings, Rows, Size, Quality
+- Actions: View definition, delete table
+
+### 2. Map Fields (3 Methods)
+
+**Location**: Silver → Field Mappings
+
+#### Method 1: Auto-Map with ML (Pattern Matching)
+
+**Best for**: Consistent naming conventions, structured data
+
+1. Expand table card
+2. Click **Auto-Map (ML)**
+3. Configure:
+   - **Top N matches**: 1-5 (default: 3)
+   - **Confidence threshold**: 0-100% (default: 60%)
+4. Wait 30-60 seconds
+5. Review suggestions with confidence scores
+6. Approve or decline each mapping
+
+**Algorithm**: TF-IDF + SequenceMatcher + word overlap
+
+**Example Matches**:
+- `clm_id` → `CLAIM_ID` (95% confidence)
+- `patient_name` → `MEMBER_NAME` (78% confidence)
+
+#### Method 2: Auto-Map with LLM (Semantic Understanding)
+
+**Best for**: Inconsistent naming, complex mappings, semantic matching
+
+1. Expand table card
+2. Click **Auto-Map (LLM)**
+3. Select model (default: `llama3.1-70b`)
+4. Wait 30-90 seconds
+5. Review AI-generated mappings with reasoning
+6. Approve or edit mappings
+
+**Powered by**: Snowflake Cortex AI
+
+**Example Reasoning**:
+- `svc_dt` → `SERVICE_DATE` (AI: "svc is common abbreviation for service")
+
+#### Method 3: Manual Mapping
+
+**Best for**: Custom transformations, complex business logic
+
+1. Expand table card
+2. Click **Add Mapping**
+3. Fill in:
+   - **Source Field**: From `RAW_DATA_TABLE` (e.g., `claim_amt`)
+   - **Target Column**: From schema (e.g., `CLAIM_AMOUNT`)
+   - **Transformation**: Optional SQL (e.g., `CAST(claim_amt AS NUMBER(10,2))`)
+   - **Approved**: Check to activate
+4. Click **Save**
+
+**Transformation Examples**:
+- Date parsing: `TO_DATE(service_date, 'MM/DD/YYYY')`
+- String cleaning: `UPPER(TRIM(provider_name))`
+- Calculations: `claim_amount * 0.8`
+
+**Mapping Features**:
+- Search tables by name/TPA/schema
+- Filter by status (All/With Mappings/No Mappings)
+- Duplicate detection (yellow highlight)
+- Bulk approve/delete
+- Shows mapping count and approval rate
+
+### 3. Execute Transformation
+
+**Location**: Silver → Transform
+
+**4-Step Wizard**:
+
+**Step 1: Select Tables**
+1. Select TPA (searchable dropdown)
+2. Source: `RAW_DATA_TABLE` (auto-selected)
+3. Target: Select destination table
+4. Click **Next**
+
+**Step 2: Verify Mappings**
+- Review all active mappings
+- Check source → target alignment
+- View transformation logic
+- See confidence scores
+- Click **Next**
+
+**Step 3: Execute**
+- Click **Execute Transform**
+- Monitor progress bar
+- Wait for completion (1-5 minutes)
+
+**Step 4: Results**
+- View transformation statistics
+- Check success/failure counts
+- Review data quality metrics
+- See transformation history
+
+### 4. View Transformed Data
+
+**Location**: Silver → View Data
+
+**Steps**:
+1. Select TPA (searchable dropdown)
+2. All TPA tables displayed in accordion
+3. Click table to expand and view data
+4. Use search to filter records
+5. Adjust row limit (100/500/1000/5000)
+
+**Quality Metrics**:
+- Total records
+- Data quality score (0-100%)
+- Last updated timestamp
+- Validation pass rate
+
+---
+
+## Gold Layer - Analytics
+
+**Purpose**: Provide business-ready analytics and aggregations.
+
+### 1. Analytics Dashboard
+
+**Location**: Gold → Analytics
+
+**Claims Analytics**:
+- Total claims count and amounts
+- Average claim amount
+- Claims by type (Medical, Dental, Pharmacy, Vision)
+- Claims by status (Submitted, Approved, Denied, Paid)
+- Provider distribution
+- Trend analysis over time
+
+**Member 360 View**:
+- Member demographics (age, gender, location)
+- Complete claim history
+- Provider relationships and patterns
+- Risk scores and health indicators
+- Lifetime value metrics
+
+**Provider Performance**:
+- Claims processed per provider
+- Average processing time
+- Approval rates and denial reasons
+- Payment metrics and trends
+- Network efficiency scores
+
+**Financial Summary**:
+- Total payments by period
+- Outstanding amounts
+- Payment trends and forecasts
+- Cost analysis by category
+- Budget vs. actual comparisons
+
+**Filters**:
+- Date range picker
+- TPA selection (multi-select)
+- Claim type filter
+- Status filter
+
+### 2. Quality Metrics
+
+**Location**: Gold → Quality
+
+**Dashboard Components**:
+- Validation rule results (pass/fail counts)
+- Error rates by field and rule
+- Quality trends over time (line charts)
+- Failed record details with reasons
+- Top quality issues (ranked list)
+
+**Use Case**: Monitor data quality and identify systematic issues.
+
+### 3. Transformation Rules
+
+**Location**: Gold → Rules
+
+**Rule Types**:
+- **Validation**: `claim_amount > 0`, `service_date <= CURRENT_DATE`
+- **Business Logic**: `IF claim_type = 'DENTAL' THEN provider_type = 'DENTIST'`
+- **Quality Checks**: Null checks, format validation, range checks
+- **Quarantine**: Isolate records that fail critical rules
+
+**Actions**:
+- REJECT: Block record from processing
+- QUARANTINE: Isolate for review
+- FLAG: Mark for attention but allow
+- CORRECT: Auto-fix with transformation
+
+---
+
+## Technical Reference
 
 ### Technology Stack
 
-**Frontend**:
-- React 18, TypeScript 5
-- Ant Design 5 (UI components)
-- Vite 5 (build tool)
-- Axios (HTTP client)
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | React 18 + TypeScript 5 | UI framework |
+| | Ant Design 5 | Component library |
+| | Vite 5 | Build tool and dev server |
+| | Axios | HTTP client |
+| **Backend** | Python 3.11 + FastAPI | REST API framework |
+| | Uvicorn | ASGI server |
+| | Snowflake Connector | Database driver |
+| | Pydantic | Data validation |
+| **Database** | Snowflake | Cloud data platform |
+| | Hybrid Tables | Indexed metadata storage |
+| | Clustered Tables | Analytics aggregations |
+| | Snowpark | Python in SQL |
+| | Cortex AI | LLM field mapping |
 
-**UI/UX Features**:
-- Loading spinners on all data-fetching operations
-- Accordion views for TPA-specific tables (no unnecessary dropdowns)
-- Color-coded layer headers (darker bronze for better visibility)
-- Real-time feedback for auto-mapping operations
-- Empty state messages with helpful guidance
-- Responsive design with mobile support
+### Table Types and Performance
 
-**Backend**:
-- Python 3.11, FastAPI
-- Uvicorn (ASGI server)
-- Snowflake Connector
-- Pydantic (validation)
+| Type | Storage | Use Case | Performance Gain |
+|------|---------|----------|------------------|
+| **Standard** | Columnar | Bronze raw data, append-only | Baseline |
+| **Hybrid** | Row + Indexes | Silver metadata (mappings, schemas) | 10-100x faster lookups |
+| **Clustered** | Columnar + Clustering | Gold analytics, aggregations | 2-10x faster scans |
 
-**Database**:
-- Snowflake (cloud data platform)
-- Hybrid Tables (fast lookups)
-- Clustered Tables (fast scans)
-- Snowpark (Python in SQL)
-- Cortex AI (LLM mapping)
-
-### Table Types
-
-**Standard Tables** (Bronze):
-- Columnar storage
-- Append-only raw data
-- Large datasets
-
-**Hybrid Tables** (Silver):
-- Row-based storage with indexes
-- 10-100x faster point queries
-- Metadata tables (mappings, schemas)
-- 22 indexes total
-
-**Clustered Tables** (Gold):
-- Columnar storage with clustering
-- 2-10x faster analytical queries
-- Analytics and aggregations
+**Index Count**: 22 indexes across Silver hybrid tables
 
 ### Task Automation
 
-**Bronze Tasks** (Every 60 minutes):
-- `discover_files_task`: Scan stages for new files
-- `process_files_task`: Process files into raw table
+| Layer | Task | Frequency | Purpose |
+|-------|------|-----------|---------|
+| **Bronze** | `discover_files_task` | 60 min | Scan stages for new files |
+| | `process_files_task` | 60 min | Parse files into `RAW_DATA_TABLE` |
+| **Silver** | `transform_task` | 10 min | Apply mappings and validation |
+| **Gold** | `aggregate_task` | Daily 1 AM | Calculate analytics and KPIs |
 
-**Silver Tasks** (Every 10 minutes):
-- Transform raw data to Silver tables
-- Apply validation rules
-- Update quality metrics
+**Manual Trigger**: Bronze → Tasks → Execute Now
 
-**Gold Tasks** (Daily at 1 AM):
-- Aggregate Silver data
-- Calculate analytics and KPIs
-- Update member 360 views
-
-### Security
+### Security Model
 
 **Caller's Rights Execution**:
-- Operations use user's credentials
+- All operations use user's credentials
 - No shared service account
-- User-level audit trails
+- User-level audit trails in logs
 
 **Required Permissions**:
-- Bronze: SELECT, INSERT on tables; READ, WRITE on stages
-- Silver: SELECT, INSERT, UPDATE, DELETE; EXECUTE on procedures
-- Gold: SELECT on tables; EXECUTE on procedures
 
-### Performance
+| Layer | Tables | Stages | Procedures |
+|-------|--------|--------|------------|
+| Bronze | SELECT, INSERT | READ, WRITE | - |
+| Silver | SELECT, INSERT, UPDATE, DELETE | - | EXECUTE |
+| Gold | SELECT | - | EXECUTE |
+
+### Performance Optimization
 
 **Query Optimization**:
 - Hybrid tables: 10-100x faster (indexed lookups)
@@ -476,90 +464,162 @@ All TPA filters use searchable dropdowns:
 **Scalability**:
 - Auto-scaling compute clusters
 - Container replication (1-3 instances)
-- Linear scaling (supports 1000+ TPAs)
+- Linear scaling (tested with 1000+ TPAs)
 
-### Monitoring
+### Monitoring and Logging
 
-**Log Tables** (Admin → System Logs):
-- `APPLICATION_LOGS`: Application events
-- `API_REQUEST_LOGS`: Request/response tracking
-- `ERROR_LOGS`: Error tracking
-- `FILE_PROCESSING_LOGS`: Processing stages
-- `TASK_EXECUTION_LOGS`: Task tracking
+**Location**: Admin → System Logs
 
-### Deployment
+| Log Table | Contents |
+|-----------|----------|
+| `APPLICATION_LOGS` | Application events, user actions |
+| `API_REQUEST_LOGS` | HTTP requests/responses, latency |
+| `ERROR_LOGS` | Exceptions, stack traces |
+| `FILE_PROCESSING_LOGS` | File lifecycle, processing stages |
+| `TASK_EXECUTION_LOGS` | Task runs, duration, status |
 
-**Local Development**:
+### Deployment Options
+
+#### Option 1: Local Development
+
 ```bash
-./start.sh  # Starts backend + frontend
+./start.sh  # Starts backend (port 8000) + frontend (port 3000)
 ```
 
-**Snowflake Database Only**:
+**Access**:
+- UI: http://localhost:3000
+- API: http://localhost:8000/docs
+
+#### Option 2: Snowflake Database Only
+
 ```bash
 cd deployment
 ./deploy.sh YOUR_CONNECTION
 ```
 
-**Snowpark Container Services** (Full Stack):
+**Deploys**: Bronze, Silver, Gold schemas, tables, tasks, procedures
+
+#### Option 3: Snowpark Container Services (Full Stack)
+
 ```bash
-# Build and push images
+# 1. Build and push Docker images
 ./build_and_push_ghcr.sh YOUR_GITHUB_USERNAME
 
-# Deploy to Snowflake
+# 2. Deploy to Snowflake SPCS
 cd deployment
 ./deploy_container.sh YOUR_CONNECTION
 ```
 
+**Includes**: Backend + Frontend containers, load balancer, auto-scaling
+
 **Authentication Methods**:
-1. Snow CLI (dev)
-2. PAT Token (prod)
-3. Keypair (most secure)
+1. **Snow CLI** (dev): `snow connection add`
+2. **PAT Token** (prod): GitHub Personal Access Token
+3. **Keypair** (most secure): RSA key pair authentication
 
 ### Best Practices
 
-1. **File Naming**: Use descriptive, date-based names (e.g., `claims-2024-03-01.csv`)
-2. **Batch Uploads**: Upload 10-20 files at a time
-3. **Test First**: Upload sample file before full dataset
-4. **Validate Mappings**: Review ML/LLM suggestions before approving
-5. **Monitor Tasks**: Check task status regularly
-6. **Define Rules**: Set up quality rules before transformations
-7. **Incremental Processing**: Use for large datasets
+| Category | Recommendation |
+|----------|----------------|
+| **File Naming** | Use descriptive, date-based names: `claims-2024-03-01.csv` |
+| **Batch Size** | Upload 10-20 files at a time for optimal processing |
+| **Testing** | Upload sample file before full dataset |
+| **Mapping** | Review ML/LLM suggestions before approving |
+| **Monitoring** | Check task status and logs regularly |
+| **Quality** | Define validation rules before transformations |
+| **Processing** | Use incremental mode for large datasets |
 
-### Troubleshooting
+---
 
-**File Not Processing**:
-- Check file in correct TPA folder (`@SRC/{tpa}/`)
-- Verify CSV/Excel format
-- Manually trigger: Bronze → Tasks → Resume
+## Troubleshooting
 
-**Transformation Failed**:
-- Check field mappings exist and are correct
-- Verify target table exists
-- Review error logs in Admin → System Logs
+### File Not Processing
 
-**Mapping Errors**:
-- Ensure target columns exist in physical table
-- Check for duplicate mappings (highlighted in UI)
-- Verify source field names match raw data
+**Symptoms**: File uploaded but not appearing in raw data
 
-**Performance Issues**:
-- Reduce batch size in transformations
-- Check Snowflake warehouse size
-- Monitor task execution times in logs
+**Solutions**:
+1. Check file in correct TPA folder: `@SRC/{tpa}/filename.csv`
+2. Verify CSV/Excel format (no corruption)
+3. Check Bronze → Processing Status for errors
+4. Manually trigger: Bronze → Tasks → Execute Now
+5. Review logs: Admin → System Logs → File Processing
 
-**Connection Issues**:
+### Transformation Failed
+
+**Symptoms**: Transform job fails or produces no output
+
+**Solutions**:
+1. Verify field mappings exist and are approved
+2. Check target table exists: Silver → Target Schemas → Created Tables
+3. Ensure source fields match raw data column names
+4. Review transformation logic for SQL errors
+5. Check logs: Admin → System Logs → Error Logs
+
+### Mapping Errors
+
+**Symptoms**: Duplicate mappings, incorrect field alignment
+
+**Solutions**:
+1. Check for duplicate mappings (highlighted in yellow)
+2. Verify target columns exist in physical table
+3. Ensure source field names match raw data exactly
+4. Delete and recreate mappings if needed
+5. Use ML/LLM auto-mapping for bulk corrections
+
+### Performance Issues
+
+**Symptoms**: Slow queries, timeouts, high latency
+
+**Solutions**:
+1. Reduce batch size in transformations (default: 10,000 rows)
+2. Check Snowflake warehouse size (recommend: MEDIUM or larger)
+3. Monitor task execution times in logs
+4. Increase warehouse size for large datasets
+5. Use incremental processing for ongoing loads
+
+### Connection Issues
+
+**Symptoms**: Cannot connect to Snowflake, authentication errors
+
+**Solutions**:
+
 ```bash
 # Test connection
 snow connection test YOUR_CONNECTION
 
-# Check credentials
+# View connection details
 cat ~/.snowflake/connections.toml
+
+# Re-add connection
+snow connection add
 ```
 
-**Windows Path Issues**:
-- Use Git Bash for deployment scripts
-- Scripts auto-convert paths for Snowflake PUT command
+**Common Issues**:
+- Incorrect account identifier (use `account.region.cloud`)
+- Expired password or token
+- Insufficient role permissions
+- Network/firewall blocking Snowflake
+
+### Windows Path Issues
+
+**Symptoms**: Deployment scripts fail on Windows
+
+**Solutions**:
+1. Use Git Bash (not CMD or PowerShell)
+2. Scripts auto-convert paths for Snowflake PUT command
+3. Use forward slashes in paths: `deployment/deploy.sh`
+4. Alternatively, use `.bat` scripts: `deployment/deploy.bat`
+
+### Common Error Messages
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Table does not exist` | Target table not created | Silver → Target Schemas → Create Table |
+| `No mappings found` | Field mappings not defined | Silver → Field Mappings → Auto-Map or Manual |
+| `Permission denied` | Insufficient Snowflake role | Grant required permissions to role |
+| `File not found in stage` | Wrong TPA folder or file deleted | Re-upload file to correct TPA folder |
+| `Transformation timeout` | Large dataset or small warehouse | Increase warehouse size or reduce batch |
 
 ---
 
-**Version**: 3.1 | **Last Updated**: February 2, 2026
+**Version**: 3.3 | **Last Updated**: February 3, 2026

@@ -145,14 +145,18 @@ def transform_bronze_to_silver(session, target_table, tpa, source_table, source_
         merge_result = session.sql(merge_query).collect()
         
         # Get the number of rows affected from the merge result
+        # MERGE returns a Row object with columns like 'number of rows inserted', 'number of rows updated'
+        records_processed = 0
         if merge_result and len(merge_result) > 0:
             result_row = merge_result[0]
-            # MERGE returns: number of rows inserted, number of rows updated
-            rows_inserted = result_row.get('number of rows inserted') or result_row.get('NUMBER OF ROWS INSERTED') or 0
-            rows_updated = result_row.get('number of rows updated') or result_row.get('NUMBER OF ROWS UPDATED') or 0
-            records_processed = rows_inserted + rows_updated
-        else:
-            records_processed = 0
+            # Try to access as dictionary keys (case-insensitive)
+            try:
+                rows_inserted = result_row['number of rows inserted'] if 'number of rows inserted' in result_row else (result_row['NUMBER OF ROWS INSERTED'] if 'NUMBER OF ROWS INSERTED' in result_row else 0)
+                rows_updated = result_row['number of rows updated'] if 'number of rows updated' in result_row else (result_row['NUMBER OF ROWS UPDATED'] if 'NUMBER OF ROWS UPDATED' in result_row else 0)
+                records_processed = rows_inserted + rows_updated
+            except (KeyError, TypeError):
+                # If we can't get the counts, just set to 0
+                records_processed = 0
         
         # Log success
         session.sql(f"""

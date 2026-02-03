@@ -396,7 +396,7 @@ async def list_silver_tables(request: Request):
                 COALESCE(ist.bytes, 0) as BYTES,
                 ist.last_altered as LAST_UPDATED
             FROM {settings.SILVER_SCHEMA_NAME}.created_tables ct
-            LEFT JOIN INFORMATION_SCHEMA.TABLES ist 
+            LEFT JOIN {settings.DATABASE_NAME}.INFORMATION_SCHEMA.TABLES ist 
                 ON ist.table_schema = '{settings.SILVER_SCHEMA_NAME}'
                 AND ist.table_name = ct.physical_table_name
             WHERE ct.active = TRUE
@@ -420,7 +420,7 @@ async def check_table_exists(request: Request, table_name: str, tpa: str):
         
         query = f"""
             SELECT COUNT(*) as count
-            FROM INFORMATION_SCHEMA.TABLES
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA = '{settings.SILVER_SCHEMA_NAME}'
               AND TABLE_NAME = '{physical_table_name}'
         """
@@ -718,7 +718,7 @@ async def validate_field_mappings(request: Request, tpa: str, target_table: str)
         physical_table_name = f"{tpa.upper()}_{target_table.upper()}"
         columns_query = f"""
             SELECT column_name
-            FROM {settings.SILVER_SCHEMA_NAME}.INFORMATION_SCHEMA.COLUMNS
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.COLUMNS
             WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
               AND table_name = '{physical_table_name}'
         """
@@ -800,7 +800,7 @@ async def create_field_mapping(request: Request, mapping: FieldMappingCreate):
         try:
             column_check_query = f"""
                 SELECT column_name
-                FROM {settings.SILVER_SCHEMA_NAME}.INFORMATION_SCHEMA.COLUMNS
+                FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.COLUMNS
                 WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
                   AND table_name = '{physical_table_name}'
                   AND column_name = '{mapping.target_column.upper()}'
@@ -1049,7 +1049,7 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
             mapping_request.model_name,
             "DEFAULT_FIELD_MAPPING"
         )
-        logger.info(f"LLM auto-mapping completed. Result type: {type(result)}, Result value: {result}")
+        logger.info(f"LLM auto-mapping completed. Result type: {type(result)}, Result value: '{result}'")
         
         # Check if procedure returned an error message
         if result and isinstance(result, str):
@@ -1071,6 +1071,12 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
                         status_code=500,
                         detail="LLM prompt template not found. This shouldn't happen after pre-flight checks. Please contact your administrator."
                     )
+                elif "could not parse" in result_lower:
+                    # LLM returned unparseable response
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"LLM returned an invalid response format. {result[:200]}"
+                    )
                 else:
                     # Generic error from procedure
                     raise HTTPException(status_code=500, detail=f"LLM mapping failed: {result}")
@@ -1085,38 +1091,54 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
                 mappings_created = int(match.group(1))
                 logger.info(f"✓ Successfully created {mappings_created} LLM-based field mappings")
             else:
-                logger.warning(f"Could not extract mapping count from result string: {result}")
+                logger.warning(f"Could not extract mapping count from result string: '{result}'")
         
-        # If result is None or empty, check if mappings were actually created by querying
-        if not result or mappings_created == 0:
-            # Query to check if mappings exist for this table/TPA
-            # Escape single quotes in table name and TPA to prevent SQL errors
-            safe_table = mapping_request.target_table.replace("'", "''")
-            safe_tpa = mapping_request.tpa.replace("'", "''")
-            
-            check_query = f"""
-                SELECT COUNT(*) as count 
-                FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
-                WHERE TARGET_TABLE = '{safe_table}' 
-                AND TPA = '{safe_tpa}'
-                AND MAPPING_METHOD LIKE 'LLM%'
-            """
-            try:
-                mapping_check = await sf_service.execute_query_dict(check_query)
-                if mapping_check and len(mapping_check) > 0:
-                    actual_count = mapping_check[0].get('COUNT', 0)
-                    if actual_count > 0:
-                        mappings_created = actual_count
+        # Always verify actual mappings in database (more reliable than parsing string)
+        logger.info(f"Verifying actual mappings in database for table='{mapping_request.target_table}', tpa='{mapping_request.tpa}'")
+        safe_table = mapping_request.target_table.replace("'", "''")
+        safe_tpa = mapping_request.tpa.replace("'", "''")
+        
+        check_query = f"""
+            SELECT COUNT(*) as count 
+            FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
+            WHERE TARGET_TABLE = '{safe_table}' 
+            AND TPA = '{safe_tpa}'
+            AND MAPPING_METHOD LIKE 'LLM%'
+            AND ACTIVE = TRUE
+        """
+        try:
+            mapping_check = await sf_service.execute_query_dict(check_query)
+            if mapping_check and len(mapping_check) > 0:
+                actual_count = mapping_check[0].get('COUNT', 0)
+                logger.info(f"Database verification: Found {actual_count} LLM mappings")
+                
+                # If we found mappings in DB but didn't parse them from result, use DB count
+                if actual_count > 0 and mappings_created == 0:
+                    mappings_created = actual_count
+                    if not result or not result.strip():
                         result = f"Successfully generated {actual_count} LLM-based field mappings"
-                        logger.info(f"Verified {actual_count} LLM mappings in database")
-            except Exception as check_error:
-                logger.warning(f"Could not verify mapping count: {check_error}")
+                    logger.info(f"Updated mappings_created from database: {actual_count}")
+                
+                # If result says 0 but DB has mappings, something is wrong
+                if mappings_created == 0 and actual_count == 0:
+                    logger.error(f"Procedure completed but no mappings were created. Result: '{result}'")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"LLM procedure completed but no mappings were created. The LLM may have returned an unexpected response format. Please check the logs or try again."
+                    )
+        except HTTPException:
+            raise
+        except Exception as check_error:
+            logger.warning(f"Could not verify mapping count: {check_error}")
+            # If we can't verify but have a result, trust the result
+            if mappings_created == 0 and result:
+                logger.error(f"Cannot verify mappings and result shows 0: '{result}'")
         
         return {
             "message": result if result else "LLM auto-mapping completed",
             "result": result,
             "mappings_created": mappings_created,
-            "success": mappings_created > 0 or (result and "successfully" in result.lower())
+            "success": mappings_created > 0
         }
     except asyncio.TimeoutError:
         logger.error(f"LLM auto-mapping timed out for TPA {mapping_request.tpa}")
@@ -1187,6 +1209,7 @@ async def transform_bronze_to_silver(request: Request, transform_request: Transf
         
         # Pre-validation: Check mappings before running transformation
         try:
+            logger.info(f"Pre-validation: Checking approved mappings for table='{transform_request.target_table}', tpa='{transform_request.tpa}'")
             mappings_query = f"""
                 SELECT target_column
                 FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
@@ -1195,7 +1218,9 @@ async def transform_bronze_to_silver(request: Request, transform_request: Transf
                   AND approved = TRUE
                   AND active = TRUE
             """
+            logger.debug(f"Mappings query: {mappings_query}")
             mappings = await sf_service.execute_query_dict(mappings_query)
+            logger.info(f"Found {len(mappings) if mappings else 0} approved mappings")
             
             if not mappings or len(mappings) == 0:
                 raise HTTPException(
@@ -1205,14 +1230,37 @@ async def transform_bronze_to_silver(request: Request, transform_request: Transf
             
             # Check if physical table exists and validate columns
             physical_table_name = f"{transform_request.tpa.upper()}_{transform_request.target_table.upper()}"
-            columns_query = f"""
-                SELECT column_name
-                FROM {settings.SILVER_SCHEMA_NAME}.INFORMATION_SCHEMA.COLUMNS
+            logger.info(f"Pre-validation: Checking if physical table '{physical_table_name}' exists")
+            
+            # First check if table exists
+            table_exists_query = f"""
+                SELECT COUNT(*) as count
+                FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.TABLES
                 WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
                   AND table_name = '{physical_table_name}'
             """
+            logger.debug(f"Table exists query: {table_exists_query}")
+            table_check = await sf_service.execute_query_dict(table_exists_query)
+            
+            if not table_check or table_check[0].get('COUNT', 0) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Physical table '{physical_table_name}' does not exist. Please create the table first using the 'Create Physical Table' button."
+                )
+            
+            logger.info(f"Physical table '{physical_table_name}' exists, validating columns")
+            
+            # Now get columns
+            columns_query = f"""
+                SELECT column_name
+                FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.COLUMNS
+                WHERE table_schema = '{settings.SILVER_SCHEMA_NAME}'
+                  AND table_name = '{physical_table_name}'
+            """
+            logger.debug(f"Columns query: {columns_query}")
             columns_result = await sf_service.execute_query_dict(columns_query)
             existing_columns = {row['COLUMN_NAME'].upper() for row in columns_result}
+            logger.info(f"Found {len(existing_columns)} columns in physical table")
             
             # Validate all mapped columns exist
             invalid_columns = []
@@ -1225,11 +1273,18 @@ async def transform_bronze_to_silver(request: Request, transform_request: Transf
                     status_code=400,
                     detail=f"Invalid mappings detected: columns {', '.join(invalid_columns)} do not exist in table '{physical_table_name}'. Please fix the mappings before transforming."
                 )
+            
+            logger.info("Pre-validation passed successfully")
                 
         except HTTPException:
             raise
         except Exception as e:
-            logger.warning(f"Could not pre-validate mappings: {str(e)}. Proceeding with transformation...")
+            logger.error(f"Pre-validation failed with error: {str(e)}", exc_info=True)
+            # Don't proceed if pre-validation fails with unexpected error
+            raise HTTPException(
+                status_code=500,
+                detail=f"Pre-validation failed: {str(e)}"
+            )
         
         # Execute transformation
         # Note: Procedure signature is (target_table, tpa, source_table, source_schema, batch_size, apply_rules, incremental)

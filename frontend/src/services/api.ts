@@ -510,6 +510,11 @@ export const apiService = {
     return response.data
   },
 
+  validateSchema: async (): Promise<any> => {
+    const response = await api.get('/admin/validate-schema')
+    return response.data
+  },
+
   getLogStatistics: async (days?: number): Promise<any[]> => {
     const response = await api.get('/logs/stats', { params: { days } })
     return response.data

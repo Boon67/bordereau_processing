@@ -85,9 +85,21 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       // Auto-select first target table if only one exists
       if (uniqueTargets.length === 1) {
         setTargetTable(uniqueTargets[0] as string)
+        // Auto-advance to step 1 (Verify Mappings) since tables are pre-defined
+        setCurrentStep(1)
+        // Load mappings immediately since we auto-selected the table
+        // Use a small delay to ensure state is updated
+        setTimeout(() => {
+          loadFieldMappingsForTable(uniqueTargets[0] as string, mapping)
+        }, 100)
       } else if (uniqueTargets.length > 1) {
         // Clear selection if multiple tables exist
         setTargetTable('')
+        // Stay on step 0 so user can select which table
+        setCurrentStep(0)
+      } else {
+        // No tables - stay on step 0 to show error
+        setCurrentStep(0)
       }
     } catch (error) {
       message.error('Failed to load tables')
@@ -96,13 +108,13 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
     }
   }
 
-  const loadFieldMappings = async () => {
-    if (!selectedTpa || !targetTable) return
+  const loadFieldMappingsForTable = async (physicalTableName: string, mapping: Record<string, string>) => {
+    if (!selectedTpa) return
 
     setLoadingMappings(true)
     try {
       // Use schema table name for fetching mappings
-      const schemaTableName = tableMapping[targetTable] || targetTable
+      const schemaTableName = mapping[physicalTableName] || physicalTableName
       const mappings = await apiService.getFieldMappings(selectedTpa, schemaTableName)
       setFieldMappings(mappings)
       
@@ -124,6 +136,11 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
     } finally {
       setLoadingMappings(false)
     }
+  }
+
+  const loadFieldMappings = async () => {
+    if (!selectedTpa || !targetTable) return
+    await loadFieldMappingsForTable(targetTable, tableMapping)
   }
 
   const handleTransform = async () => {
@@ -255,7 +272,11 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
 
       <Card style={{ marginBottom: 24 }}>
         <Steps current={currentStep}>
-          <Step title="Select Tables" icon={<DatabaseOutlined />} />
+          <Step 
+            title={targetTables.length <= 1 ? "Tables" : "Select Tables"} 
+            icon={<DatabaseOutlined />}
+            description={targetTables.length === 1 ? "Auto-selected" : undefined}
+          />
           <Step title="Verify Mappings" icon={<ApiOutlined />} />
           <Step title="Execute Transform" icon={<ThunderboltOutlined />} />
           <Step title="Complete" icon={<PlayCircleOutlined />} />
@@ -263,7 +284,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       </Card>
 
       {currentStep === 0 && (
-        <Card title="Step 1: Select Source and Target Tables">
+        <Card title={targetTables.length === 1 ? "Step 1: Tables Pre-Selected" : "Step 1: Select Source and Target Tables"}>
           <Space direction="vertical" style={{ width: '100%' }} size="large">
             {loadingTables ? (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -284,6 +305,84 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
                 type="warning"
                 showIcon
               />
+            ) : targetTables.length === 1 ? (
+              <>
+                <Alert
+                  message="Tables Auto-Selected"
+                  description={`Source and target tables are pre-defined for this TPA. Proceeding to verify mappings...`}
+                  type="success"
+                  showIcon
+                />
+                {/* Show the visual flow even when auto-selected */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  padding: '24px',
+                  background: '#f5f5f5',
+                  borderRadius: '8px',
+                  gap: '24px'
+                }}>
+                  {/* Source Table */}
+                  <div style={{
+                    flex: 1,
+                    maxWidth: '400px',
+                    background: '#fff',
+                    border: '2px solid #ffccc7',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ color: '#cf1322', fontWeight: 'bold', marginBottom: '8px' }}>
+                      <DatabaseOutlined style={{ fontSize: '20px', marginRight: '8px' }} />
+                      Bronze Layer
+                    </div>
+                    <div style={{ 
+                      fontSize: '18px', 
+                      fontWeight: 'bold',
+                      color: '#262626',
+                      marginBottom: '8px'
+                    }}>
+                      {sourceTable}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                      Raw unstructured data
+                    </div>
+                  </div>
+
+                  {/* Arrow */}
+                  <div style={{ fontSize: '32px', color: '#1890ff' }}>
+                    <ArrowRightOutlined />
+                  </div>
+
+                  {/* Target Table */}
+                  <div style={{
+                    flex: 1,
+                    maxWidth: '400px',
+                    background: '#fff',
+                    border: '2px solid #b7eb8f',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ color: '#389e0d', fontWeight: 'bold', marginBottom: '8px' }}>
+                      <DatabaseOutlined style={{ fontSize: '20px', marginRight: '8px' }} />
+                      Silver Layer
+                    </div>
+                    <div style={{ 
+                      fontSize: '18px', 
+                      fontWeight: 'bold',
+                      color: '#262626',
+                      marginBottom: '8px'
+                    }}>
+                      {targetTable}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                      Structured validated data
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 {/* Visual Flow Display */}

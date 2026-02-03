@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Table, Tabs, Tag, Button, Space, DatePicker, Select, Input, message, Modal, Descriptions } from 'antd'
-import { ReloadOutlined, SearchOutlined, FileTextOutlined, BugOutlined, ApiOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Card, Table, Tabs, Tag, Button, Space, DatePicker, Select, Input, message, Modal, Descriptions, Alert, Spin } from 'antd'
+import { ReloadOutlined, SearchOutlined, FileTextOutlined, BugOutlined, ApiOutlined, ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { apiService } from '../services/api'
 import dayjs from 'dayjs'
@@ -85,6 +85,8 @@ const AdminLogs: React.FC<AdminLogsProps> = ({ tpas }) => {
   const [fileProcessingLogs, setFileProcessingLogs] = useState<FileProcessingLog[]>([])
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([])
   const [apiLogs, setAPILogs] = useState<APIRequestLog[]>([])
+  const [schemaValidation, setSchemaValidation] = useState<any>(null)
+  const [validationLoading, setValidationLoading] = useState(false)
 
   const renderTpaName = (tpaCode: string) => {
     const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
@@ -97,6 +99,24 @@ const AdminLogs: React.FC<AdminLogsProps> = ({ tpas }) => {
   useEffect(() => {
     loadLogs()
   }, [])
+
+  const loadSchemaValidation = async () => {
+    setValidationLoading(true)
+    try {
+      const result = await apiService.validateSchema()
+      setSchemaValidation(result)
+      
+      if (result.overall_status === 'COMPLETE') {
+        message.success('Schema validation passed!')
+      } else {
+        message.warning('Schema validation found issues')
+      }
+    } catch (error: any) {
+      message.error('Failed to validate schema: ' + (error.response?.data?.detail || error.message))
+    } finally {
+      setValidationLoading(false)
+    }
+  }
 
   const loadLogs = async () => {
     setLoading(true)
@@ -516,6 +536,137 @@ const AdminLogs: React.FC<AdminLogsProps> = ({ tpas }) => {
           pagination={{ pageSize: 50 }}
           scroll={{ x: 1200 }}
         />
+      ),
+    },
+    {
+      key: 'validation',
+      label: (
+        <span>
+          <DatabaseOutlined /> Schema Validation
+        </span>
+      ),
+      children: (
+        <div>
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Alert
+              message="Database Schema Validation"
+              description="Verify that all required tables, procedures, and views exist in the database. This helps identify missing components that could cause errors."
+              type="info"
+              showIcon
+            />
+            
+            <Button
+              type="primary"
+              icon={<DatabaseOutlined />}
+              onClick={loadSchemaValidation}
+              loading={validationLoading}
+              size="large"
+            >
+              Run Schema Validation
+            </Button>
+
+            {validationLoading && (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+                <p style={{ marginTop: 16 }}>Validating database schema...</p>
+              </div>
+            )}
+
+            {schemaValidation && !validationLoading && (
+              <Card
+                title={
+                  <span>
+                    {schemaValidation.overall_status === 'COMPLETE' ? (
+                      <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} />
+                    ) : (
+                      <CloseCircleOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
+                    )}
+                    Validation Results
+                  </span>
+                }
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  <Alert
+                    message={schemaValidation.overall_status === 'COMPLETE' ? 'Schema Complete' : 'Schema Incomplete'}
+                    description={`Overall status: ${schemaValidation.overall_status}`}
+                    type={schemaValidation.overall_status === 'COMPLETE' ? 'success' : 'error'}
+                    showIcon
+                  />
+
+                  <Descriptions title="Schema Summary" bordered column={2}>
+                    <Descriptions.Item label="Bronze Tables">
+                      <Tag color={schemaValidation.bronze?.status === 'PASS' ? 'success' : 'error'}>
+                        {schemaValidation.bronze?.existing_count || 0} / {schemaValidation.bronze?.required_count || 0}
+                      </Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Silver Tables">
+                      <Tag color={schemaValidation.silver?.status === 'PASS' ? 'success' : 'error'}>
+                        {schemaValidation.silver?.existing_count || 0} / {schemaValidation.silver?.required_count || 0}
+                      </Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Gold Tables">
+                      <Tag color={schemaValidation.gold?.status === 'PASS' ? 'success' : 'error'}>
+                        {schemaValidation.gold?.existing_count || 0} / {schemaValidation.gold?.required_count || 0}
+                      </Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Silver Procedures">
+                      <Tag color={schemaValidation.procedures?.status === 'PASS' ? 'success' : 'error'}>
+                        {schemaValidation.procedures?.existing_count || 0} / {schemaValidation.procedures?.required_count || 0}
+                      </Tag>
+                    </Descriptions.Item>
+                  </Descriptions>
+
+                  {schemaValidation.critical_checks && (
+                    <Card title="Critical Checks" size="small">
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        {schemaValidation.critical_checks.map((check: any, index: number) => (
+                          <Alert
+                            key={index}
+                            message={check.check_name}
+                            description={check.details}
+                            type={check.status === 'READY' ? 'success' : 'error'}
+                            showIcon
+                            icon={check.status === 'READY' ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                          />
+                        ))}
+                      </Space>
+                    </Card>
+                  )}
+
+                  {schemaValidation.missing_tables && schemaValidation.missing_tables.length > 0 && (
+                    <Alert
+                      message="Missing Tables"
+                      description={
+                        <ul>
+                          {schemaValidation.missing_tables.map((table: string, index: number) => (
+                            <li key={index}>{table}</li>
+                          ))}
+                        </ul>
+                      }
+                      type="error"
+                      showIcon
+                    />
+                  )}
+
+                  {schemaValidation.missing_procedures && schemaValidation.missing_procedures.length > 0 && (
+                    <Alert
+                      message="Missing Procedures"
+                      description={
+                        <ul>
+                          {schemaValidation.missing_procedures.map((proc: string, index: number) => (
+                            <li key={index}>{proc}</li>
+                          ))}
+                        </ul>
+                      }
+                      type="error"
+                      showIcon
+                    />
+                  )}
+                </Space>
+              </Card>
+            )}
+          </Space>
+        </div>
       ),
     },
   ]

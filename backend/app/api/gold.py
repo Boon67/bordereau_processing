@@ -31,7 +31,7 @@ async def get_gold_table_data(request: Request, table_name: str, tpa: str, limit
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
@@ -72,7 +72,7 @@ async def get_gold_stats(request: Request, table_name: str, tpa: str):
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
@@ -113,7 +113,7 @@ async def get_business_metrics(request: Request, tpa: str):
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
@@ -156,7 +156,7 @@ async def get_quality_check_results(request: Request, tpa: str, limit: int = 100
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
@@ -212,7 +212,7 @@ async def get_quality_stats(request: Request, tpa: str):
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
@@ -247,7 +247,7 @@ async def get_transformation_rules(request: Request, tpa: str):
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
@@ -291,7 +291,7 @@ async def get_quality_rules(request: Request, tpa: str):
         # Check if Gold schema exists
         check_schema = f"""
             SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.SCHEMATA 
+            FROM {settings.DATABASE_NAME}.INFORMATION_SCHEMA.SCHEMATA 
             WHERE SCHEMA_NAME = 'GOLD' AND CATALOG_NAME = '{settings.DATABASE_NAME}'
         """
         schema_result = await sf_service.execute_query_dict(check_schema)
