@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Button, Select, Space, message, Steps, Alert, Descriptions, Statistic, Row, Col, Progress, Timeline, Tag, Table } from 'antd'
+import { Card, Typography, Button, Select, Space, message, Steps, Alert, Descriptions, Statistic, Row, Col, Progress, Timeline, Tag, Table, Spin } from 'antd'
 import { ThunderboltOutlined, DatabaseOutlined, ApiOutlined, PlayCircleOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FieldMapping } from '../services/api'
+import TPASelector from '../components/TPASelector'
 
 const { Title } = Typography
 const { Step } = Steps
@@ -33,6 +34,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
   }, [])
 
   const [loading, setLoading] = useState(false)
+  const [loadingTables, setLoadingTables] = useState(true)
   const [sourceTable, setSourceTable] = useState<string>('RAW_DATA_TABLE')
   const [targetTable, setTargetTable] = useState<string>('')
   const [sourceTables, setSourceTables] = useState<string[]>(['RAW_DATA_TABLE'])
@@ -53,6 +55,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
   const loadTables = async () => {
     if (!selectedTpa) return
 
+    setLoadingTables(true)
     try {
       // Load created tables for this TPA
       const createdTables = await apiService.getSilverTables()
@@ -75,8 +78,21 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       
       setTargetTables(uniqueTargets as string[])
       setTableMapping(mapping)
+      
+      // Auto-select source table (always RAW_DATA_TABLE)
+      setSourceTable('RAW_DATA_TABLE')
+      
+      // Auto-select first target table if only one exists
+      if (uniqueTargets.length === 1) {
+        setTargetTable(uniqueTargets[0] as string)
+      } else if (uniqueTargets.length > 1) {
+        // Clear selection if multiple tables exist
+        setTargetTable('')
+      }
     } catch (error) {
       message.error('Failed to load tables')
+    } finally {
+      setLoadingTables(false)
     }
   }
 
@@ -224,16 +240,12 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       <Title level={2}>⚡ Transform Bronze to Silver</Title>
       
       <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Filter by TPA:</label>
+        <TPASelector
           value={selectedTpa}
           onChange={setSelectedTpa}
-          style={{ width: 300 }}
+          tpas={tpas}
           placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
         />
       </div>
 
@@ -253,44 +265,128 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       {currentStep === 0 && (
         <Card title="Step 1: Select Source and Target Tables">
           <Space direction="vertical" style={{ width: '100%' }} size="large">
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-                Source Table (Bronze Layer)
-              </label>
-              <Select
-                value={sourceTable}
-                onChange={setSourceTable}
-                style={{ width: '100%' }}
-                placeholder="Select source table"
-                options={sourceTables.map(table => ({
-                  label: table,
-                  value: table,
-                }))}
-              />
-              <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
-                Raw data table containing unstructured data from uploaded files
+            {loadingTables ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <Spin size="large" />
+                <p style={{ marginTop: 16, color: '#666' }}>Loading tables...</p>
               </div>
-            </div>
+            ) : targetTables.length === 0 ? (
+              <Alert
+                message="No Target Tables Found"
+                description={
+                  <div>
+                    <p>No tables have been created for TPA <strong>{selectedTpaName || selectedTpa}</strong>.</p>
+                    <p style={{ marginTop: 8 }}>
+                      Please go to <strong>Schemas and Tables</strong> page to create a table first.
+                    </p>
+                  </div>
+                }
+                type="warning"
+                showIcon
+              />
+            ) : (
+              <>
+                {/* Visual Flow Display */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  padding: '24px',
+                  background: '#f5f5f5',
+                  borderRadius: '8px',
+                  gap: '24px'
+                }}>
+                  {/* Source Table */}
+                  <div style={{
+                    flex: 1,
+                    maxWidth: '400px',
+                    background: '#fff',
+                    border: '2px solid #ffccc7',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ color: '#cf1322', fontWeight: 'bold', marginBottom: '8px' }}>
+                      <DatabaseOutlined style={{ fontSize: '20px', marginRight: '8px' }} />
+                      Bronze Layer
+                    </div>
+                    <div style={{ 
+                      fontSize: '18px', 
+                      fontWeight: 'bold',
+                      color: '#262626',
+                      marginBottom: '8px'
+                    }}>
+                      {sourceTable}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                      Raw unstructured data
+                    </div>
+                  </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-                Target Table (Silver Layer)
-              </label>
-              <Select
-                value={targetTable}
-                onChange={setTargetTable}
-                style={{ width: '100%' }}
-                placeholder="Select target table"
-                options={targetTables.map(table => ({
-                  label: table,
-                  value: table,
-                }))}
-                disabled={!sourceTable}
-              />
-              <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
-                Structured table where transformed data will be stored
-              </div>
-            </div>
+                  {/* Arrow */}
+                  <div style={{ fontSize: '32px', color: '#1890ff' }}>
+                    <ArrowRightOutlined />
+                  </div>
+
+                  {/* Target Table */}
+                  <div style={{
+                    flex: 1,
+                    maxWidth: '400px',
+                    background: '#fff',
+                    border: targetTable ? '2px solid #b7eb8f' : '2px dashed #d9d9d9',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ color: '#389e0d', fontWeight: 'bold', marginBottom: '8px' }}>
+                      <DatabaseOutlined style={{ fontSize: '20px', marginRight: '8px' }} />
+                      Silver Layer
+                    </div>
+                    {targetTable ? (
+                      <>
+                        <div style={{ 
+                          fontSize: '18px', 
+                          fontWeight: 'bold',
+                          color: '#262626',
+                          marginBottom: '8px'
+                        }}>
+                          {targetTable}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                          Structured validated data
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ color: '#8c8c8c', fontStyle: 'italic' }}>
+                        No table selected
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Target Table Selection (only if multiple tables) */}
+                {targetTables.length > 1 && (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
+                      Select Target Table:
+                    </label>
+                    <Select
+                      value={targetTable}
+                      onChange={setTargetTable}
+                      style={{ width: '100%' }}
+                      placeholder="Select target table to transform"
+                      options={targetTables.map(table => ({
+                        label: table,
+                        value: table,
+                      }))}
+                    />
+                    <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
+                      Multiple tables exist for this TPA - select one to transform
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
             <div style={{ marginTop: 16 }}>
               <Button

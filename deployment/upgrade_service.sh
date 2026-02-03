@@ -5,8 +5,20 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Handle Windows paths in Git Bash
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ -n "$WINDIR" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -W 2>/dev/null || pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -W 2>/dev/null || pwd)"
+    SCRIPT_DIR="${SCRIPT_DIR//\\//}"
+    PROJECT_ROOT="${PROJECT_ROOT//\\//}"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+# Create tmp directory if it doesn't exist
+TMP_DIR="${PROJECT_ROOT}/tmp"
+mkdir -p "${TMP_DIR}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -20,9 +32,6 @@ echo -e "${BLUE}Upgrade Snowpark Container Service${NC}"
 echo -e "${BLUE}================================${NC}"
 echo ""
 
-# Get script directory and load config
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
 # Load configuration
 [ -f "$SCRIPT_DIR/default.config" ] && source "$SCRIPT_DIR/default.config"
 [ -f "$SCRIPT_DIR/custom.config" ] && source "$SCRIPT_DIR/custom.config"
@@ -31,7 +40,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
 SCHEMA_NAME="${SCHEMA_NAME:-PUBLIC}"
 SERVICE_NAME="${SERVICE_NAME:-BORDEREAU_APP}"
-SPEC_FILE="/tmp/bordereau_service_spec_fixed.yaml"
+SPEC_FILE="${TMP_DIR}/bordereau_service_spec_fixed.yaml"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -59,7 +68,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --database NAME    Database name (default: BORDEREAU_PROCESSING_PIPELINE)"
             echo "  --schema NAME      Schema name (default: PUBLIC)"
             echo "  --service NAME     Service name (default: BORDEREAU_APP)"
-            echo "  --spec-file PATH   Path to spec file (default: /tmp/bordereau_service_spec_fixed.yaml)"
+            echo "  --spec-file PATH   Path to spec file (default: <project_root>/tmp/bordereau_service_spec_fixed.yaml)"
             echo "  --help             Show this help message"
             exit 0
             ;;

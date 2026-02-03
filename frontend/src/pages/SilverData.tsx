@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Select, Space, message, Statistic, Row, Col, Input, Tag, Collapse, Tooltip } from 'antd'
+import { Card, Typography, Table, Button, Select, Space, message, Statistic, Row, Col, Input, Tag, Collapse, Tooltip, Spin } from 'antd'
 import { ReloadOutlined, DatabaseOutlined, SearchOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
+import TPASelector from '../components/TPASelector'
 
 const { Title } = Typography
 const { Panel } = Collapse
@@ -15,9 +16,10 @@ interface SilverDataProps {
 
 const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
   const [loading, setLoading] = useState(false)
+  const [loadingTables, setLoadingTables] = useState(true)
   const [data, setData] = useState<any[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
-  const [tables, setTables] = useState<Array<{ physicalName: string; schemaName: string }>>([])
+  const [tables, setTables] = useState<Array<{ physicalName: string; schemaName: string; tpa: string }>>([])
   const [limit, setLimit] = useState(100)
   const [searchText, setSearchText] = useState('')
   const [statistics, setStatistics] = useState<any>(null)
@@ -38,30 +40,56 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
   const loadTables = async () => {
     if (!selectedTpa) return
 
+    // Validate that selectedTpa is a TPA_CODE (should not contain spaces)
+    if (selectedTpa.includes(' ')) {
+      message.error('Invalid TPA code. Please refresh the page.')
+      console.error('Invalid TPA code detected:', selectedTpa)
+      return
+    }
+
+    setLoadingTables(true)
     try {
       // Get all created tables
       const allTables = await apiService.getSilverTables()
       
-      // Filter tables for the selected TPA
+      console.log('All tables:', allTables)
+      console.log('Filtering for TPA:', selectedTpa)
+      
+      // Filter tables for the selected TPA (case-insensitive comparison)
       const tpaCreatedTables = allTables.filter(
-        (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
+        (table: any) => {
+          const tableTpa = table.TPA ? table.TPA.toLowerCase() : ''
+          const selectedTpaLower = selectedTpa.toLowerCase()
+          console.log('Comparing:', { tableTpa, selectedTpaLower, match: tableTpa === selectedTpaLower })
+          return tableTpa === selectedTpaLower
+        }
       )
+      
+      console.log('Filtered tables for TPA:', tpaCreatedTables)
       
       // Map to include both physical and schema names
       const tableList = tpaCreatedTables.map((table: any) => ({
         physicalName: table.TABLE_NAME,
-        schemaName: table.SCHEMA_TABLE
+        schemaName: table.SCHEMA_TABLE,
+        tpa: table.TPA
       }))
+      
+      console.log('Table list:', tableList)
       
       setTables(tableList)
       
       // Auto-select the first table if available and no table is currently selected
       if (tableList.length > 0 && !selectedTable) {
         setSelectedTable(tableList[0].physicalName)
+      } else if (tableList.length === 0) {
+        message.info(`No tables found for TPA: ${selectedTpa}`)
+        setSelectedTable('')
       }
     } catch (error) {
       message.error('Failed to load tables')
       console.error('Error loading tables:', error)
+    } finally {
+      setLoadingTables(false)
     }
   }
 
@@ -72,7 +100,23 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
     try {
       // Find the schema name for the selected physical table
       const tableInfo = tables.find(t => t.physicalName === selectedTable)
-      const schemaName = tableInfo?.schemaName || selectedTable
+      if (!tableInfo) {
+        message.error('Table information not found')
+        setData([])
+        return
+      }
+      
+      const schemaName = tableInfo.schemaName
+      
+      // Validate that we're using TPA_CODE (should be lowercase with underscores)
+      if (!selectedTpa || selectedTpa.includes(' ')) {
+        message.error('Invalid TPA code. Please refresh and try again.')
+        console.error('Invalid TPA code:', selectedTpa)
+        setData([])
+        return
+      }
+      
+      console.log('Loading data with:', { tpa: selectedTpa, schemaName, physicalTable: selectedTable })
       
       const result = await apiService.getSilverData(selectedTpa, schemaName, limit)
       setData(result.data || [])
@@ -82,6 +126,7 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
       }
     } catch (error: any) {
       message.error(`Failed to load Silver data: ${error.response?.data?.detail || error.message}`)
+      console.error('Error loading data:', error)
       setData([])
     } finally {
       setLoading(false)
@@ -94,7 +139,20 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
     try {
       // Find the schema name for the selected physical table
       const tableInfo = tables.find(t => t.physicalName === selectedTable)
-      const schemaName = tableInfo?.schemaName || selectedTable
+      if (!tableInfo) {
+        console.error('Table information not found for statistics')
+        return
+      }
+      
+      const schemaName = tableInfo.schemaName
+      
+      // Validate TPA code
+      if (selectedTpa.includes(' ')) {
+        console.error('Invalid TPA code in loadStatistics:', selectedTpa)
+        return
+      }
+      
+      console.log('Loading statistics with:', { tpa: selectedTpa, schemaName })
       
       const stats = await apiService.getSilverDataStats(selectedTpa, schemaName)
       setStatistics({
@@ -156,16 +214,12 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
       <Title level={2}>💎 Silver Data</Title>
       
       <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Filter by TPA:</label>
+        <TPASelector
           value={selectedTpa}
           onChange={setSelectedTpa}
-          style={{ width: 300 }}
+          tpas={tpas}
           placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
         />
       </div>
 
@@ -302,26 +356,22 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
         </Card>
       )}
 
-      {/* Table Selection and Search */}
+      {/* Search and Limit Controls */}
       <Card style={{ marginBottom: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-              Select Table
-            </label>
-            <Select
-              value={selectedTable}
-              onChange={setSelectedTable}
-              style={{ width: '100%' }}
-              placeholder="Select a table"
-              options={tables.map(table => ({
-                label: table.physicalName,
-                value: table.physicalName,
-              }))}
-            />
+        {loadingTables ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" />
+            <p style={{ marginTop: 16, color: '#666' }}>Loading tables...</p>
           </div>
-
-          <Space style={{ width: '100%' }}>
+        ) : tables.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            <p>No tables found for TPA: <strong>{selectedTpaName || selectedTpa}</strong></p>
+            <p style={{ fontSize: '12px' }}>
+              Please go to <strong>Schemas and Tables</strong> page to create a table first.
+            </p>
+          </div>
+        ) : (
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Input
               placeholder="Search data..."
               prefix={<SearchOutlined />}
@@ -341,46 +391,61 @@ const SilverData: React.FC<SilverDataProps> = ({ selectedTpa, setSelectedTpa, tp
               ]}
             />
           </Space>
-        </Space>
+        )}
       </Card>
 
-      {/* Data Table */}
-      {selectedTable ? (
-        <Card title={
-          <Space>
-            <DatabaseOutlined />
-            <span>{selectedTable}</span>
-            <Tag color="blue">{filteredData.length} records</Tag>
-          </Space>
-        }>
-          {data.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-              <p>No data found in this table.</p>
-              <p style={{ fontSize: '12px' }}>
-                Data will appear here after successful transformation from Bronze to Silver layer.
-              </p>
-            </div>
-          ) : (
-            <Table
-              columns={columns}
-              dataSource={filteredData}
-              loading={loading}
-              pagination={{
-                pageSize: 50,
-                showSizeChanger: true,
-                showTotal: (total) => `Total ${total} records`,
-              }}
-              scroll={{ x: 'max-content' }}
-              size="small"
-            />
-          )}
-        </Card>
-      ) : (
-        <Card>
-          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            Please select a table to view data.
-          </p>
-        </Card>
+      {/* Data Tables - Show all tables for the TPA */}
+      {!loadingTables && tables.length > 0 && (
+        <Collapse 
+          accordion
+          activeKey={selectedTable}
+          onChange={(key) => setSelectedTable(Array.isArray(key) ? key[0] : key as string)}
+          style={{ marginBottom: 16 }}
+        >
+          {tables.map(table => {
+            const isActive = selectedTable === table.physicalName
+            const tableData = isActive ? filteredData : []
+            const tableColumns = isActive ? columns : []
+            
+            return (
+              <Panel
+                key={table.physicalName}
+                header={
+                  <Space>
+                    <DatabaseOutlined />
+                    <strong>{table.physicalName}</strong>
+                    <Tag color="blue">{table.schemaName}</Tag>
+                    {isActive && data.length > 0 && (
+                      <Tag color="green">{filteredData.length} records</Tag>
+                    )}
+                  </Space>
+                }
+              >
+                {isActive && data.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                    <p>No data found in this table.</p>
+                    <p style={{ fontSize: '12px' }}>
+                      Data will appear here after successful transformation from Bronze to Silver layer.
+                    </p>
+                  </div>
+                ) : isActive ? (
+                  <Table
+                    columns={tableColumns}
+                    dataSource={tableData}
+                    loading={loading}
+                    pagination={{
+                      pageSize: 50,
+                      showSizeChanger: true,
+                      showTotal: (total) => `Total ${total} records`,
+                    }}
+                    scroll={{ x: 'max-content' }}
+                    size="small"
+                  />
+                ) : null}
+              </Panel>
+            )
+          })}
+        </Collapse>
       )}
 
       <Card title="ℹ️ Silver Layer Information" style={{ marginTop: 16 }}>

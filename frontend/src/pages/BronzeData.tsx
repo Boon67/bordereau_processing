@@ -34,27 +34,21 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
   })
   const [fileName, setFileName] = useState<string>('')
   const [limit, setLimit] = useState(100)
-  const [tpaFilter, setTpaFilter] = useState<string[]>([selectedTpa])
+  const [tpaFilter, setTpaFilter] = useState<string[]>([])
 
   useEffect(() => {
-    if (selectedTpa) {
-      setTpaFilter([selectedTpa])
-    }
-  }, [selectedTpa])
+    // Load all data on mount
+    loadData()
+  }, [])
 
   useEffect(() => {
     applyFilters()
   }, [tpaFilter, allData])
 
   const loadData = async () => {
-    if (!selectedTpa) {
-      message.warning('Please select a TPA')
-      return
-    }
-
     setLoading(true)
     try {
-      const result = await apiService.getRawData(selectedTpa, fileName || undefined, limit)
+      const result = await apiService.getRawData(undefined, fileName || undefined, limit)
       setAllData(result)
       message.success(`Loaded ${result.length} records`)
     } catch (error) {
@@ -161,19 +155,6 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
     },
   ]
 
-  if (!selectedTpa) {
-    return (
-      <div>
-        <Title level={2}>📊 Raw Data</Title>
-        <Card style={{ marginTop: 16 }}>
-          <p style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-            Please select a TPA from the dropdown in the header to view raw data.
-          </p>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -188,7 +169,7 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
-        View raw data records loaded from files. TPA: <strong>{selectedTpaName || selectedTpa}</strong>
+        View raw data records loaded from files
       </p>
 
       {/* Statistics Cards */}
@@ -256,10 +237,13 @@ const BronzeData: React.FC<BronzeDataProps> = ({ selectedTpa, setSelectedTpa, tp
               placeholder="All TPAs"
               value={tpaFilter}
               onChange={setTpaFilter}
-              options={Array.from(new Set(allData.map(r => r.TPA))).map(tpa => ({
-                label: tpa,
-                value: tpa
-              }))}
+              options={Array.from(new Set(allData.map(r => r.TPA))).map(tpaCode => {
+                const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+                return {
+                  label: tpa ? tpa.TPA_NAME : tpaCode,
+                  value: tpaCode
+                }
+              })}
               allowClear
             />
           </div>

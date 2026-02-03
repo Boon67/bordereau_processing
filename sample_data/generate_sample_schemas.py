@@ -214,7 +214,7 @@ Sample schemas are generated for:
 ### Option 1: Load via SQL Script
 
 ```bash
-cd /Users/tboon/code/bordereau
+# From project root directory
 
 # 1. Upload CSV to Snowflake stage
 snow stage put sample_data/config/silver_target_schemas.csv \\
@@ -301,8 +301,7 @@ def main():
     print()
     print("Next steps:")
     print("1. Review generated files in sample_data/config/")
-    print("2. Upload to Snowflake:")
-    print("   cd /Users/tboon/code/bordereau")
+    print("2. Upload to Snowflake (from project root):")
     print("   snow stage put sample_data/config/silver_target_schemas.csv @SILVER.SILVER_CONFIG/ --connection DEPLOYMENT")
     print("3. Load schemas:")
     print("   snow sql -f sample_data/config/load_sample_schemas.sql --connection DEPLOYMENT")

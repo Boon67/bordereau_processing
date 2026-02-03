@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Typography, Table, Button, Space, message, Tabs, Popconfirm, Select } from 'antd'
-import { ReloadOutlined, FolderOutlined, FileOutlined, DeleteOutlined } from '@ant-design/icons'
+import { ReloadOutlined, FolderOutlined, FileOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { TPA } from '../types'
 
@@ -87,8 +87,13 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
       if (tpaFilter.length === 0) return files
       return files.filter(file => {
         // Extract TPA from file path (e.g., "provider_a/file.csv" -> "provider_a")
-        const tpa = file.name.split('/')[0]
-        return tpaFilter.includes(tpa)
+        const parts = file.name.split('/')
+        const tpa = parts.length > 1 ? parts[0] : null
+        
+        // If no TPA prefix, don't show this file when filtering
+        if (!tpa) return false
+        
+        return tpaFilter.some(filterTpa => filterTpa.toLowerCase() === tpa.toLowerCase())
       })
     }
 
@@ -179,8 +184,18 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
       key: 'tpa',
       width: 200,
       render: (name: string) => {
-        const tpaCode = name.split('/')[0]
-        const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+        // Extract TPA code from file path
+        // Expected format: "provider_a/file.csv" or just "file.csv"
+        const parts = name.split('/')
+        const tpaCode = parts.length > 1 ? parts[0] : null
+        
+        if (!tpaCode) {
+          // No TPA prefix in path - file might be in root or incorrectly uploaded
+          return <span style={{ color: '#999', fontStyle: 'italic' }}>Unknown</span>
+        }
+        
+        // Look up TPA name from code
+        const tpa = tpas.find(t => t.TPA_CODE.toLowerCase() === tpaCode.toLowerCase())
         return tpa ? tpa.TPA_NAME : tpaCode
       },
     },
@@ -278,10 +293,17 @@ const BronzeStages: React.FC<BronzeStagesProps> = ({ selectedTpa, setSelectedTpa
             placeholder="All TPAs"
             value={tpaFilter}
             onChange={setTpaFilter}
-            options={tpas.map(tpa => ({
-              label: tpa.TPA_NAME,
-              value: tpa.TPA_CODE
-            }))}
+            showSearch
+            suffixIcon={<SearchOutlined />}
+            filterOption={(input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={[...tpas]
+              .sort((a, b) => a.TPA_NAME.localeCompare(b.TPA_NAME))
+              .map(tpa => ({
+                label: tpa.TPA_NAME,
+                value: tpa.TPA_CODE
+              }))}
             allowClear
           />
         </div>

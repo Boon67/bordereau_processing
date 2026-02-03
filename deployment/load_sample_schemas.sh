@@ -58,11 +58,24 @@ echo ""
 
 # Step 2: Upload to Snowflake
 echo -e "${YELLOW}[2/3]${NC} Uploading schemas to Snowflake..."
+
+# Convert path for Windows if needed (Git Bash drive notation like /z/ to Z:/)
+SCHEMA_FILE="${PROJECT_ROOT}/sample_data/config/silver_target_schemas.csv"
+SCHEMA_FILE_UPLOAD="${SCHEMA_FILE}"
+if [[ "$SCHEMA_FILE_UPLOAD" =~ ^/([a-z])/ ]]; then
+    DRIVE_LETTER="${BASH_REMATCH[1]}"
+    SCHEMA_FILE_UPLOAD=$(echo "${SCHEMA_FILE}" | sed "s|^/${DRIVE_LETTER}/|${DRIVE_LETTER}:/|")
+fi
+SCHEMA_FILE_UPLOAD=$(echo "${SCHEMA_FILE_UPLOAD}" | sed 's|\\|/|g')
+
+echo -e "${BLUE}   Schema file: ${SCHEMA_FILE}${NC}"
+echo -e "${BLUE}   Upload path: ${SCHEMA_FILE_UPLOAD}${NC}"
+
 UPLOAD_OUTPUT=$(snow sql -q "
 USE DATABASE ${DATABASE_NAME};
 USE SCHEMA ${SILVER_SCHEMA_NAME};
 CREATE STAGE IF NOT EXISTS SILVER_CONFIG;
-PUT file://${PROJECT_ROOT}/sample_data/config/silver_target_schemas.csv @SILVER_CONFIG/ AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file://${SCHEMA_FILE_UPLOAD} @SILVER_CONFIG/ AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
 " --connection "$CONNECTION_NAME" 2>&1)
 UPLOAD_EXIT_CODE=$?
 

@@ -18,8 +18,12 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_DIR="${SCRIPT_DIR}/output"
+TMP_DIR="${PROJECT_ROOT}/tmp"
 NUM_CLAIMS=${1:-1000}  # Default 1000 claims
 CONNECTION=${2:-DEPLOYMENT}  # Default connection
+
+# Create tmp directory if it doesn't exist
+mkdir -p "${TMP_DIR}"
 
 # Load configuration from default.config
 if [ -f "${PROJECT_ROOT}/deployment/default.config" ]; then
@@ -96,8 +100,16 @@ fi
 echo ""
 echo -e "${YELLOW}[3/4]${NC} Uploading CSV files to Snowflake..."
 
+# Convert paths for Windows if needed (Git Bash drive notation like /z/ to Z:/)
+OUTPUT_DIR_UPLOAD="${OUTPUT_DIR}"
+if [[ "$OUTPUT_DIR_UPLOAD" =~ ^/([a-z])/ ]]; then
+    DRIVE_LETTER="${BASH_REMATCH[1]}"
+    OUTPUT_DIR_UPLOAD=$(echo "${OUTPUT_DIR}" | sed "s|^/${DRIVE_LETTER}/|${DRIVE_LETTER}:/|")
+fi
+OUTPUT_DIR_UPLOAD=$(echo "${OUTPUT_DIR_UPLOAD}" | sed 's|\\|/|g')
+
 # Create temporary SQL file with correct paths
-TEMP_UPLOAD_SQL="/tmp/upload_sample_data_$$.sql"
+TEMP_UPLOAD_SQL="${TMP_DIR}/upload_sample_data_$$.sql"
 cat > "${TEMP_UPLOAD_SQL}" << EOF
 USE ROLE SYSADMIN;
 USE DATABASE ${DATABASE_NAME};
@@ -109,11 +121,11 @@ CREATE STAGE IF NOT EXISTS SAMPLE_DATA
     COMMENT = 'Stage for sample data CSV files';
 
 -- Upload files
-PUT file://${OUTPUT_DIR}/members.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-PUT file://${OUTPUT_DIR}/providers.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-PUT file://${OUTPUT_DIR}/claims.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-PUT file://${OUTPUT_DIR}/member_journeys.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
-PUT file://${OUTPUT_DIR}/journey_events.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file://${OUTPUT_DIR_UPLOAD}/members.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file://${OUTPUT_DIR_UPLOAD}/providers.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file://${OUTPUT_DIR_UPLOAD}/claims.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file://${OUTPUT_DIR_UPLOAD}/member_journeys.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file://${OUTPUT_DIR_UPLOAD}/journey_events.csv @SAMPLE_DATA AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
 
 -- Verify uploads
 LIST @SAMPLE_DATA;
@@ -139,7 +151,7 @@ echo ""
 echo -e "${YELLOW}[4/4]${NC} Loading data into Snowflake tables..."
 
 # Create temporary SQL file for loading
-TEMP_LOAD_SQL="/tmp/load_sample_data_$$.sql"
+TEMP_LOAD_SQL="${TMP_DIR}/load_sample_data_$$.sql"
 cat > "${TEMP_LOAD_SQL}" << 'EOF'
 USE ROLE SYSADMIN;
 USE DATABASE BORDEREAU_PROCESSING_PIPELINE;

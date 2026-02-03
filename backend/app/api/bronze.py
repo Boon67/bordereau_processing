@@ -195,10 +195,10 @@ async def get_bronze_stats(request: Request, tpa: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/raw-data")
-async def get_raw_data(request: Request, tpa: str,
+async def get_raw_data(request: Request, tpa: Optional[str] = None,
     file_name: Optional[str] = None,
     limit: int = 100):
-    """Get raw data records"""
+    """Get raw data records (optionally filtered by TPA)"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         return await sf_service.get_raw_data(tpa, file_name, limit)
@@ -660,10 +660,11 @@ async def update_task_schedule(request: Request, task_name: str, schedule_update
 @router.post("/clear-all-data")
 async def clear_all_data(request: Request):
     """
-    Clear all data from Bronze layer including:
+    Clear all data from Bronze layer and Silver TPA tables including:
     - All files from all stages (@SRC, @COMPLETED, @ERROR, @ARCHIVE)
     - All records from RAW_DATA_TABLE
     - All entries from file_processing_queue
+    - All TPA-specific tables in Silver layer
     
     WARNING: This is a destructive operation that cannot be undone!
     """
@@ -672,10 +673,11 @@ async def clear_all_data(request: Request):
         results = {
             "stages_cleared": [],
             "tables_truncated": [],
+            "silver_tables_dropped": [],
             "errors": []
         }
         
-        logger.warning("⚠️  CLEARING ALL BRONZE DATA - This is a destructive operation!")
+        logger.warning("⚠️  CLEARING ALL BRONZE AND SILVER DATA - This is a destructive operation!")
         
         # Clear all stages
         stages = ["SRC", "COMPLETED", "ERROR", "ARCHIVE"]
@@ -690,7 +692,7 @@ async def clear_all_data(request: Request):
                 results["errors"].append(error_msg)
                 logger.error(error_msg)
         
-        # Truncate tables (preserve structure, delete data)
+        # Truncate Bronze tables (preserve structure, delete data)
         tables = ["RAW_DATA_TABLE", "file_processing_queue"]
         for table in tables:
             try:
@@ -703,12 +705,59 @@ async def clear_all_data(request: Request):
                 results["errors"].append(error_msg)
                 logger.error(error_msg)
         
+        # Drop all TPA-specific tables in Silver layer
+        try:
+            # Get all TPA tables (tables that don't match the metadata table names)
+            show_tables_query = f"SHOW TABLES IN SCHEMA {settings.SILVER_SCHEMA_NAME}"
+            tables_result = await sf_service.execute_query(show_tables_query)
+            
+            # Metadata tables to preserve
+            metadata_tables = [
+                'TARGET_SCHEMAS', 'FIELD_MAPPINGS', 'TRANSFORMATION_RULES',
+                'DATA_QUALITY_RULES', 'VALIDATION_RESULTS', 'TRANSFORMATION_HISTORY',
+                'CREATED_TABLES'
+            ]
+            
+            for row in tables_result:
+                table_name = row[1]  # Table name is in second column
+                if table_name.upper() not in metadata_tables:
+                    try:
+                        drop_query = f"DROP TABLE IF EXISTS {settings.SILVER_SCHEMA_NAME}.{table_name}"
+                        await sf_service.execute_query(drop_query)
+                        results["silver_tables_dropped"].append(table_name)
+                        logger.info(f"Dropped Silver table: {table_name}")
+                    except Exception as e:
+                        error_msg = f"Failed to drop Silver table {table_name}: {str(e)}"
+                        results["errors"].append(error_msg)
+                        logger.error(error_msg)
+            
+            # Also truncate CREATED_TABLES to remove table registry entries
+            try:
+                truncate_created_query = f"TRUNCATE TABLE IF EXISTS {settings.SILVER_SCHEMA_NAME}.CREATED_TABLES"
+                await sf_service.execute_query(truncate_created_query)
+                results["tables_truncated"].append("SILVER.CREATED_TABLES")
+                logger.info("Truncated SILVER.CREATED_TABLES")
+            except Exception as e:
+                error_msg = f"Failed to truncate CREATED_TABLES: {str(e)}"
+                results["errors"].append(error_msg)
+                logger.error(error_msg)
+                
+        except Exception as e:
+            error_msg = f"Failed to drop Silver tables: {str(e)}"
+            results["errors"].append(error_msg)
+            logger.error(error_msg)
+        
         # Build summary message
-        success_count = len(results["stages_cleared"]) + len(results["tables_truncated"])
+        success_count = (len(results["stages_cleared"]) + 
+                        len(results["tables_truncated"]) + 
+                        len(results["silver_tables_dropped"]))
         error_count = len(results["errors"])
         
         if error_count == 0:
-            message = f"✅ All Bronze data cleared successfully! Cleared {len(results['stages_cleared'])} stages and truncated {len(results['tables_truncated'])} tables."
+            message = (f"✅ All data cleared successfully! "
+                      f"Cleared {len(results['stages_cleared'])} stages, "
+                      f"truncated {len(results['tables_truncated'])} tables, "
+                      f"and dropped {len(results['silver_tables_dropped'])} Silver TPA tables.")
         else:
             message = f"⚠️  Partial success: {success_count} operations succeeded, {error_count} failed. Check errors for details."
         

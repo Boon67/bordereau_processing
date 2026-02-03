@@ -73,11 +73,16 @@ const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, setSelectedT
     }
   }
 
+  const renderTpaName = (tpaCode: string) => {
+    const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+    return tpa ? tpa.TPA_NAME : tpaCode
+  }
+
   const getColumnsForTable = (tableName: string) => {
     switch (tableName) {
       case 'CLAIMS_ANALYTICS':
         return [
-          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150 },
+          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150, render: renderTpaName },
           { title: 'Year', dataIndex: 'CLAIM_YEAR', key: 'CLAIM_YEAR', width: 100 },
           { title: 'Month', dataIndex: 'CLAIM_MONTH', key: 'CLAIM_MONTH', width: 100 },
           { title: 'Claim Type', dataIndex: 'CLAIM_TYPE', key: 'CLAIM_TYPE', width: 120 },
@@ -112,7 +117,7 @@ const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, setSelectedT
         ]
       case 'MEMBER_360':
         return [
-          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150 },
+          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150, render: renderTpaName },
           { title: 'Member ID', dataIndex: 'MEMBER_ID', key: 'MEMBER_ID', width: 150 },
           { title: 'Age', dataIndex: 'AGE', key: 'AGE', width: 80 },
           { title: 'Gender', dataIndex: 'GENDER', key: 'GENDER', width: 100 },
@@ -144,7 +149,7 @@ const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, setSelectedT
         ]
       case 'PROVIDER_PERFORMANCE':
         return [
-          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150 },
+          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150, render: renderTpaName },
           { title: 'Provider ID', dataIndex: 'PROVIDER_ID', key: 'PROVIDER_ID', width: 150 },
           { title: 'Period', dataIndex: 'MEASUREMENT_PERIOD', key: 'MEASUREMENT_PERIOD', width: 120 },
           {
@@ -178,7 +183,7 @@ const GoldAnalytics: React.FC<GoldAnalyticsProps> = ({ selectedTpa, setSelectedT
         ]
       case 'FINANCIAL_SUMMARY':
         return [
-          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150 },
+          { title: 'TPA', dataIndex: 'TPA', key: 'TPA', width: 150, render: renderTpaName },
           { title: 'Fiscal Year', dataIndex: 'FISCAL_YEAR', key: 'FISCAL_YEAR', width: 120 },
           { title: 'Fiscal Month', dataIndex: 'FISCAL_MONTH', key: 'FISCAL_MONTH', width: 120 },
           { title: 'Claim Type', dataIndex: 'CLAIM_TYPE', key: 'CLAIM_TYPE', width: 120 },

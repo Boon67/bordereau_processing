@@ -63,6 +63,44 @@ function App() {
     }
   }, [location.pathname])
 
+  // Get header color based on current layer
+  const getHeaderStyle = () => {
+    const path = location.pathname
+    
+    if (path.startsWith('/bronze')) {
+      return {
+        background: 'linear-gradient(135deg, #8B5A3C 0%, #6B4423 100%)', // Darker bronze gradient
+        boxShadow: '0 2px 8px rgba(139, 90, 60, 0.4)'
+      }
+    } else if (path.startsWith('/silver')) {
+      return {
+        background: 'linear-gradient(135deg, #c0c0c0 0%, #a8a8a8 100%)', // Silver gradient
+        boxShadow: '0 2px 8px rgba(192, 192, 192, 0.3)'
+      }
+    } else if (path.startsWith('/gold')) {
+      return {
+        background: 'linear-gradient(135deg, #ffd700 0%, #ffb700 100%)', // Gold gradient
+        boxShadow: '0 2px 8px rgba(255, 215, 0, 0.3)'
+      }
+    } else {
+      return {
+        background: '#001529', // Default dark blue
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+      }
+    }
+  }
+
+  // Get text color based on background
+  const getTextColor = () => {
+    const path = location.pathname
+    
+    if (path.startsWith('/gold')) {
+      return '#000' // Dark text for gold
+    } else {
+      return '#fff' // White text for bronze, silver and default
+    }
+  }
+
   useEffect(() => {
     loadTpas()
     loadUserInfo()
@@ -94,7 +132,7 @@ function App() {
 
   const handleClearAllData = () => {
     Modal.confirm({
-      title: '⚠️ Clear All Bronze Data',
+      title: <span style={{ color: '#d4380d' }}>⚠️ Clear All Bronze Data</span>,
       icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
       content: (
         <div>
@@ -103,11 +141,12 @@ function App() {
             <li>All files from all stages (SRC, COMPLETED, ERROR, ARCHIVE)</li>
             <li>All records from RAW_DATA_TABLE</li>
             <li>All entries from file_processing_queue</li>
+            <li><strong>All TPA-specific tables in Silver layer</strong></li>
           </ul>
-          <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+          <p style={{ color: '#ff4d4f', fontWeight: 'bold', marginTop: 16 }}>
             ⚠️ This action CANNOT be undone!
           </p>
-          <p>Type "DELETE" below to confirm:</p>
+          <p style={{ marginTop: 8 }}>Type "DELETE" below to confirm:</p>
         </div>
       ),
       okText: 'Yes, Delete Everything',
@@ -115,29 +154,39 @@ function App() {
       cancelText: 'Cancel',
       width: 600,
       onOk: async () => {
-        const result = await apiService.clearAllData()
-        message.success(result.message || 'All data cleared successfully')
-        
-        // Show detailed results if available
-        if (result.results) {
-          const { stages_cleared, tables_truncated, errors } = result.results
-          if (errors && errors.length > 0) {
-            Modal.warning({
-              title: 'Some operations failed',
-              content: (
-                <div>
-                  <p>Cleared: {stages_cleared.join(', ')}</p>
-                  <p>Truncated: {tables_truncated.join(', ')}</p>
-                  <p style={{ color: '#ff4d4f' }}>Errors:</p>
-                  <ul>
-                    {errors.map((err: string, idx: number) => (
-                      <li key={idx}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              ),
-            })
+        try {
+          const result = await apiService.clearAllData()
+          message.success(result.message || 'All data cleared successfully')
+          
+          // Show detailed results if available
+          if (result.results) {
+            const { stages_cleared, tables_truncated, silver_tables_dropped, errors } = result.results
+            if (errors && errors.length > 0) {
+              Modal.warning({
+                title: 'Some operations failed',
+                content: (
+                  <div>
+                    <p>Cleared stages: {stages_cleared?.join(', ') || 'None'}</p>
+                    <p>Truncated tables: {tables_truncated?.join(', ') || 'None'}</p>
+                    <p>Dropped Silver tables: {silver_tables_dropped?.length || 0}</p>
+                    <p style={{ color: '#ff4d4f', marginTop: 8 }}>Errors:</p>
+                    <ul>
+                      {errors.map((err: string, idx: number) => (
+                        <li key={idx}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ),
+              })
+            }
           }
+          
+          // Return resolved promise to close the modal
+          return Promise.resolve()
+        } catch (error: any) {
+          message.error(`Failed to clear data: ${error.message || 'Unknown error'}`)
+          // Return rejected promise to keep modal open on error
+          return Promise.reject(error)
         }
       },
       onCancel: () => {
@@ -272,10 +321,16 @@ function App() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Header style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        transition: 'all 0.3s ease',
+        ...getHeaderStyle()
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
-          <h1 style={{ color: '#fff', margin: 0 }}>{import.meta.env.VITE_APP_NAME || 'Snowflake Pipeline'}</h1>
+          <DatabaseOutlined style={{ fontSize: '24px', color: getTextColor() }} />
+          <h1 style={{ color: getTextColor(), margin: 0 }}>{import.meta.env.VITE_APP_NAME || 'Snowflake Pipeline'}</h1>
         </div>
       </Header>
       <Layout>
@@ -322,7 +377,7 @@ function App() {
               <Route path="/gold/rules" element={<GoldRules selectedTpa={selectedTpa} setSelectedTpa={setSelectedTpa} tpas={tpas} selectedTpaName={selectedTpaObject?.TPA_NAME} />} />
               <Route path="/admin/tasks" element={<TaskManagement />} />
               <Route path="/admin/tpas" element={<TPAManagement onTpaChange={loadTpas} />} />
-              <Route path="/admin/logs" element={<AdminLogs />} />
+              <Route path="/admin/logs" element={<AdminLogs tpas={tpas} />} />
             </Routes>
           </Content>
           <Footer

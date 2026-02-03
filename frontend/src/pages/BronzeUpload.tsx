@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { Upload, Button, Card, message, Progress, List, Checkbox, Select, Typography } from 'antd'
+import { Upload, Button, Card, message, Progress, List, Checkbox, Typography } from 'antd'
 import { InboxOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import { apiService } from '../services/api'
 import type { TPA } from '../types'
+import TPASelector from '../components/TPASelector'
 
 const { Dragger } = Upload
 const { Title } = Typography
@@ -99,18 +100,12 @@ const BronzeUpload: React.FC<Props> = ({ selectedTpa, setSelectedTpa, tpas, sele
     <div>
       <Title level={2}>📤 Upload Files</Title>
       <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Filter by TPA:</label>
+        <TPASelector
           value={selectedTpa}
           onChange={setSelectedTpa}
-          style={{ width: 300 }}
+          tpas={tpas}
           placeholder="Select TPA"
-          options={[...tpas]
-            .sort((a, b) => a.TPA_NAME.localeCompare(b.TPA_NAME))
-            .map(tpa => ({
-              value: tpa.TPA_CODE,
-              label: tpa.TPA_NAME,
-            }))}
         />
       </div>
 

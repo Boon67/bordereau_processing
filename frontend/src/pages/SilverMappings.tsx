@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Select, Space, message, Tag, Progress, Modal, Form, Input, Popconfirm, Drawer, Alert, Slider, InputNumber, Collapse } from 'antd'
-import { ReloadOutlined, ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, RobotOutlined, ThunderboltOutlined, PlusOutlined } from '@ant-design/icons'
+import { Card, Typography, Table, Button, Select, Space, message, Tag, Progress, Modal, Form, Input, Popconfirm, Drawer, Alert, Slider, InputNumber, Collapse, Radio, Spin } from 'antd'
+import { ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, RobotOutlined, ThunderboltOutlined, PlusOutlined, ExclamationCircleOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FieldMapping } from '../services/api'
 import type { TPA } from '../types'
@@ -16,10 +16,10 @@ interface SilverMappingsProps {
   selectedTpaName?: string
 }
 
-const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelectedTpa, tpas, selectedTpaName }) => {
+const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
   const [loading, setLoading] = useState(false)
+  const [loadingTables, setLoadingTables] = useState(true)
   const [mappings, setMappings] = useState<FieldMapping[]>([])
-  const [tables, setTables] = useState<string[]>([])
   const [availableTargetTables, setAvailableTargetTables] = useState<any[]>([])
   const [selectedTable, setSelectedTable] = useState<string>('')
   const [isAutoMLDrawerVisible, setIsAutoMLDrawerVisible] = useState(false)
@@ -36,17 +36,19 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const [loadingCortexModels, setLoadingCortexModels] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [mappingFilter, setMappingFilter] = useState<'all' | 'with-mappings' | 'no-mappings'>('all')
 
   useEffect(() => {
-    // Load all created tables on mount or when selectedTpa changes
+    // Load all created tables and mappings (not filtered by TPA)
     loadTargetTables()
-  }, [selectedTpa])
+    loadAllMappings()
+  }, [])
 
   useEffect(() => {
-    // Load mappings when table changes
+    // Clear selection when table changes
     if (selectedTable) {
-      setSelectedRowKeys([]) // Clear selection when table changes
-      loadMappings()
+      setSelectedRowKeys([])
     }
   }, [selectedTable])
 
@@ -82,26 +84,16 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   }, [cortexModels])
 
   const loadTargetTables = async () => {
-    if (!selectedTpa) {
-      setAvailableTargetTables([])
-      setSelectedTable('')
-      return
-    }
-
+    setLoadingTables(true)
     try {
-      // Load all created tables
+      // Load all created tables (no TPA filter)
       const allCreatedTables = await apiService.getSilverTables()
-      
-      // Filter tables for the selected TPA
-      const tpaTables = allCreatedTables.filter(
-        (table: any) => table.TPA.toLowerCase() === selectedTpa.toLowerCase()
-      )
       
       // Load all schema definitions
       const schemas = await apiService.getTargetSchemas()
       
       // Map each created table with its column count from schemas
-      const tablesWithColumns = tpaTables.map((table: any) => {
+      const tablesWithColumns = allCreatedTables.map((table: any) => {
         const tableSchemas = schemas.filter(
           (s: any) => s.TABLE_NAME === table.SCHEMA_TABLE
         )
@@ -116,50 +108,22 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
       })
       
       setAvailableTargetTables(tablesWithColumns)
-      
-      // Auto-select the first table if available and only one table exists for the TPA
-      // Or if the currently selected table is not valid for the new TPA
-      if (tablesWithColumns.length > 0) {
-        const currentTableIsValid = tablesWithColumns.some(t => t.physicalName === selectedTable)
-
-        if (tablesWithColumns.length === 1 && tablesWithColumns[0].physicalName !== selectedTable) {
-          setSelectedTable(tablesWithColumns[0].physicalName)
-        } else if (!currentTableIsValid) {
-          setSelectedTable(tablesWithColumns[0].physicalName) // Select first valid table
-        }
-      } else {
-        setSelectedTable('') // Clear selection if no tables for TPA
-      }
     } catch (error) {
       console.error('Failed to load target tables:', error)
+      message.error('Failed to load tables')
+    } finally {
+      setLoadingTables(false)
     }
   }
 
-  const loadMappings = async () => {
-    if (!selectedTable || !selectedTpa) {
-      return
-    }
-
+  const loadAllMappings = async () => {
     setLoading(true)
     try {
-      // Get the schema table name (without TPA prefix)
-      // Mappings are stored with the schema table name (e.g., "PHARMACY_CLAIMS")
-      // not the physical table name (e.g., "PROVIDER_A_PHARMACY_CLAIMS")
-      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
-      const schemaTableName = tableInfo?.name || selectedTable
-      
-      const data = await apiService.getFieldMappings(selectedTpa, schemaTableName)
+      // Load all mappings (no TPA filter)
+      const data = await apiService.getFieldMappings()
       setMappings(data)
-      
-      // Extract unique target tables from mappings
-      const uniqueTables = Array.from(new Set(data.map(m => m.TARGET_TABLE)))
-      setTables(uniqueTables)
-      
-      if (data.length > 0) {
-        message.success(`Loaded ${data.length} field mappings`)
-      }
     } catch (error) {
-      message.error('Failed to load field mappings')
+      console.error('Failed to load mappings:', error)
     } finally {
       setLoading(false)
     }
@@ -218,7 +182,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
     try {
       await apiService.approveMapping(mappingId)
       message.success('Mapping approved')
-      loadMappings()
+      await loadAllMappings()
     } catch (error: any) {
       message.error(`Failed to approve mapping: ${error.response?.data?.detail || error.message}`)
     }
@@ -228,7 +192,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
     try {
       await apiService.declineMapping(mappingId)
       message.success('Mapping declined and deleted')
-      loadMappings()
+      await loadAllMappings()
     } catch (error: any) {
       message.error(`Failed to decline mapping: ${error.response?.data?.detail || error.message}`)
     }
@@ -237,32 +201,50 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const handleAutoMapML = async (values: any) => {
     setLoading(true)
     try {
+      console.log('Auto-Map ML - Form values:', values)
+      
+      // Get TPA from the selected table
+      const targetTableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      const tpa = targetTableInfo?.tpa || ''
+      
+      console.log('Auto-Map ML - Target table info:', { targetTableInfo, tpa })
+      
       // Use the target_table from form values (already a schema table name)
       const result = await apiService.autoMapFieldsML(
         values.source_table,
         values.target_table,  // Schema table name from dropdown
-        selectedTpa,
+        tpa,
         values.top_n,
         values.min_confidence / 100
       )
       
-      // Check if mapping was successful
+      console.log('Auto-Map ML - Result:', result)
+      
+      // Always close the drawer first
+      setIsAutoMLDrawerVisible(false)
+      
+      // Reload all mappings to show any new ones
+      await loadAllMappings()
+      
+      // Switch to the table that was just mapped
+      const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      if (tableInfo) {
+        setSelectedTable(tableInfo.physicalName)
+      }
+      
+      // Check if mapping was successful and show appropriate message
       if (result.mappings_created > 0) {
         message.success(`Created ${result.mappings_created} ML-based mappings for ${values.target_table}`)
-        setIsAutoMLDrawerVisible(false)
-        
-        // Switch to the table that was just mapped
-        const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
-        if (tableInfo) {
-          setSelectedTable(tableInfo.physicalName)
-        }
-        // loadMappings will be called automatically by the selectedTable useEffect
+      } else if (result.success) {
+        // If success flag is true but mappings_created is 0, show the message
+        message.success(result.message || `Auto-mapping completed for ${values.target_table}`)
       } else {
         // Show the actual error/info message from the procedure
         const errorMsg = result.message || result.result || 'No mappings created'
         message.warning(errorMsg, 10) // Show for 10 seconds
       }
     } catch (error: any) {
+      setIsAutoMLDrawerVisible(false)
       const errorDetail = error.response?.data?.detail || error.message
       message.error(`Auto-mapping failed: ${errorDetail}`, 10)
     } finally {
@@ -273,31 +255,49 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
   const handleAutoMapLLM = async (values: any) => {
     setLoading(true)
     try {
+      console.log('Auto-Map LLM - Form values:', values)
+      
+      // Get TPA from the selected table
+      const targetTableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      const tpa = targetTableInfo?.tpa || ''
+      
+      console.log('Auto-Map LLM - Target table info:', { targetTableInfo, tpa })
+      
       // Use the target_table from form values (already a schema table name)
       const result = await apiService.autoMapFieldsLLM(
         values.source_table,
         values.target_table,  // Schema table name from dropdown
-        selectedTpa,
+        tpa,
         values.model_name
       )
       
-      // Check if mapping was successful
+      console.log('Auto-Map LLM - Result:', result)
+      
+      // Always close the drawer first
+      setIsAutoLLMDrawerVisible(false)
+      
+      // Reload all mappings to show any new ones
+      await loadAllMappings()
+      
+      // Switch to the table that was just mapped
+      const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      if (tableInfo) {
+        setSelectedTable(tableInfo.physicalName)
+      }
+      
+      // Check if mapping was successful and show appropriate message
       if (result.mappings_created > 0) {
         message.success(`Created ${result.mappings_created} LLM-based mappings for ${values.target_table}`)
-        setIsAutoLLMDrawerVisible(false)
-        
-        // Switch to the table that was just mapped
-        const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
-        if (tableInfo) {
-          setSelectedTable(tableInfo.physicalName)
-        }
-        // loadMappings will be called automatically by the selectedTable useEffect
+      } else if (result.success) {
+        // If success flag is true but mappings_created is 0, show the message
+        message.success(result.message || `Auto-mapping completed for ${values.target_table}`)
       } else {
         // Show the actual error/info message from the procedure
         const errorMsg = result.message || result.result || 'No mappings created'
         message.warning(errorMsg, 10) // Show for 10 seconds
       }
     } catch (error: any) {
+      setIsAutoLLMDrawerVisible(false)
       const errorDetail = error.response?.data?.detail || error.message
       message.error(`Auto-mapping failed: ${errorDetail}`, 10)
     } finally {
@@ -307,23 +307,32 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
 
   const handleManualMapping = async (values: any) => {
     try {
-      // Get the schema table name (without TPA prefix)
-      const tableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
-      const schemaTableName = tableInfo?.name || selectedTable
+      console.log('Manual Mapping - Form values:', values)
+      
+      // Get the TPA from the target table (values.target_table is the schema name)
+      const targetTableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      const tpa = targetTableInfo?.tpa || ''
+      
+      console.log('Manual Mapping - Target table info:', { targetTableInfo, tpa })
       
       await apiService.createFieldMapping({
         SOURCE_TABLE: values.source_table,
         SOURCE_FIELD: values.source_field,
-        TARGET_TABLE: schemaTableName,  // Use schema table name, not physical name
+        TARGET_TABLE: values.target_table,  // Already the schema table name from form
         TARGET_COLUMN: values.target_column,
-        TPA: selectedTpa,
+        TPA: tpa,
         MAPPING_METHOD: 'MANUAL',
         TRANSFORMATION_LOGIC: values.transformation_logic,
         APPROVED: values.approved ?? false,
       })
       message.success('Manual mapping created')
       setIsManualModalVisible(false)
-      loadMappings()
+      await loadAllMappings()
+      
+      // Switch to the table that was just mapped
+      if (targetTableInfo) {
+        setSelectedTable(targetTableInfo.physicalName)
+      }
     } catch (error: any) {
       message.error(`Failed to create mapping: ${error.response?.data?.detail || error.message}`)
     }
@@ -340,12 +349,12 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
       // Approve all selected mappings in parallel
       await Promise.all(
         selectedRowKeys.map(mappingId => 
-          apiService.approveMapping(mappingId as string)
+          apiService.approveMapping(Number(mappingId))
         )
       )
       message.success(`Approved ${selectedRowKeys.length} mapping(s)`)
       setSelectedRowKeys([])
-      loadMappings()
+      await loadAllMappings()
     } catch (error: any) {
       message.error(`Bulk approve failed: ${error.response?.data?.detail || error.message}`)
     } finally {
@@ -364,12 +373,12 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
       // Delete all selected mappings in parallel
       await Promise.all(
         selectedRowKeys.map(mappingId => 
-          apiService.deleteMapping(mappingId as string)
+          apiService.deleteMapping(Number(mappingId))
         )
       )
       message.success(`Deleted ${selectedRowKeys.length} mapping(s)`)
       setSelectedRowKeys([])
-      loadMappings()
+      await loadAllMappings()
     } catch (error: any) {
       message.error(`Bulk delete failed: ${error.response?.data?.detail || error.message}`)
     } finally {
@@ -386,6 +395,46 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
     }
     const config = methodConfig[method] || { color: 'default', label: method }
     return <Tag color={config.color}>{config.label}</Tag>
+  }
+
+  // Detect duplicate mappings (same source field mapped to multiple targets, or multiple sources to same target)
+  const getDuplicateMappings = (mappingsToCheck: FieldMapping[]) => {
+    const duplicates = new Set<number>()
+    
+    // Check for duplicate source fields (same source → multiple targets)
+    const sourceFieldMap = new Map<string, FieldMapping[]>()
+    mappingsToCheck.forEach(mapping => {
+      const key = `${mapping.SOURCE_TABLE}:${mapping.SOURCE_FIELD}:${mapping.TARGET_TABLE}`
+      if (!sourceFieldMap.has(key)) {
+        sourceFieldMap.set(key, [])
+      }
+      sourceFieldMap.get(key)!.push(mapping)
+    })
+    
+    // Mark all mappings in groups with duplicates
+    sourceFieldMap.forEach(group => {
+      if (group.length > 1) {
+        group.forEach(m => duplicates.add(m.MAPPING_ID))
+      }
+    })
+    
+    // Check for duplicate target columns (multiple sources → same target)
+    const targetColumnMap = new Map<string, FieldMapping[]>()
+    mappingsToCheck.forEach(mapping => {
+      const key = `${mapping.TARGET_TABLE}:${mapping.TARGET_COLUMN}`
+      if (!targetColumnMap.has(key)) {
+        targetColumnMap.set(key, [])
+      }
+      targetColumnMap.get(key)!.push(mapping)
+    })
+    
+    targetColumnMap.forEach(group => {
+      if (group.length > 1) {
+        group.forEach(m => duplicates.add(m.MAPPING_ID))
+      }
+    })
+    
+    return duplicates
   }
 
   const columns = [
@@ -443,6 +492,50 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
               status={percentage >= 80 ? 'success' : percentage >= 60 ? 'normal' : 'exception'}
             />
           </div>
+        )
+      },
+    },
+    {
+      title: 'Duplicate',
+      key: 'DUPLICATE',
+      width: 100,
+      align: 'center' as const,
+      render: (_: any, record: FieldMapping) => {
+        // Check if this mapping is a duplicate within the current table
+        const tableMappings = mappings.filter(m => m.TARGET_TABLE === record.TARGET_TABLE)
+        const duplicates = getDuplicateMappings(tableMappings)
+        const isDuplicate = duplicates.has(record.MAPPING_ID)
+        
+        if (!isDuplicate) return null
+        
+        // Determine duplicate type
+        const sameSourceCount = tableMappings.filter(m => 
+          m.SOURCE_TABLE === record.SOURCE_TABLE && 
+          m.SOURCE_FIELD === record.SOURCE_FIELD &&
+          m.TARGET_TABLE === record.TARGET_TABLE
+        ).length
+        
+        const sameTargetCount = tableMappings.filter(m => 
+          m.TARGET_TABLE === record.TARGET_TABLE && 
+          m.TARGET_COLUMN === record.TARGET_COLUMN
+        ).length
+        
+        const tooltipText = []
+        if (sameSourceCount > 1) {
+          tooltipText.push(`Source field "${record.SOURCE_FIELD}" mapped ${sameSourceCount} times`)
+        }
+        if (sameTargetCount > 1) {
+          tooltipText.push(`Target column "${record.TARGET_COLUMN}" has ${sameTargetCount} mappings`)
+        }
+        
+        return (
+          <Tag 
+            color="warning" 
+            icon={<ExclamationCircleOutlined />}
+            title={tooltipText.join('\n')}
+          >
+            Duplicate
+          </Tag>
         )
       },
     },
@@ -528,61 +621,66 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={2}>🔗 Field Mappings</Title>
-        <Space>
-          <Button 
-            icon={<RobotOutlined />} 
-            onClick={() => setIsAutoMLDrawerVisible(true)}
-            type="primary"
-            disabled={!selectedTpa}
-          >
-            Auto-Map (ML)
-          </Button>
-          <Button 
-            icon={<ThunderboltOutlined />} 
-            onClick={() => {
-              setIsAutoLLMDrawerVisible(true)
-              loadCortexModels() // Load models when drawer opens
-            }}
-            type="primary"
-            disabled={!selectedTpa}
-          >
-            Auto-Map (LLM)
-          </Button>
-          <Button 
-            icon={<PlusOutlined />} 
-            onClick={() => {
-              manualForm.resetFields()
-              setIsManualModalVisible(true)
-              loadSourceFields() // Load source fields when modal opens
-            }}
-            type="primary"
-            disabled={!selectedTable}
-          >
-            Manual Mapping
-          </Button>
-          <Button 
-            icon={<ReloadOutlined />} 
-            onClick={loadMappings}
-            loading={loading}
-            type="primary"
-            disabled={!selectedTable}
-          >
-            Refresh
-          </Button>
-        </Space>
+        {availableTargetTables.length > 0 && (
+          <Space>
+            <Tag color="blue" style={{ fontSize: '14px', padding: '4px 12px' }}>
+              {availableTargetTables.length} {availableTargetTables.length === 1 ? 'Table' : 'Tables'} Total
+            </Tag>
+            <Tag color="green" style={{ fontSize: '14px', padding: '4px 12px' }}>
+              {mappings.length} {mappings.length === 1 ? 'Mapping' : 'Mappings'}
+            </Tag>
+          </Space>
+        )}
       </div>
 
       <p style={{ marginBottom: 24, color: '#666' }}>
-        View field mappings from Bronze (raw data) to Silver (target tables).
+        View field mappings from Bronze (raw data) to Silver (target tables). All tables across all TPAs are shown below.
       </p>
 
-      {!selectedTpa ? (
+      {/* Search and Filter Controls */}
+      <Card style={{ marginBottom: 16 }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Input
+              placeholder="Search tables by name, TPA, or schema..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: 400 }}
+              allowClear
+            />
+            <Space>
+              <FilterOutlined />
+              <Radio.Group value={mappingFilter} onChange={(e) => setMappingFilter(e.target.value)}>
+                <Radio.Button value="all">All Tables</Radio.Button>
+                <Radio.Button value="with-mappings">With Mappings</Radio.Button>
+                <Radio.Button value="no-mappings">No Mappings</Radio.Button>
+              </Radio.Group>
+            </Space>
+          </Space>
+        </Space>
+      </Card>
+
+      {loadingTables ? (
+        <Card>
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" />
+            <p style={{ marginTop: 16, color: '#666' }}>Loading tables...</p>
+          </div>
+        </Card>
+      ) : availableTargetTables.length === 0 ? (
         <Card>
           <Alert
-            message="No TPA Selected"
+            message="No Tables Created"
             description={
               <div>
-                <p>Please select a provider (TPA) from the header dropdown to view and manage field mappings.</p>
+                <p>No physical tables have been created yet. To create field mappings, you must first:</p>
+                <ol>
+                  <li>Go to <strong>Schemas and Tables</strong> page</li>
+                  <li>Select a schema definition (e.g., DENTAL_CLAIMS, MEDICAL_CLAIMS)</li>
+                  <li>Click <strong>Create Table</strong> and select a TPA</li>
+                  <li>Return here to create field mappings for the created table</li>
+                </ol>
               </div>
             }
             type="info"
@@ -591,34 +689,33 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
           />
         </Card>
       ) : (
-        availableTargetTables.length === 0 ? (
-          <Card>
-            <Alert
-              message="No Tables Created for this TPA"
-              description={
-                <div>
-                  <p>No physical tables have been created yet for TPA <strong>{selectedTpaName || selectedTpa}</strong>. To create field mappings, you must first:</p>
-                  <ol>
-                    <li>Go to <strong>Schemas and Tables</strong> page</li>
-                    <li>Select a schema definition (e.g., DENTAL_CLAIMS, MEDICAL_CLAIMS)</li>
-                    <li>Click <strong>Create Table</strong> and select <strong>{selectedTpaName || selectedTpa}</strong></li>
-                    <li>Return here to create field mappings for the created table</li>
-                  </ol>
-                </div>
-              }
-              type="info"
-              showIcon
-              style={{ margin: '20px 0' }}
-            />
-          </Card>
-        ) : (
-          <Collapse 
-            accordion
-            activeKey={selectedTable}
-            onChange={(key) => setSelectedTable(key as string)}
-            style={{ marginBottom: 16 }}
-          >
-            {availableTargetTables.map(tableInfo => {
+        <Collapse 
+          accordion
+          activeKey={selectedTable}
+          onChange={(key) => setSelectedTable(Array.isArray(key) ? key[0] : key as string)}
+          style={{ marginBottom: 16 }}
+        >
+          {availableTargetTables
+            .filter(tableInfo => {
+              // Apply search filter
+              const searchLower = searchText.toLowerCase()
+              const matchesSearch = !searchText || 
+                tableInfo.physicalName.toLowerCase().includes(searchLower) ||
+                tableInfo.name.toLowerCase().includes(searchLower) ||
+                tableInfo.tpa.toLowerCase().includes(searchLower) ||
+                tableInfo.tpaName.toLowerCase().includes(searchLower)
+              
+              if (!matchesSearch) return false
+              
+              // Apply mapping filter
+              const tableMappings = mappings.filter(m => m.TARGET_TABLE === tableInfo.name)
+              const hasMappings = tableMappings.length > 0
+              
+              if (mappingFilter === 'with-mappings') return hasMappings
+              if (mappingFilter === 'no-mappings') return !hasMappings
+              return true // 'all'
+            })
+            .map(tableInfo => {
               const tableMappings = mappings.filter(m => m.TARGET_TABLE === tableInfo.name)
               const approvedCount = tableMappings.filter(m => m.APPROVED).length
               const totalCount = tableMappings.length
@@ -628,21 +725,74 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
                 <Panel
                   key={tableInfo.physicalName}
                   header={
-                    <Space>
-                      <ApiOutlined />
-                      <span><strong>{tableInfo.physicalName}</strong></span>
-                      <Tag color="cyan">{tableInfo.columns} columns</Tag>
-                      {totalCount > 0 ? (
-                        <>
-                          <Tag color="blue">{totalCount} mappings</Tag>
-                          <Tag color={approvalRate === 100 ? 'success' : 'warning'}>
-                            {approvedCount}/{totalCount} approved
-                          </Tag>
-                        </>
-                      ) : (
-                        <Tag color="default">No mappings yet</Tag>
-                      )}
-                    </Space>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                      <Space>
+                        <ApiOutlined />
+                        <span><strong>{tableInfo.physicalName}</strong></span>
+                        <Tag color="purple">{tableInfo.tpaName}</Tag>
+                        <Tag color="cyan">{tableInfo.columns} columns</Tag>
+                        {totalCount > 0 ? (
+                          <>
+                            <Tag color="blue">{totalCount} mappings</Tag>
+                            <Tag color={approvalRate === 100 ? 'success' : 'warning'}>
+                              {approvedCount}/{totalCount} approved
+                            </Tag>
+                          </>
+                        ) : (
+                          <Tag color="default">No mappings yet</Tag>
+                        )}
+                      </Space>
+                      <Space onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                          icon={<RobotOutlined />} 
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedTable(tableInfo.physicalName)
+                            autoMLForm.setFieldsValue({ 
+                              source_table: 'RAW_DATA_TABLE',
+                              target_table: tableInfo.name 
+                            })
+                            setIsAutoMLDrawerVisible(true)
+                          }}
+                        >
+                          ML
+                        </Button>
+                        <Button 
+                          icon={<ThunderboltOutlined />} 
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedTable(tableInfo.physicalName)
+                            autoLLMForm.setFieldsValue({ 
+                              source_table: 'RAW_DATA_TABLE',
+                              target_table: tableInfo.name 
+                            })
+                            setIsAutoLLMDrawerVisible(true)
+                            loadCortexModels()
+                          }}
+                        >
+                          LLM
+                        </Button>
+                        <Button 
+                          icon={<PlusOutlined />} 
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedTable(tableInfo.physicalName)
+                            manualForm.resetFields()
+                            manualForm.setFieldsValue({ 
+                              source_table: 'RAW_DATA_TABLE',
+                              target_table: tableInfo.name 
+                            })
+                            setIsManualModalVisible(true)
+                            loadSourceFields()
+                          }}
+                        >
+                          Manual
+                        </Button>
+                      </Space>
+                    </div>
                   }
                 >
                   {totalCount > 0 ? (
@@ -711,8 +861,12 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
                             setSelectedRowKeys(newSelectedRowKeys)
                           },
                           getCheckboxProps: (record: FieldMapping) => ({
-                            name: record.MAPPING_ID,
+                            name: String(record.MAPPING_ID),
                           }),
+                        }}
+                        rowClassName={(record: FieldMapping) => {
+                          const duplicates = getDuplicateMappings(tableMappings)
+                          return duplicates.has(record.MAPPING_ID) ? 'duplicate-mapping-row' : ''
                         }}
                       />
                     </>
@@ -729,7 +883,7 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
             })}
           </Collapse>
         )
-      )}
+      }
 
       <Card title="ℹ️ Mapping Information" style={{ marginTop: 16 }}>
         <Space direction="vertical" size="small">
@@ -772,33 +926,38 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
           onFinish={handleAutoMapML}
           initialValues={{ 
             source_table: 'RAW_DATA_TABLE',
-            target_table: selectedTable,
+            target_table: '',
             top_n: 3, 
             min_confidence: 60 
           }}
         >
           <Form.Item
             name="source_table"
-            label="Source Table"
-            rules={[{ required: true, message: 'Please enter source table' }]}
+            hidden
           >
-            <Input placeholder="RAW_DATA_TABLE" />
+            <Input />
           </Form.Item>
 
           <Form.Item
             name="target_table"
-            label="Target Table"
-            rules={[{ required: true, message: 'Please select target table' }]}
-            tooltip="Select the schema table to map fields to"
+            hidden
           >
-            <Select
-              placeholder="Select target table"
-              options={availableTargetTables.map(table => ({
-                label: `${table.name} (${table.columns} columns)`,
-                value: table.name
-              }))}
-              showSearch
-            />
+            <Input />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate>
+            {() => (
+              <Alert
+                message={
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <div><strong>Source Table:</strong> {autoMLForm.getFieldValue('source_table') || 'RAW_DATA_TABLE'}</div>
+                    <div><strong>Target Table:</strong> {autoMLForm.getFieldValue('target_table') || 'Not selected'}</div>
+                  </Space>
+                }
+                type="info"
+                style={{ marginBottom: 16 }}
+              />
+            )}
           </Form.Item>
 
           <Form.Item
@@ -852,31 +1011,36 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
           onFinish={handleAutoMapLLM}
           initialValues={{ 
             source_table: 'RAW_DATA_TABLE',
-            target_table: selectedTable,
+            target_table: '',
           }}
         >
           <Form.Item
             name="source_table"
-            label="Source Table"
-            rules={[{ required: true, message: 'Please enter source table' }]}
+            hidden
           >
-            <Input placeholder="RAW_DATA_TABLE" />
+            <Input />
           </Form.Item>
 
           <Form.Item
             name="target_table"
-            label="Target Table"
-            rules={[{ required: true, message: 'Please select target table' }]}
-            tooltip="Select the schema table to map fields to"
+            hidden
           >
-            <Select
-              placeholder="Select target table"
-              options={availableTargetTables.map(table => ({
-                label: `${table.name} (${table.columns} columns)`,
-                value: table.name
-              }))}
-              showSearch
-            />
+            <Input />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate>
+            {() => (
+              <Alert
+                message={
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <div><strong>Source Table:</strong> {autoLLMForm.getFieldValue('source_table') || 'RAW_DATA_TABLE'}</div>
+                    <div><strong>Target Table:</strong> {autoLLMForm.getFieldValue('target_table') || 'Not selected'}</div>
+                  </Space>
+                }
+                type="info"
+                style={{ marginBottom: 16 }}
+              />
+            )}
           </Form.Item>
 
           <Form.Item
@@ -923,14 +1087,36 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ selectedTpa, setSelecte
           onFinish={handleManualMapping}
           initialValues={{ 
             source_table: 'RAW_DATA_TABLE',
+            target_table: '',
           }}
         >
           <Form.Item
             name="source_table"
-            label="Source Table"
-            rules={[{ required: true, message: 'Please enter source table' }]}
+            hidden
           >
-            <Input placeholder="RAW_DATA_TABLE" />
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            name="target_table"
+            hidden
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate>
+            {() => (
+              <Alert
+                message={
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <div><strong>Source Table:</strong> {manualForm.getFieldValue('source_table') || 'RAW_DATA_TABLE'}</div>
+                    <div><strong>Target Table:</strong> {manualForm.getFieldValue('target_table') || 'Not selected'}</div>
+                  </Space>
+                }
+                type="info"
+                style={{ marginBottom: 16 }}
+              />
+            )}
           </Form.Item>
 
           <Form.Item

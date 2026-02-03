@@ -29,14 +29,8 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa
   const [queue, setQueue] = useState<FileQueueItem[]>([])
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [typeFilter, setTypeFilter] = useState<string[]>([])
-  const [tpaFilter, setTpaFilter] = useState<string[]>([selectedTpa])
+  const [tpaFilter, setTpaFilter] = useState<string[]>([])
   const [totalRows, setTotalRows] = useState(0)
-
-  useEffect(() => {
-    if (selectedTpa) {
-      setTpaFilter([selectedTpa])
-    }
-  }, [selectedTpa])
 
   useEffect(() => {
     loadQueue()
@@ -112,10 +106,13 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa
     value: type
   }))
 
-  const tpaOptions = Array.from(new Set(queue.map(f => f.TPA))).map(tpa => ({
-    label: tpa,
-    value: tpa
-  }))
+  const tpaOptions = Array.from(new Set(queue.map(f => f.TPA))).map(tpaCode => {
+    const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+    return {
+      label: tpa ? tpa.TPA_NAME : tpaCode,
+      value: tpaCode
+    }
+  })
 
   const getStatusTag = (status: string) => {
     const statusConfig: Record<string, { color: string; icon: React.ReactNode }> = {
@@ -147,6 +144,10 @@ const BronzeStatus: React.FC<BronzeStatusProps> = ({ selectedTpa, setSelectedTpa
       dataIndex: 'TPA',
       key: 'TPA',
       width: 120,
+      render: (tpaCode: string) => {
+        const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+        return tpa ? tpa.TPA_NAME : tpaCode
+      },
     },
     {
       title: 'Status',

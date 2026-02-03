@@ -274,8 +274,8 @@ class SnowflakeService:
         
         return await self.execute_query_dict(query, timeout=30)
     
-    async def get_raw_data(self, tpa: str, file_name: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get raw data records asynchronously"""
+    async def get_raw_data(self, tpa: Optional[str] = None, file_name: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get raw data records asynchronously (optionally filtered by TPA)"""
         query = f"""
             SELECT 
                 RECORD_ID,
@@ -287,8 +287,11 @@ class SnowflakeService:
                 LOAD_TIMESTAMP,
                 LOADED_BY
             FROM {settings.BRONZE_SCHEMA_NAME}.RAW_DATA_TABLE
-            WHERE TPA = '{tpa}'
+            WHERE 1=1
         """
+        
+        if tpa:
+            query += f" AND TPA = '{tpa}'"
         
         if file_name:
             query += f" AND FILE_NAME = '{file_name}'"
@@ -327,8 +330,8 @@ class SnowflakeService:
         
         return result
     
-    async def get_field_mappings(self, tpa: str, target_table: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get field mappings asynchronously"""
+    async def get_field_mappings(self, tpa: Optional[str] = None, target_table: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get field mappings asynchronously (optionally filtered by TPA and/or target table)"""
         query = f"""
             SELECT 
                 mapping_id,
@@ -346,8 +349,11 @@ class SnowflakeService:
                 description,
                 active
             FROM {settings.SILVER_SCHEMA_NAME}.field_mappings
-            WHERE tpa = '{tpa}' AND active = TRUE
+            WHERE active = TRUE
         """
+        
+        if tpa:
+            query += f" AND tpa = '{tpa}'"
         
         if target_table:
             query += f" AND target_table = '{target_table.upper()}'"

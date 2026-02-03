@@ -638,8 +638,8 @@ async def get_silver_data_stats(request: Request, tpa: str, table_name: str):
             raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/mappings")
-async def get_field_mappings(request: Request, tpa: str, target_table: Optional[str] = None):
-    """Get field mappings"""
+async def get_field_mappings(request: Request, tpa: Optional[str] = None, target_table: Optional[str] = None):
+    """Get field mappings (optionally filtered by TPA and/or target table)"""
     try:
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
         return await sf_service.get_field_mappings(tpa, target_table)
@@ -824,7 +824,7 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
             mapping_request.top_n,
             mapping_request.min_confidence
         )
-        logger.info(f"ML auto-mapping completed: {result}")
+        logger.info(f"ML auto-mapping completed. Result type: {type(result)}, Result value: {result}")
         
         # Parse the result string to extract number of mappings created
         # Result format: "Successfully generated X ML-based field mappings..."
@@ -834,6 +834,34 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
             match = re.search(r'generated (\d+)', result)
             if match:
                 mappings_created = int(match.group(1))
+                logger.info(f"Extracted mappings_created from result: {mappings_created}")
+            else:
+                logger.warning(f"Could not extract mapping count from result string: {result}")
+        
+        # If result is None or empty, check if mappings were actually created by querying
+        if not result or mappings_created == 0:
+            # Query to check if mappings exist for this table/TPA
+            # Escape single quotes in table name and TPA to prevent SQL errors
+            safe_table = mapping_request.target_table.replace("'", "''")
+            safe_tpa = mapping_request.tpa.replace("'", "''")
+            
+            check_query = f"""
+                SELECT COUNT(*) as count 
+                FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
+                WHERE TARGET_TABLE = '{safe_table}' 
+                AND TPA = '{safe_tpa}'
+                AND MAPPING_METHOD LIKE 'ML%'
+            """
+            try:
+                mapping_check = await sf_service.execute_query_dict(check_query)
+                if mapping_check and len(mapping_check) > 0:
+                    actual_count = mapping_check[0].get('COUNT', 0)
+                    if actual_count > 0:
+                        mappings_created = actual_count
+                        result = f"Successfully generated {actual_count} ML-based field mappings"
+                        logger.info(f"Verified {actual_count} ML mappings in database")
+            except Exception as check_error:
+                logger.warning(f"Could not verify mapping count: {check_error}")
         
         return {
             "message": result if result else "ML auto-mapping completed",
@@ -870,7 +898,7 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
             mapping_request.model_name,
             "DEFAULT_FIELD_MAPPING"
         )
-        logger.info(f"LLM auto-mapping completed: {result}")
+        logger.info(f"LLM auto-mapping completed. Result type: {type(result)}, Result value: {result}")
         
         # Parse the result string to extract number of mappings created
         # Result format: "Successfully generated X LLM-based field mappings..."
@@ -880,6 +908,34 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
             match = re.search(r'generated (\d+)', result)
             if match:
                 mappings_created = int(match.group(1))
+                logger.info(f"Extracted mappings_created from result: {mappings_created}")
+            else:
+                logger.warning(f"Could not extract mapping count from result string: {result}")
+        
+        # If result is None or empty, check if mappings were actually created by querying
+        if not result or mappings_created == 0:
+            # Query to check if mappings exist for this table/TPA
+            # Escape single quotes in table name and TPA to prevent SQL errors
+            safe_table = mapping_request.target_table.replace("'", "''")
+            safe_tpa = mapping_request.tpa.replace("'", "''")
+            
+            check_query = f"""
+                SELECT COUNT(*) as count 
+                FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
+                WHERE TARGET_TABLE = '{safe_table}' 
+                AND TPA = '{safe_tpa}'
+                AND MAPPING_METHOD LIKE 'LLM%'
+            """
+            try:
+                mapping_check = await sf_service.execute_query_dict(check_query)
+                if mapping_check and len(mapping_check) > 0:
+                    actual_count = mapping_check[0].get('COUNT', 0)
+                    if actual_count > 0:
+                        mappings_created = actual_count
+                        result = f"Successfully generated {actual_count} LLM-based field mappings"
+                        logger.info(f"Verified {actual_count} LLM mappings in database")
+            except Exception as check_error:
+                logger.warning(f"Could not verify mapping count: {check_error}")
         
         return {
             "message": result if result else "LLM auto-mapping completed",
@@ -894,8 +950,19 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
             detail="Procedure execution timed out. LLM processing can take longer for large datasets."
         )
     except Exception as e:
-        logger.error(f"LLM auto-mapping failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        logger.error(f"LLM auto-mapping failed: {error_msg}", exc_info=True)
+        logger.error(f"Request details: source={mapping_request.source_table}, target={mapping_request.target_table}, tpa={mapping_request.tpa}, model={mapping_request.model_name}")
+        
+        # Provide more helpful error messages
+        if "does not exist" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Procedure 'auto_map_fields_llm' not found. Please ensure Silver layer is deployed correctly.")
+        elif "cortex" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Cortex AI error: {error_msg}. Check if Cortex AI is enabled in your Snowflake account.")
+        elif "compilation error" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"SQL compilation error in procedure: {error_msg}")
+        else:
+            raise HTTPException(status_code=500, detail=f"LLM auto-mapping failed: {error_msg}")
 
 @router.post("/mappings/{mapping_id}/approve")
 async def approve_mapping(request: Request, mapping_id: int):

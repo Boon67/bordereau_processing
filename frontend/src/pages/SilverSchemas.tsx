@@ -40,6 +40,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   const [qualityData, setQualityData] = useState<Record<string, any>>({})
   const [loadingQuality, setLoadingQuality] = useState(false)
   const [tableMappings, setTableMappings] = useState<Record<string, number>>({})
+  const [schemaTableCounts, setSchemaTableCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     // Load schemas once on mount (TPA-agnostic)
@@ -84,6 +85,17 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
     try {
       const data = await apiService.getSilverTables()
       setCreatedTables(data)
+      
+      // Calculate how many physical tables exist for each schema
+      const schemaCounts: Record<string, number> = {}
+      data.forEach((table: any) => {
+        const schemaName = table.SCHEMA_TABLE
+        if (schemaName) {
+          schemaCounts[schemaName] = (schemaCounts[schemaName] || 0) + 1
+        }
+      })
+      setSchemaTableCounts(schemaCounts)
+      
       // Load mappings after tables are loaded
       if (data.length > 0) {
         await loadTableMappingsForTables(data)
@@ -489,20 +501,6 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
   return (
     <div>
       <Title level={2}>Target Schemas</Title>
-      
-      <div style={{ marginBottom: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Select Provider (TPA):</label>
-        <Select
-          value={selectedTpa}
-          onChange={setSelectedTpa}
-          style={{ width: 300 }}
-          placeholder="Select TPA"
-          options={tpas.map(tpa => ({
-            value: tpa.TPA_CODE,
-            label: tpa.TPA_NAME,
-          }))}
-        />
-      </div>
 
       <Card>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -555,7 +553,8 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
                     <Space>
                       <TableOutlined />
                       <strong>{tableName}</strong>
-                      <Tag color="purple">{tableSchemas.length} columns</Tag>
+                      <Tag color="cyan">{tableSchemas.length} columns</Tag>
+                      <Tag color="green">{schemaTableCounts[tableName] || 0} tables</Tag>
                     </Space>
                     <Space>
                       <Button
@@ -615,7 +614,12 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
       )}
 
       <Card title="📋 Created Tables" style={{ marginTop: 16 }}>
-        {createdTables.length === 0 ? (
+        {loadingCreatedTables ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" />
+            <p style={{ marginTop: 16, color: '#666' }}>Loading created tables...</p>
+          </div>
+        ) : createdTables.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
             <p>No tables have been created yet.</p>
             <p style={{ fontSize: '12px' }}>
@@ -648,7 +652,10 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
                 dataIndex: 'TPA',
                 key: 'TPA',
                 width: 150,
-                render: (text: string) => <Tag color="green">{text}</Tag>,
+                render: (tpaCode: string) => {
+                  const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+                  return <Tag color="green">{tpa ? tpa.TPA_NAME : tpaCode}</Tag>
+                },
               },
               {
                 title: 'Mappings',
@@ -1071,7 +1078,7 @@ const SilverSchemas: React.FC<SilverSchemasProps> = ({ selectedTpa, setSelectedT
             <Select
               placeholder="Select provider"
               options={tpas.map(tpa => ({
-                label: `${tpa.TPA_NAME} (${tpa.TPA_CODE})`,
+                label: tpa.TPA_NAME,
                 value: tpa.TPA_CODE
               }))}
               showSearch

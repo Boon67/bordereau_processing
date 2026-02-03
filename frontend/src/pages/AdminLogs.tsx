@@ -75,12 +75,21 @@ interface APIRequestLog {
   CLIENT_IP: string
 }
 
-const AdminLogs: React.FC = () => {
+interface AdminLogsProps {
+  tpas: Array<{ TPA_CODE: string; TPA_NAME: string }>
+}
+
+const AdminLogs: React.FC<AdminLogsProps> = ({ tpas }) => {
   const [applicationLogs, setApplicationLogs] = useState<ApplicationLog[]>([])
   const [taskLogs, setTaskLogs] = useState<TaskExecutionLog[]>([])
   const [fileProcessingLogs, setFileProcessingLogs] = useState<FileProcessingLog[]>([])
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([])
   const [apiLogs, setAPILogs] = useState<APIRequestLog[]>([])
+
+  const renderTpaName = (tpaCode: string) => {
+    const tpa = tpas.find(t => t.TPA_CODE === tpaCode)
+    return tpa ? tpa.TPA_NAME : tpaCode
+  }
   const [loading, setLoading] = useState(false)
   const [selectedLog, setSelectedLog] = useState<any>(null)
   const [detailsVisible, setDetailsVisible] = useState(false)
@@ -185,6 +194,7 @@ const AdminLogs: React.FC = () => {
       dataIndex: 'TPA_CODE',
       key: 'tpa',
       width: 100,
+      render: renderTpaName,
     },
     {
       title: 'Actions',
@@ -290,6 +300,7 @@ const AdminLogs: React.FC = () => {
       dataIndex: 'TPA_CODE',
       key: 'tpa',
       width: 100,
+      render: renderTpaName,
     },
     {
       title: 'Actions',

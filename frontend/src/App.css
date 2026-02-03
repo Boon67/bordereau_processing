@@ -10,3 +10,16 @@
 .ant-menu {
   border-right: 1px solid #f0f0f0;
 }
+
+/* Duplicate mapping row highlighting */
+.duplicate-mapping-row {
+  background-color: #fff7e6 !important;
+}
+
+.duplicate-mapping-row:hover {
+  background-color: #ffe7ba !important;
+}
+
+.duplicate-mapping-row.ant-table-row-selected {
+  background-color: #ffd591 !important;
+}

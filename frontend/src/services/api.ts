@@ -132,7 +132,7 @@ export const apiService = {
     return response.data
   },
 
-  getRawData: async (tpa: string, fileName?: string, limit = 100): Promise<RawDataRecord[]> => {
+  getRawData: async (tpa?: string, fileName?: string, limit = 100): Promise<RawDataRecord[]> => {
     const response = await api.get('/bronze/raw-data', {
       params: { tpa, file_name: fileName, limit },
     })
@@ -323,7 +323,7 @@ export const apiService = {
     return response.data
   },
 
-  getFieldMappings: async (tpa: string, targetTable?: string): Promise<FieldMapping[]> => {
+  getFieldMappings: async (tpa?: string, targetTable?: string): Promise<FieldMapping[]> => {
     const response = await api.get('/silver/mappings', {
       params: { tpa, target_table: targetTable },
     })
