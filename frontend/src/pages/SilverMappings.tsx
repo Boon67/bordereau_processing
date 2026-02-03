@@ -203,17 +203,30 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
     try {
       console.log('Auto-Map ML - Form values:', values)
       
-      // Get TPA from the selected table
-      const targetTableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      // Get TPA from the currently selected physical table (not from form values)
+      // selectedTable is the physical table name like "PROVIDER_A_DENTAL_CLAIMS"
+      const targetTableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
       const tpa = targetTableInfo?.tpa || ''
+      const schemaTableName = targetTableInfo?.name || values.target_table
       
-      console.log('Auto-Map ML - Target table info:', { targetTableInfo, tpa })
+      console.log('Auto-Map ML - Target table info:', { 
+        selectedTable, 
+        targetTableInfo, 
+        tpa, 
+        schemaTableName 
+      })
       
-      // Use the target_table from form values (already a schema table name)
+      if (!tpa) {
+        message.error('Could not determine TPA from selected table')
+        setLoading(false)
+        return
+      }
+      
+      // Use the schema table name (e.g., DENTAL_CLAIMS) for the procedure
       const result = await apiService.autoMapFieldsML(
         values.source_table,
-        values.target_table,  // Schema table name from dropdown
-        tpa,
+        schemaTableName,  // Schema table name (e.g., DENTAL_CLAIMS)
+        tpa,              // TPA from selected physical table
         values.top_n,
         values.min_confidence / 100
       )
@@ -226,18 +239,15 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
       // Reload all mappings to show any new ones
       await loadAllMappings()
       
-      // Switch to the table that was just mapped
-      const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
-      if (tableInfo) {
-        setSelectedTable(tableInfo.physicalName)
-      }
+      // Table is already selected (we used selectedTable to get the TPA)
+      // No need to switch tables
       
       // Check if mapping was successful and show appropriate message
       if (result.mappings_created > 0) {
-        message.success(`Created ${result.mappings_created} ML-based mappings for ${values.target_table}`)
+        message.success(`Created ${result.mappings_created} ML-based mappings for ${schemaTableName}`)
       } else if (result.success) {
         // If success flag is true but mappings_created is 0, show the message
-        message.success(result.message || `Auto-mapping completed for ${values.target_table}`)
+        message.success(result.message || `Auto-mapping completed for ${schemaTableName}`)
       } else {
         // Show the actual error/info message from the procedure
         const errorMsg = result.message || result.result || 'No mappings created'
@@ -257,17 +267,30 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
     try {
       console.log('Auto-Map LLM - Form values:', values)
       
-      // Get TPA from the selected table
-      const targetTableInfo = availableTargetTables.find(t => t.name === values.target_table)
+      // Get TPA from the currently selected physical table (not from form values)
+      // selectedTable is the physical table name like "PROVIDER_A_DENTAL_CLAIMS"
+      const targetTableInfo = availableTargetTables.find(t => t.physicalName === selectedTable)
       const tpa = targetTableInfo?.tpa || ''
+      const schemaTableName = targetTableInfo?.name || values.target_table
       
-      console.log('Auto-Map LLM - Target table info:', { targetTableInfo, tpa })
+      console.log('Auto-Map LLM - Target table info:', { 
+        selectedTable, 
+        targetTableInfo, 
+        tpa, 
+        schemaTableName 
+      })
       
-      // Use the target_table from form values (already a schema table name)
+      if (!tpa) {
+        message.error('Could not determine TPA from selected table')
+        setLoading(false)
+        return
+      }
+      
+      // Use the schema table name (e.g., DENTAL_CLAIMS) for the procedure
       const result = await apiService.autoMapFieldsLLM(
         values.source_table,
-        values.target_table,  // Schema table name from dropdown
-        tpa,
+        schemaTableName,  // Schema table name (e.g., DENTAL_CLAIMS)
+        tpa,              // TPA from selected physical table
         values.model_name
       )
       
@@ -279,18 +302,15 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
       // Reload all mappings to show any new ones
       await loadAllMappings()
       
-      // Switch to the table that was just mapped
-      const tableInfo = availableTargetTables.find(t => t.name === values.target_table)
-      if (tableInfo) {
-        setSelectedTable(tableInfo.physicalName)
-      }
+      // Table is already selected (we used selectedTable to get the TPA)
+      // No need to switch tables
       
       // Check if mapping was successful and show appropriate message
       if (result.mappings_created > 0) {
-        message.success(`Created ${result.mappings_created} LLM-based mappings for ${values.target_table}`)
+        message.success(`Created ${result.mappings_created} LLM-based mappings for ${schemaTableName}`)
       } else if (result.success) {
         // If success flag is true but mappings_created is 0, show the message
-        message.success(result.message || `Auto-mapping completed for ${values.target_table}`)
+        message.success(result.message || `Auto-mapping completed for ${schemaTableName}`)
       } else {
         // Show the actual error/info message from the procedure
         const errorMsg = result.message || result.result || 'No mappings created'

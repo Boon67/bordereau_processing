@@ -932,6 +932,115 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
     try:
         logger.info(f"Starting LLM auto-mapping: source={mapping_request.source_table}, target={mapping_request.target_table}, tpa={mapping_request.tpa}, model={mapping_request.model_name}")
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Escape single quotes for SQL safety
+        safe_table = mapping_request.target_table.replace("'", "''")
+        safe_tpa = mapping_request.tpa.replace("'", "''")
+        safe_source = mapping_request.source_table.replace("'", "''")
+        
+        # PRE-FLIGHT CHECK 1: Verify TPA exists and is active
+        logger.info(f"Pre-flight check 1: Verifying TPA '{mapping_request.tpa}' exists")
+        tpa_check = await sf_service.execute_query_dict(f"""
+            SELECT TPA_CODE, TPA_NAME, ACTIVE 
+            FROM {settings.BRONZE_SCHEMA_NAME}.TPA_MASTER 
+            WHERE TPA_CODE = '{safe_tpa}'
+        """)
+        if not tpa_check or len(tpa_check) == 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"TPA '{mapping_request.tpa}' is not registered. Please register the TPA first in the Bronze layer."
+            )
+        if not tpa_check[0].get('ACTIVE', False):
+            raise HTTPException(
+                status_code=400,
+                detail=f"TPA '{mapping_request.tpa}' is inactive. Please activate the TPA before mapping."
+            )
+        logger.info(f"✓ TPA '{tpa_check[0]['TPA_NAME']}' is valid and active")
+        
+        # PRE-FLIGHT CHECK 2: Verify Bronze data exists for this TPA
+        logger.info(f"Pre-flight check 2: Checking Bronze data for TPA '{mapping_request.tpa}'")
+        bronze_check = await sf_service.execute_query_dict(f"""
+            SELECT COUNT(*) as record_count,
+                   COUNT(DISTINCT f.key) as field_count
+            FROM {settings.BRONZE_SCHEMA_NAME}.{safe_source},
+            LATERAL FLATTEN(input => RAW_DATA) f
+            WHERE RAW_DATA IS NOT NULL
+              AND TPA = '{safe_tpa}'
+            LIMIT 1000
+        """)
+        if not bronze_check or bronze_check[0].get('RECORD_COUNT', 0) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No data found for TPA '{mapping_request.tpa}' in Bronze table '{mapping_request.source_table}'. Please upload data files first using the Bronze upload feature."
+            )
+        field_count = bronze_check[0].get('FIELD_COUNT', 0)
+        record_count = bronze_check[0].get('RECORD_COUNT', 0)
+        logger.info(f"✓ Found {record_count} records with {field_count} unique fields for TPA '{mapping_request.tpa}'")
+        
+        # PRE-FLIGHT CHECK 3: Verify target schema exists
+        logger.info(f"Pre-flight check 3: Verifying target schema for table '{mapping_request.target_table}'")
+        schema_check = await sf_service.execute_query_dict(f"""
+            SELECT COUNT(*) as column_count,
+                   LISTAGG(DISTINCT column_name, ', ') WITHIN GROUP (ORDER BY column_name) as columns
+            FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+            WHERE table_name = '{safe_table}'
+              AND active = TRUE
+        """)
+        if not schema_check or schema_check[0].get('COLUMN_COUNT', 0) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No schema definition found for table '{mapping_request.target_table}'. Please create the table schema first using the Silver Schemas page."
+            )
+        column_count = schema_check[0].get('COLUMN_COUNT', 0)
+        logger.info(f"✓ Target schema '{mapping_request.target_table}' has {column_count} columns defined")
+        
+        # PRE-FLIGHT CHECK 4: Verify LLM prompt template exists
+        logger.info(f"Pre-flight check 4: Checking LLM prompt template")
+        template_check = await sf_service.execute_query_dict(f"""
+            SELECT template_id, template_name, model_name
+            FROM {settings.SILVER_SCHEMA_NAME}.llm_prompt_templates
+            WHERE template_id = 'DEFAULT_FIELD_MAPPING'
+              AND active = TRUE
+        """)
+        if not template_check or len(template_check) == 0:
+            raise HTTPException(
+                status_code=500,
+                detail="LLM prompt template 'DEFAULT_FIELD_MAPPING' not found. The Silver layer may not be fully deployed. Please contact your administrator."
+            )
+        logger.info(f"✓ LLM prompt template '{template_check[0]['TEMPLATE_NAME']}' is available")
+        
+        # PRE-FLIGHT CHECK 5: Test Cortex AI availability (quick test)
+        logger.info(f"Pre-flight check 5: Testing Cortex AI availability")
+        try:
+            cortex_test = await sf_service.execute_query_dict(f"""
+                SELECT SNOWFLAKE.CORTEX.COMPLETE('{mapping_request.model_name}', 'test') as test_response
+            """)
+            logger.info(f"✓ Cortex AI model '{mapping_request.model_name}' is available and responding")
+        except Exception as cortex_error:
+            error_str = str(cortex_error).lower()
+            if "does not exist" in error_str and "function" in error_str:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Cortex AI is not enabled in your Snowflake account. Please contact Snowflake support to enable Cortex AI functionality."
+                )
+            elif "not available" in error_str or "invalid" in error_str:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model '{mapping_request.model_name}' is not available in your Snowflake region. Available models typically include: llama3.1-8b, llama3.1-70b, mistral-large, mixtral-8x7b. Please try a different model."
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Cortex AI test failed: {str(cortex_error)}"
+                )
+        
+        # All pre-flight checks passed - proceed with LLM mapping
+        logger.info(f"✓ All pre-flight checks passed. Proceeding with LLM auto-mapping...")
+        logger.info(f"  - TPA: {mapping_request.tpa} ({tpa_check[0]['TPA_NAME']})")
+        logger.info(f"  - Source: {record_count} records, {field_count} fields")
+        logger.info(f"  - Target: {mapping_request.target_table} ({column_count} columns)")
+        logger.info(f"  - Model: {mapping_request.model_name}")
+        
         result = await sf_service.execute_procedure(
             "auto_map_fields_llm",
             mapping_request.source_table,
@@ -942,6 +1051,30 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
         )
         logger.info(f"LLM auto-mapping completed. Result type: {type(result)}, Result value: {result}")
         
+        # Check if procedure returned an error message
+        if result and isinstance(result, str):
+            result_lower = result.lower()
+            if "error" in result_lower or "failed" in result_lower:
+                # Procedure returned an error message
+                if "no source fields found" in result_lower:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No source fields found for TPA '{mapping_request.tpa}'. This shouldn't happen after pre-flight checks. Please try again."
+                    )
+                elif "no target fields found" in result_lower:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No target schema found for '{mapping_request.target_table}'. This shouldn't happen after pre-flight checks. Please try again."
+                    )
+                elif "prompt template" in result_lower and "not found" in result_lower:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="LLM prompt template not found. This shouldn't happen after pre-flight checks. Please contact your administrator."
+                    )
+                else:
+                    # Generic error from procedure
+                    raise HTTPException(status_code=500, detail=f"LLM mapping failed: {result}")
+        
         # Parse the result string to extract number of mappings created
         # Result format: "Successfully generated X LLM-based field mappings..."
         mappings_created = 0
@@ -950,7 +1083,7 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
             match = re.search(r'generated (\d+)', result)
             if match:
                 mappings_created = int(match.group(1))
-                logger.info(f"Extracted mappings_created from result: {mappings_created}")
+                logger.info(f"✓ Successfully created {mappings_created} LLM-based field mappings")
             else:
                 logger.warning(f"Could not extract mapping count from result string: {result}")
         
@@ -997,12 +1130,22 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
         logger.error(f"Request details: source={mapping_request.source_table}, target={mapping_request.target_table}, tpa={mapping_request.tpa}, model={mapping_request.model_name}")
         
         # Provide more helpful error messages
-        if "does not exist" in error_msg.lower():
+        if "does not exist" in error_msg.lower() and "procedure" in error_msg.lower():
             raise HTTPException(status_code=500, detail=f"Procedure 'auto_map_fields_llm' not found. Please ensure Silver layer is deployed correctly.")
-        elif "cortex" in error_msg.lower():
-            raise HTTPException(status_code=500, detail=f"Cortex AI error: {error_msg}. Check if Cortex AI is enabled in your Snowflake account.")
+        elif "does not exist" in error_msg.lower() and "function" in error_msg.lower() and "cortex" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Cortex AI is not enabled in your Snowflake account. Contact Snowflake support to enable Cortex AI.")
+        elif "cortex" in error_msg.lower() and "not available" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Model '{mapping_request.model_name}' is not available in your region. Try a different model.")
+        elif "no source fields found" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"No data found for TPA '{mapping_request.tpa}' in Bronze table. Please upload data first.")
+        elif "no target fields found" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"No schema found for table '{mapping_request.target_table}'. Please create the table schema first.")
+        elif "prompt template" in error_msg.lower() and "not found" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"LLM prompt template not found. Please run Silver schema setup.")
         elif "compilation error" in error_msg.lower():
             raise HTTPException(status_code=500, detail=f"SQL compilation error in procedure: {error_msg}")
+        elif "insufficient privileges" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Insufficient privileges to use Cortex AI. Grant USAGE on SNOWFLAKE.CORTEX to your role.")
         else:
             raise HTTPException(status_code=500, detail=f"LLM auto-mapping failed: {error_msg}")
 
