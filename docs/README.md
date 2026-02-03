@@ -1,28 +1,96 @@
-# Documentation Index
+# 📚 Bordereau Documentation
 
-Complete documentation for the Bordereau Processing Pipeline.
+> Complete documentation for the Bordereau Processing Pipeline
+
+[![Version](https://img.shields.io/badge/version-3.3-blue)]()
+[![Docs](https://img.shields.io/badge/docs-up%20to%20date-brightgreen)]()
+[![Status](https://img.shields.io/badge/status-production%20ready-brightgreen)]()
+
+**Last Updated**: February 3, 2026
+
+---
+
+## 🗺️ Documentation Map
+
+```
+📚 Documentation
+│
+├── 📖 README.md (You are here)
+│   └── Central navigation hub
+│
+├── 🚀 ../README.md
+│   └── Quick start & overview
+│
+├── 🎓 GUIDE.md (50+ pages)
+│   ├── Getting Started
+│   ├── TPA Management
+│   ├── Bronze Layer (Data Ingestion)
+│   ├── Silver Layer (Transformation)
+│   ├── Gold Layer (Analytics)
+│   ├── Technical Reference
+│   ├── Troubleshooting
+│   ├── FAQ
+│   └── Glossary
+│
+├── 🏗️ ARCHITECTURE.md
+│   ├── System Architecture Diagram
+│   ├── Entity Reference
+│   ├── Data Flow
+│   └── Design Principles
+│
+├── 📝 CHANGELOG.md
+│   └── Documentation version history
+│
+└── 📊 OPTIMIZATION_SUMMARY.md
+    └── Documentation improvements log
+```
 
 ---
 
 ## 📖 Documentation Structure
 
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| **[User Guide](GUIDE.md)** | Complete usage instructions and workflows | End users, administrators |
-| **[Architecture](ARCHITECTURE.md)** | Technical design and data model | Developers, architects |
-| **[README](../README.md)** | Quick start and overview | Everyone |
+| Document | Purpose | Pages | Audience | Reading Time |
+|----------|---------|-------|----------|--------------|
+| **[🚀 Quick Start](../README.md)** | Get started in 5 minutes | 1 | Everyone | 2 min |
+| **[🎓 User Guide](GUIDE.md)** | Complete usage instructions | 50+ | End users, admins | 35 min |
+| **[🏗️ Architecture](ARCHITECTURE.md)** | Technical design & data model | 10 | Developers, architects | 15 min |
+| **[📝 Changelog](CHANGELOG.md)** | Documentation history | 5 | Maintainers | 5 min |
+| **[📊 Optimization](OPTIMIZATION_SUMMARY.md)** | Improvement summary | 10 | Maintainers | 10 min |
 
 ---
 
 ## 🚀 Getting Started
 
-**New to Bordereau?** Start here:
+**New to Bordereau?** Follow this learning path:
 
-1. **[README](../README.md)** - 5-minute overview and quick start
-2. **[User Guide - Getting Started](GUIDE.md#getting-started)** - First-time setup
-3. **[User Guide - TPA Management](GUIDE.md#tpa-management)** - Create your first TPA
-4. **[User Guide - Bronze Layer](GUIDE.md#bronze-layer---data-ingestion)** - Upload files
-5. **[User Guide - Silver Layer](GUIDE.md#silver-layer---transformation)** - Map and transform data
+### 🎯 Learning Path (30 minutes)
+
+```mermaid
+graph LR
+    A[1. Overview<br/>2 min] --> B[2. Setup<br/>5 min]
+    B --> C[3. First TPA<br/>3 min]
+    C --> D[4. Upload Data<br/>5 min]
+    D --> E[5. Map Fields<br/>10 min]
+    E --> F[6. Transform<br/>5 min]
+    
+    style A fill:#e1f5ff
+    style B fill:#e1f5ff
+    style C fill:#fff3e0
+    style D fill:#fff3e0
+    style E fill:#f3e5f5
+    style F fill:#f3e5f5
+```
+
+| Step | Document | Section | Time |
+|------|----------|---------|------|
+| **1** | [README](../README.md) | Overview & Quick Start | 2 min |
+| **2** | [User Guide](GUIDE.md#getting-started) | Prerequisites & Setup | 5 min |
+| **3** | [User Guide](GUIDE.md#tpa-management) | Create First TPA | 3 min |
+| **4** | [User Guide](GUIDE.md#bronze-layer---data-ingestion) | Upload Files | 5 min |
+| **5** | [User Guide](GUIDE.md#silver-layer---transformation) | Map Fields (ML/LLM) | 10 min |
+| **6** | [User Guide](GUIDE.md#3-execute-transformation) | Transform Data | 5 min |
+
+**Total**: ~30 minutes from zero to analytics
 
 ---
 
