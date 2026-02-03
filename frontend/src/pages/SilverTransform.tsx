@@ -85,13 +85,8 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       // Auto-select first target table if only one exists
       if (uniqueTargets.length === 1) {
         setTargetTable(uniqueTargets[0] as string)
-        // Auto-advance to step 1 (Verify Mappings) since tables are pre-defined
-        setCurrentStep(1)
-        // Load mappings immediately since we auto-selected the table
-        // Use a small delay to ensure state is updated
-        setTimeout(() => {
-          loadFieldMappingsForTable(uniqueTargets[0] as string, mapping)
-        }, 100)
+        // Stay on step 0 to show the diagram, but table is pre-selected
+        setCurrentStep(0)
       } else if (uniqueTargets.length > 1) {
         // Clear selection if multiple tables exist
         setTargetTable('')
@@ -273,9 +268,9 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       <Card style={{ marginBottom: 24 }}>
         <Steps current={currentStep}>
           <Step 
-            title={targetTables.length <= 1 ? "Tables" : "Select Tables"} 
+            title={targetTables.length === 1 ? "Tables" : "Select Tables"}
             icon={<DatabaseOutlined />}
-            description={targetTables.length === 1 ? "Auto-selected" : undefined}
+            description={targetTables.length === 1 ? "Pre-selected" : undefined}
           />
           <Step title="Verify Mappings" icon={<ApiOutlined />} />
           <Step title="Execute Transform" icon={<ThunderboltOutlined />} />
@@ -284,7 +279,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       </Card>
 
       {currentStep === 0 && (
-        <Card title={targetTables.length === 1 ? "Step 1: Tables Pre-Selected" : "Step 1: Select Source and Target Tables"}>
+        <Card title={targetTables.length === 1 ? "Tables Pre-Selected" : "Select Source and Target Tables"}>
           <Space direction="vertical" style={{ width: '100%' }} size="large">
             {loadingTables ? (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -504,7 +499,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       )}
 
       {currentStep === 1 && (
-        <Card title="Step 2: Verify Mappings" style={{ marginBottom: 16 }}>
+        <Card title="Verify Mappings" style={{ marginBottom: 16 }}>
           <Descriptions column={1} bordered style={{ marginBottom: 16 }}>
             <Descriptions.Item label="TPA">{selectedTpa}</Descriptions.Item>
             <Descriptions.Item label="Source Table">{sourceTable}</Descriptions.Item>
@@ -695,7 +690,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       )}
 
       {currentStep === 2 && (
-        <Card title="Step 3: Execute Transformation">
+        <Card title="Execute Transformation">
           <Alert
             style={{ marginBottom: 16 }}
             message="Ready to Transform"
@@ -722,7 +717,7 @@ const SilverTransform: React.FC<SilverTransformProps> = ({ selectedTpa, setSelec
       )}
 
       {currentStep === 3 && transformResult && (
-        <Card title="Step 4: Transformation Complete">
+        <Card title="Transformation Complete">
           <Alert
             message={transformResult.status === 'success' ? 'Transformation Complete!' : 'Transformation Failed'}
             description={
