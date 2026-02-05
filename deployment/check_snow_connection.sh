@@ -30,37 +30,16 @@ fi
 
 echo -e "${GREEN}✓ Snowflake CLI is installed${NC}"
 
-# Try to list connections (don't fail if this errors)
-CONNECTION_OUTPUT=$(snow connection list 2>&1 || true)
+# Try to list connections using JSON format
+CONNECTION_JSON=$(snow connection list --format json 2>/dev/null || echo "[]")
 
-# Parse connections from table output
+# Parse connections from JSON output using jq
 connections=()
-while IFS= read -r line; do
-    # Skip empty lines
-    [[ -z "$line" ]] && continue
-    
-    # Skip separator lines (all dashes and pipes)
-    [[ "$line" =~ ^[[:space:]]*[-+|]+[[:space:]]*$ ]] && continue
-    
-    # Skip header line
-    [[ "$line" =~ connection_name ]] && continue
-    
-    # If line contains |, extract first field
-    if [[ "$line" == *"|"* ]]; then
-        # Get everything before first |
-        first_col="${line%%|*}"
-        # Trim whitespace
-        conn=$(echo "$first_col" | tr -d '[:space:]')
-        
-        # Check if it's a valid connection name (not empty, not just whitespace)
-        if [[ -n "$conn" ]] && [[ ! "$conn" =~ ^[-+]+$ ]]; then
-            # Check if we already have this connection (avoid duplicates from multi-line entries)
-            if [[ ! " ${connections[@]} " =~ " ${conn} " ]]; then
-                connections+=("$conn")
-            fi
-        fi
-    fi
-done <<< "$CONNECTION_OUTPUT"
+if command -v jq &> /dev/null; then
+    while IFS= read -r conn; do
+        [[ -n "$conn" ]] && connections+=("$conn")
+    done < <(echo "$CONNECTION_JSON" | jq -r '.[].connection_name' 2>/dev/null || true)
+fi
 
 # Check if we found any connections
 if [[ ${#connections[@]} -gt 0 ]]; then
@@ -68,27 +47,18 @@ if [[ ${#connections[@]} -gt 0 ]]; then
     echo ""
     echo -e "${BLUE}Available Snowflake Connections:${NC}"
     echo ""
-    echo "$CONNECTION_OUTPUT"
-    echo ""
-    echo -e "${GREEN}✓ Connection check passed - deployment will use configured connection${NC}"
-    exit 0
-fi
-
-# Alternative check: see if connections.toml exists and has content
-TOML_FILE="$HOME/.snowflake/connections.toml"
-if [[ -f "$TOML_FILE" ]] && [[ -s "$TOML_FILE" ]]; then
-    echo -e "${GREEN}✓ Snowflake connections file found${NC}"
-    echo ""
-    echo -e "${CYAN}Connections configured in: $TOML_FILE${NC}"
-    echo ""
     
-    # Try to show connections
-    if command -v grep &> /dev/null; then
-        echo -e "${BLUE}Configured connections:${NC}"
-        grep -E "^\[connections\." "$TOML_FILE" 2>/dev/null | sed 's/\[connections\.//g' | sed 's/\]//g' || true
-        echo ""
-    fi
+    # Display connections in a nice format
+    for conn in "${connections[@]}"; do
+        is_default=$(echo "$CONNECTION_JSON" | jq -r ".[] | select(.connection_name == \"$conn\") | .is_default" 2>/dev/null)
+        if [[ "$is_default" == "true" ]]; then
+            echo -e "  • ${GREEN}$conn${NC} (default)"
+        else
+            echo "  • $conn"
+        fi
+    done
     
+    echo ""
     echo -e "${GREEN}✓ Connection check passed - deployment will use configured connection${NC}"
     exit 0
 fi

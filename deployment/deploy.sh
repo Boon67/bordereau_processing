@@ -340,9 +340,17 @@ fi
 if [[ -z "$CONNECTION_NAME" ]]; then
     # Check if config specifies to use default connection
     if [[ "${USE_DEFAULT_CONNECTION}" == "true" ]]; then
-        CONNECTION_NAME=$(snow connection list --format json | jq -r '.[] | select(.is_default == true) | .connection_name // empty' 2>/dev/null)
+        # Get default connection from snow CLI
+        CONNECTION_NAME=$(snow connection list --format json 2>/dev/null | jq -r '.[] | select(.is_default == true) | .connection_name' 2>/dev/null)
+        
+        # If snow CLI fails or returns empty, error out with helpful message
         if [[ -z "$CONNECTION_NAME" ]]; then
-            CONNECTION_NAME="default"
+            log_message ERROR "Could not detect default connection from snow CLI"
+            log_message ERROR "Please either:"
+            log_message ERROR "  1. Set a default connection: snow connection set-default <connection_name>"
+            log_message ERROR "  2. Specify a connection: export SNOWFLAKE_CONNECTION=<connection_name>"
+            log_message ERROR "  3. Set USE_DEFAULT_CONNECTION=false in config and select manually"
+            exit 1
         fi
         log_message INFO "Using default connection: $CONNECTION_NAME"
     elif [[ -n "${SNOWFLAKE_CONNECTION}" ]]; then
