@@ -97,13 +97,13 @@ class SnowflakeLogHandler(logging.Handler):
                 message = log['message'].replace("'", "''")[:4000]  # Truncate long messages
                 
                 # For JSON, we need to escape for SQL string literal
-                # First convert to JSON string, then escape backslashes, then escape single quotes
+                # Convert to JSON string and escape for SQL
                 details_json_str = json.dumps(log['details'])
-                # Replace backslash with double backslash, then single quote with double single quote
-                details_escaped = details_json_str.replace("\\", "\\\\\\\\").replace("'", "''")
+                # Escape single quotes for SQL string literal
+                details_escaped = details_json_str.replace("'", "''")
                 
                 values.append(
-                    f"('{level}', '{source}', '{message}', PARSE_JSON('{details_escaped}'), CURRENT_USER(), NULL)"
+                    f"('{level}', '{source}', '{message}', TO_VARIANT(PARSE_JSON($${details_json_str}$$)), CURRENT_USER(), NULL)"
                 )
             
             values_str = ',\n'.join(values)
@@ -157,9 +157,8 @@ async def log_api_request(
             if obj is None or not obj:
                 return 'NULL'
             json_str = json.dumps(obj)
-            # Escape backslashes first, then single quotes
-            escaped = json_str.replace(chr(92), chr(92)+chr(92)).replace(chr(39), chr(39)+chr(39))
-            return f"PARSE_JSON('{escaped}')"
+            # Use $$ delimiter to avoid escaping issues
+            return f"TO_VARIANT(PARSE_JSON($${json_str}$$))"
         
         # Build the query with properly escaped values
         query = f"""
@@ -215,9 +214,12 @@ async def log_error(
         error_type = error_type.replace("'", "''")
         error_message = error_message.replace("'", "''")[:4000]
         stack = stack_trace.replace("'", "''")[:8000] if stack_trace else 'NULL'
-        context_json = json.dumps(context or {}).replace("'", "''") if context else 'NULL'
+        context_json_str = json.dumps(context or {}) if context else None
         user = user_name.replace("'", "''") if user_name else 'NULL'
         tpa = tpa_code.replace("'", "''") if tpa_code else 'NULL'
+        
+        # Build context value using $$ delimiter
+        context_val = f"TO_VARIANT(PARSE_JSON($${context_json_str}$$))" if context_json_str else 'NULL'
         
         query = f"""
             INSERT INTO {settings.BRONZE_SCHEMA_NAME}.ERROR_LOGS (
@@ -235,7 +237,7 @@ async def log_error(
                 '{error_type}',
                 '{error_message}',
                 {f"'{stack}'" if stack_trace else 'NULL'},
-                {f"PARSE_JSON('{context_json}')" if context else 'NULL'},
+                {context_val},
                 {f"'{user}'" if user_name else 'NULL'},
                 {f"'{tpa}'" if tpa_code else 'NULL'}
             )

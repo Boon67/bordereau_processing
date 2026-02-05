@@ -30,19 +30,22 @@ class SnowflakeLogger:
             sf_service = SnowflakeService()
             
             # Prepare details as JSON string
-            details_json = json.dumps(details) if details else 'null'
+            details_json = json.dumps(details) if details else None
             user_str = f"'{user_name}'" if user_name else 'null'
             tpa_str = f"'{tpa_code}'" if tpa_code else 'null'
             
             # Escape single quotes in message
             message_escaped = message.replace("'", "''")
             
+            # Build details value using $$ delimiter
+            details_val = f"TO_VARIANT(PARSE_JSON($${details_json}$$))" if details_json else 'null'
+            
             query = f"""
                 INSERT INTO {settings.BRONZE_SCHEMA_NAME}.APPLICATION_LOGS (
                     LOG_LEVEL, LOG_SOURCE, LOG_MESSAGE, LOG_DETAILS, USER_NAME, TPA_CODE
                 ) VALUES (
                     '{level}', '{source}', '{message_escaped}', 
-                    PARSE_JSON('{details_json}'), {user_str}, {tpa_str}
+                    {details_val}, {user_str}, {tpa_str}
                 )
             """
             
@@ -71,25 +74,14 @@ class SnowflakeLogger:
         try:
             sf_service = SnowflakeService()
             
-            # Prepare JSON fields (properly escape for SQL)
-            if params:
-                params_json = json.dumps(params).replace("'", "''")
-            else:
-                params_json = None
-            
-            if body:
-                body_json = json.dumps(body).replace("'", "''")
-            else:
-                body_json = None
-            
-            if response_body:
-                response_json = json.dumps(response_body).replace("'", "''")
-            else:
-                response_json = None
+            # Prepare JSON fields (no escaping needed with $$ delimiter)
+            params_json = json.dumps(params) if params else None
+            body_json = json.dumps(body) if body else None
+            response_json = json.dumps(response_body) if response_body else None
             
             # Prepare optional string fields (escape quotes for SQL)
             if error_message:
-                escaped_error = error_message.replace('"', '""')
+                escaped_error = error_message.replace("'", "''")
                 error_str = f"'{escaped_error}'"
             else:
                 error_str = 'null'
@@ -101,10 +93,10 @@ class SnowflakeLogger:
             status_str = str(response_status) if response_status else 'null'
             time_str = str(response_time_ms) if response_time_ms else 'null'
             
-            # Build VALUES clause with proper NULL handling
-            params_val = f"PARSE_JSON('{params_json}')" if params_json else 'NULL'
-            body_val = f"PARSE_JSON('{body_json}')" if body_json else 'NULL'
-            response_val = f"PARSE_JSON('{response_json}')" if response_json else 'NULL'
+            # Build VALUES clause with proper NULL handling using $$ delimiter
+            params_val = f"TO_VARIANT(PARSE_JSON($${params_json}$$))" if params_json else 'NULL'
+            body_val = f"TO_VARIANT(PARSE_JSON($${body_json}$$))" if body_json else 'NULL'
+            response_val = f"TO_VARIANT(PARSE_JSON($${response_json}$$))" if response_json else 'NULL'
             
             query = f"""
                 INSERT INTO {settings.BRONZE_SCHEMA_NAME}.API_REQUEST_LOGS (
@@ -138,12 +130,15 @@ class SnowflakeLogger:
             sf_service = SnowflakeService()
             
             # Prepare fields
-            context_json = json.dumps(context) if context else 'null'
+            context_json = json.dumps(context) if context else None
             stack_escaped = stack_trace.replace("'", "''")[:5000] if stack_trace else ''
             message_escaped = error_message.replace("'", "''")[:1000]
             user_str = f"'{user_name}'" if user_name else 'null'
             tpa_str = f"'{tpa_code}'" if tpa_code else 'null'
             stack_str = f"'{stack_escaped}'" if stack_trace else 'null'
+            
+            # Build context value using $$ delimiter
+            context_val = f"TO_VARIANT(PARSE_JSON($${context_json}$$))" if context_json else 'null'
             
             query = f"""
                 INSERT INTO {settings.BRONZE_SCHEMA_NAME}.ERROR_LOGS (
@@ -151,7 +146,7 @@ class SnowflakeLogger:
                     ERROR_STACK_TRACE, ERROR_CONTEXT, USER_NAME, TPA_CODE
                 ) VALUES (
                     'ERROR', '{source}', '{error_type}', '{message_escaped}',
-                    {stack_str}, PARSE_JSON('{context_json}'), {user_str}, {tpa_str}
+                    {stack_str}, {context_val}, {user_str}, {tpa_str}
                 )
             """
             
