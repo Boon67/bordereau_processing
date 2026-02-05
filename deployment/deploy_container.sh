@@ -34,13 +34,53 @@ source "$SCRIPT_DIR/default.config" 2>/dev/null || true
 # Configuration defaults (can be overridden by config files or env vars)
 SNOWFLAKE_CONNECTION="${SNOWFLAKE_CONNECTION:-}"
 USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
-SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-SFSENORTHAMERICA-TBOON_AWS2}"
+SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-}"  # Will be auto-detected if not set
 SNOWFLAKE_USER="${SNOWFLAKE_USER:-DEMO_SVC}"
 SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-BORDEREAU_PROCESSING_PIPELINE_ADMIN}"
 CONTAINER_ROLE="${CONTAINER_ROLE:-${SNOWFLAKE_ROLE}}"  # Use SNOWFLAKE_ROLE if not specified
 SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
 DATABASE_NAME="${DATABASE_NAME:-BORDEREAU_PROCESSING_PIPELINE}"
 SCHEMA_NAME="${SCHEMA_NAME:-PUBLIC}"
+
+# Auto-detect Snowflake account if not set
+detect_snowflake_account() {
+    if [ -n "$SNOWFLAKE_ACCOUNT" ]; then
+        return 0  # Already set, no need to detect
+    fi
+    
+    # Try to get account from connections.toml
+    local connections_file="$HOME/.snowflake/connections.toml"
+    if [ -f "$connections_file" ]; then
+        # Get the connection name to use
+        local conn_name="$SNOWFLAKE_CONNECTION"
+        if [ -z "$conn_name" ]; then
+            # Get default connection
+            conn_name=$(grep "default_connection_name" "$connections_file" | cut -d'"' -f2 | tr -d ' ')
+        fi
+        
+        if [ -n "$conn_name" ]; then
+            # Extract account from the connection section
+            SNOWFLAKE_ACCOUNT=$(awk -v conn="[$conn_name]" '
+                $0 == conn { found=1; next }
+                found && /^\[/ { found=0 }
+                found && /^account/ { gsub(/[" ]/, "", $3); print $3; exit }
+            ' "$connections_file")
+        fi
+    fi
+    
+    # Fallback: try to detect from current session
+    if [ -z "$SNOWFLAKE_ACCOUNT" ]; then
+        SNOWFLAKE_ACCOUNT=$(snow sql -q "SELECT CURRENT_ACCOUNT()" --format json 2>/dev/null | jq -r '.[0].CURRENT_ACCOUNT' 2>/dev/null || echo "")
+    fi
+    
+    if [ -z "$SNOWFLAKE_ACCOUNT" ]; then
+        log_error "Could not detect Snowflake account. Please set SNOWFLAKE_ACCOUNT in config or environment."
+        exit 1
+    fi
+}
+
+# Detect account before proceeding
+detect_snowflake_account
 
 # Service configuration
 SERVICE_NAME="${SERVICE_NAME:-BORDEREAU_APP}"

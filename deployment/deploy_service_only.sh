@@ -33,7 +33,7 @@ source "$SCRIPT_DIR/default.config" 2>/dev/null || true
 # Configuration defaults
 SNOWFLAKE_CONNECTION="${SNOWFLAKE_CONNECTION:-}"
 USE_DEFAULT_CONNECTION="${USE_DEFAULT_CONNECTION:-true}"
-SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-SFSENORTHAMERICA-TBOON_AWS2}"
+SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-}"  # Will be auto-detected if not set
 SNOWFLAKE_USER="${SNOWFLAKE_USER:-DEMO_SVC}"
 SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-SYSADMIN}"
 CONTAINER_ROLE="${CONTAINER_ROLE:-${SNOWFLAKE_ROLE}}"
@@ -57,6 +57,40 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${CYAN}[STEP]${NC} $1"; }
+
+# Auto-detect Snowflake account if not set
+detect_snowflake_account() {
+    if [ -n "$SNOWFLAKE_ACCOUNT" ]; then
+        return 0  # Already set
+    fi
+    
+    local connections_file="$HOME/.snowflake/connections.toml"
+    if [ -f "$connections_file" ]; then
+        local conn_name="$SNOWFLAKE_CONNECTION"
+        if [ -z "$conn_name" ]; then
+            conn_name=$(grep "default_connection_name" "$connections_file" | cut -d'"' -f2 | tr -d ' ')
+        fi
+        
+        if [ -n "$conn_name" ]; then
+            SNOWFLAKE_ACCOUNT=$(awk -v conn="[$conn_name]" '
+                $0 == conn { found=1; next }
+                found && /^\[/ { found=0 }
+                found && /^account/ { gsub(/[" ]/, "", $3); print $3; exit }
+            ' "$connections_file")
+        fi
+    fi
+    
+    if [ -z "$SNOWFLAKE_ACCOUNT" ]; then
+        SNOWFLAKE_ACCOUNT=$(snow sql -q "SELECT CURRENT_ACCOUNT()" --format json 2>/dev/null | jq -r '.[0].CURRENT_ACCOUNT' 2>/dev/null || echo "")
+    fi
+    
+    if [ -z "$SNOWFLAKE_ACCOUNT" ]; then
+        log_error "Could not detect Snowflake account"
+        exit 1
+    fi
+}
+
+detect_snowflake_account
 
 execute_sql() {
     local sql="$1"

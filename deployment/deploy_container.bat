@@ -15,7 +15,10 @@ for %%i in ("%SCRIPT_DIR%..") do set "PROJECT_ROOT=%%~fi"
 cd /d "%PROJECT_ROOT%"
 
 REM Configuration
-if "%SNOWFLAKE_ACCOUNT%"=="" set "SNOWFLAKE_ACCOUNT=SFSENORTHAMERICA-TBOON_AWS2"
+if "%SNOWFLAKE_ACCOUNT%"=="" (
+    REM Try to detect account from connections.toml
+    call :detect_snowflake_account
+)
 if "%SNOWFLAKE_USER%"=="" set "SNOWFLAKE_USER=DEMO_SVC"
 if "%SNOWFLAKE_ROLE%"=="" set "SNOWFLAKE_ROLE=BORDEREAU_PROCESSING_PIPELINE_ADMIN"
 if "%SNOWFLAKE_WAREHOUSE%"=="" set "SNOWFLAKE_WAREHOUSE=COMPUTE_WH"
@@ -505,4 +508,99 @@ echo     manage_services.bat status
 echo.
 echo ================================================================
 echo.
+exit /b 0
+
+REM ============================================
+REM Helper Functions
+REM ============================================
+
+:detect_snowflake_account
+REM Try to detect Snowflake account from connections.toml
+set "CONNECTIONS_FILE=%USERPROFILE%\.snowflake\connections.toml"
+
+if not exist "%CONNECTIONS_FILE%" (
+    echo [WARNING] Could not find connections.toml, using fallback query
+    goto :detect_from_query
+)
+
+REM Try to read account from connections.toml
+REM First, get the default connection name
+for /f "tokens=2 delims==" %%a in ('findstr /C:"default_connection_name" "%CONNECTIONS_FILE%"') do (
+    set "DEFAULT_CONN=%%a"
+    REM Remove quotes and spaces
+    set "DEFAULT_CONN=!DEFAULT_CONN:"=!"
+    set "DEFAULT_CONN=!DEFAULT_CONN: =!"
+)
+
+if not defined DEFAULT_CONN (
+    echo [WARNING] Could not find default connection
+    goto :detect_from_query
+)
+
+REM Now find the account for that connection
+set "IN_SECTION="
+for /f "usebackq tokens=*" %%a in ("%CONNECTIONS_FILE%") do (
+    set "LINE=%%a"
+    
+    REM Check if we're entering the right section
+    echo !LINE! | findstr /C:"[!DEFAULT_CONN!]" >nul
+    if !errorlevel! equ 0 (
+        set "IN_SECTION=1"
+    )
+    
+    REM Check if we're entering a different section
+    echo !LINE! | findstr /R /C:"^\[.*\]$" >nul
+    if !errorlevel! equ 0 (
+        echo !LINE! | findstr /C:"[!DEFAULT_CONN!]" >nul
+        if !errorlevel! neq 0 (
+            set "IN_SECTION="
+        )
+    )
+    
+    REM If we're in the right section, look for account
+    if defined IN_SECTION (
+        echo !LINE! | findstr /C:"account" >nul
+        if !errorlevel! equ 0 (
+            for /f "tokens=2 delims==" %%b in ("!LINE!") do (
+                set "SNOWFLAKE_ACCOUNT=%%b"
+                REM Remove quotes and spaces
+                set "SNOWFLAKE_ACCOUNT=!SNOWFLAKE_ACCOUNT:"=!"
+                set "SNOWFLAKE_ACCOUNT=!SNOWFLAKE_ACCOUNT: =!"
+                echo [INFO] Detected account from connections.toml: !SNOWFLAKE_ACCOUNT!
+                goto :detect_done
+            )
+        )
+    )
+)
+
+:detect_from_query
+REM Fallback: Query Snowflake for current account
+echo [INFO] Attempting to detect account from Snowflake query...
+for /f "tokens=*" %%a in ('snow sql -q "SELECT CURRENT_ACCOUNT()" --format json 2^>nul') do (
+    set "QUERY_RESULT=%%a"
+)
+
+REM Try to parse JSON (basic parsing without jq)
+echo %QUERY_RESULT% | findstr /C:"CURRENT_ACCOUNT" >nul
+if !errorlevel! equ 0 (
+    REM Extract account from JSON (very basic parsing)
+    for /f "tokens=2 delims=:" %%b in ('echo %QUERY_RESULT% ^| findstr /C:"CURRENT_ACCOUNT"') do (
+        set "ACCOUNT_RAW=%%b"
+        REM Remove quotes, commas, brackets, spaces
+        set "ACCOUNT_RAW=!ACCOUNT_RAW:"=!"
+        set "ACCOUNT_RAW=!ACCOUNT_RAW:,=!"
+        set "ACCOUNT_RAW=!ACCOUNT_RAW:}=!"
+        set "ACCOUNT_RAW=!ACCOUNT_RAW: =!"
+        set "SNOWFLAKE_ACCOUNT=!ACCOUNT_RAW!"
+        echo [INFO] Detected account from query: !SNOWFLAKE_ACCOUNT!
+        goto :detect_done
+    )
+)
+
+REM If all detection failed, error out
+echo [ERROR] Could not detect Snowflake account
+echo [ERROR] Please set SNOWFLAKE_ACCOUNT environment variable
+exit /b 1
+
+:detect_done
 exit /b 0

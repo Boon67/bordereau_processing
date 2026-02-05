@@ -157,13 +157,30 @@ class Settings(BaseSettings):
             
             # Get environment variables set by SPCS
             snowflake_host = os.getenv('SNOWFLAKE_HOST')
-            snowflake_account = os.getenv('SNOWFLAKE_ACCOUNT')
+            snowflake_account_env = os.getenv('SNOWFLAKE_ACCOUNT')
             snowflake_database = os.getenv('SNOWFLAKE_DATABASE')
             snowflake_schema = os.getenv('SNOWFLAKE_SCHEMA')
             
-            if not snowflake_host or not snowflake_account:
-                logger.warning("SPCS token found but required environment variables not set")
+            if not snowflake_host:
+                logger.warning("SPCS token found but SNOWFLAKE_HOST not set")
                 return None
+            
+            # Extract account from host URL (more reliable than SNOWFLAKE_ACCOUNT env var)
+            # Host format: <account>.snowflakecomputing.com or <account>.<region>.<cloud>.snowflakecomputing.com
+            # Examples:
+            #   - hlc77443.va4.us-east-1.aws.snowflakecomputing.com -> hlc77443.va4.us-east-1.aws
+            #   - myaccount.snowflakecomputing.com -> myaccount
+            try:
+                host_parts = snowflake_host.split('.snowflakecomputing.com')[0]
+                snowflake_account = host_parts
+                logger.info(f"Extracted account from host: {snowflake_account}")
+            except Exception as e:
+                logger.warning(f"Could not extract account from host {snowflake_host}: {e}")
+                # Fallback to env var if extraction fails
+                snowflake_account = snowflake_account_env
+                if not snowflake_account:
+                    logger.warning("SPCS token found but could not determine account")
+                    return None
             
             config = {
                 'host': snowflake_host,
