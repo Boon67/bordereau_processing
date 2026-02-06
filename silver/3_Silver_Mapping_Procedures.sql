@@ -502,6 +502,10 @@ def auto_map_fields_llm(session, source_table, target_table, tpa, model_name, cu
         if not isinstance(mappings, list):
             return "LLM response is not a JSON array"
         
+        # Validate target_table was provided
+        if not target_table:
+            return f"Error: target_table parameter is required for validation"
+        
         # Get valid target columns for validation
         valid_columns_query = f"""
             SELECT DISTINCT column_name
@@ -538,6 +542,14 @@ def auto_map_fields_llm(session, source_table, target_table, tpa, model_name, cu
                 skipped_columns.append(f"{target_column} (suggested by LLM but not in schema)")
                 continue
             
+            # Escape single quotes for SQL
+            source_field_escaped = source_field.replace("'", "''")
+            source_table_escaped = source_table.replace("'", "''")
+            target_table_escaped = target_table_name.replace("'", "''")
+            target_column_escaped = target_column.replace("'", "''")
+            tpa_escaped = tpa.replace("'", "''")
+            reasoning_escaped = reasoning.replace("'", "''")
+            
             insert_query = f"""
                 INSERT INTO field_mappings (
                     source_field, source_table, target_table, target_column, tpa,
@@ -545,15 +557,15 @@ def auto_map_fields_llm(session, source_table, target_table, tpa, model_name, cu
                     description
                 )
                 VALUES (
-                    '{source_field}',
-                    '{source_table}',
-                    '{target_table_name}',
-                    '{target_column}',
-                    '{tpa}',
+                    '{source_field_escaped}',
+                    '{source_table_escaped}',
+                    '{target_table_escaped}',
+                    '{target_column_escaped}',
+                    '{tpa_escaped}',
                     'LLM_CORTEX',
                     {confidence},
                     FALSE,
-                    'LLM: {model_name} - {reasoning}'
+                    'LLM: {model_name} - {reasoning_escaped}'
                 )
             """
             

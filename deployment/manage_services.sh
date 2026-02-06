@@ -343,24 +343,39 @@ show_endpoints() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    local backend_endpoint=$(get_service_endpoint "$BACKEND_SERVICE_NAME")
-    local frontend_endpoint=$(get_service_endpoint "$FRONTEND_SERVICE_NAME")
+    detect_service_model
     
-    echo -e "${CYAN}Backend (API):${NC}"
-    if [ "$backend_endpoint" != "provisioning" ]; then
-        echo -e "  ${GREEN}${backend_endpoint}${NC}"
-        echo -e "  Test: ${BLUE}curl ${backend_endpoint}/api/health${NC}"
+    if [ "$USE_UNIFIED_SERVICE" == "true" ]; then
+        local endpoint=$(get_service_endpoint "$UNIFIED_SERVICE_NAME")
+        
+        echo -e "${MAGENTA}Unified Service (Frontend + Backend):${NC}"
+        if [ "$endpoint" != "provisioning" ]; then
+            echo -e "  ${GREEN}${endpoint}${NC}"
+            echo -e "  Open:     ${BLUE}${endpoint}${NC}"
+            echo -e "  API Test: ${BLUE}curl ${endpoint}/api/health${NC}"
+        else
+            echo -e "  ${YELLOW}Provisioning in progress...${NC}"
+        fi
     else
-        echo -e "  ${YELLOW}Provisioning in progress...${NC}"
-    fi
-    
-    echo ""
-    echo -e "${MAGENTA}Frontend (UI):${NC}"
-    if [ "$frontend_endpoint" != "provisioning" ]; then
-        echo -e "  ${GREEN}${frontend_endpoint}${NC}"
-        echo -e "  Open: ${BLUE}${frontend_endpoint}${NC}"
-    else
-        echo -e "  ${YELLOW}Provisioning in progress...${NC}"
+        local backend_endpoint=$(get_service_endpoint "$BACKEND_SERVICE_NAME")
+        local frontend_endpoint=$(get_service_endpoint "$FRONTEND_SERVICE_NAME")
+        
+        echo -e "${CYAN}Backend (API):${NC}"
+        if [ "$backend_endpoint" != "provisioning" ]; then
+            echo -e "  ${GREEN}${backend_endpoint}${NC}"
+            echo -e "  Test: ${BLUE}curl ${backend_endpoint}/api/health${NC}"
+        else
+            echo -e "  ${YELLOW}Provisioning in progress...${NC}"
+        fi
+        
+        echo ""
+        echo -e "${MAGENTA}Frontend (UI):${NC}"
+        if [ "$frontend_endpoint" != "provisioning" ]; then
+            echo -e "  ${GREEN}${frontend_endpoint}${NC}"
+            echo -e "  Open: ${BLUE}${frontend_endpoint}${NC}"
+        else
+            echo -e "  ${YELLOW}Provisioning in progress...${NC}"
+        fi
     fi
     echo ""
 }
@@ -607,12 +622,21 @@ show_all() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    echo -e "${CYAN}Backend (last 10 lines):${NC}"
-    execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${BACKEND_SERVICE_NAME}', '0', 'backend', 10)"
-    echo ""
-    
-    echo -e "${MAGENTA}Frontend (last 10 lines):${NC}"
-    execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${FRONTEND_SERVICE_NAME}', '0', 'frontend', 10)"
+    if [ "$USE_UNIFIED_SERVICE" == "true" ]; then
+        echo -e "${CYAN}Backend (last 10 lines):${NC}"
+        execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}', '0', 'backend', 10)"
+        echo ""
+        
+        echo -e "${MAGENTA}Frontend (last 10 lines):${NC}"
+        execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${UNIFIED_SERVICE_NAME}', '0', 'frontend', 10)"
+    else
+        echo -e "${CYAN}Backend (last 10 lines):${NC}"
+        execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${BACKEND_SERVICE_NAME}', '0', 'backend', 10)"
+        echo ""
+        
+        echo -e "${MAGENTA}Frontend (last 10 lines):${NC}"
+        execute_sql "CALL SYSTEM\\\$GET_SERVICE_LOGS('${DATABASE_NAME}.${SCHEMA_NAME}.${FRONTEND_SERVICE_NAME}', '0', 'frontend', 10)"
+    fi
     echo ""
 }
 
@@ -627,55 +651,95 @@ health_check() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    local backend_endpoint=$(get_service_endpoint "$BACKEND_SERVICE_NAME")
-    local frontend_endpoint=$(get_service_endpoint "$FRONTEND_SERVICE_NAME")
+    detect_service_model
     
-    # Check backend
-    echo -e "${CYAN}Backend Health:${NC}"
-    if [ "$backend_endpoint" != "provisioning" ]; then
-        local response=$(curl -s -w "\n%{http_code}" "${backend_endpoint}/api/health" 2>/dev/null || echo "000")
-        local http_code=$(echo "$response" | tail -n1)
-        local body=$(echo "$response" | head -n-1)
+    if [ "$USE_UNIFIED_SERVICE" == "true" ]; then
+        # Unified service - single endpoint serves both frontend and backend via proxy
+        local endpoint=$(get_service_endpoint "$UNIFIED_SERVICE_NAME")
         
-        if [ "$http_code" == "200" ]; then
-            echo -e "  ${GREEN}✓ Healthy (HTTP $http_code)${NC}"
-            echo -e "  Response: $body"
+        echo -e "${CYAN}Backend Health (via API proxy):${NC}"
+        if [ "$endpoint" != "provisioning" ]; then
+            local response=$(curl -s -w "\n%{http_code}" "${endpoint}/api/health" 2>/dev/null || echo "000")
+            local http_code=$(echo "$response" | tail -n1)
+            local body=$(echo "$response" | head -n-1)
+            
+            if [ "$http_code" == "200" ]; then
+                echo -e "  ${GREEN}✓ Healthy (HTTP $http_code)${NC}"
+                echo -e "  Response: $body"
+            else
+                echo -e "  ${RED}✗ Unhealthy (HTTP $http_code)${NC}"
+            fi
         else
-            echo -e "  ${RED}✗ Unhealthy (HTTP $http_code)${NC}"
-        fi
-    else
-        echo -e "  ${YELLOW}⚠ Endpoint not ready${NC}"
-    fi
-    
-    echo ""
-    
-    # Check frontend
-    echo -e "${MAGENTA}Frontend Health:${NC}"
-    if [ "$frontend_endpoint" != "provisioning" ]; then
-        local response=$(curl -s -w "\n%{http_code}" "${frontend_endpoint}/" 2>/dev/null || echo "000")
-        local http_code=$(echo "$response" | tail -n1)
-        
-        if [ "$http_code" == "200" ]; then
-            echo -e "  ${GREEN}✓ Accessible (HTTP $http_code)${NC}"
-        else
-            echo -e "  ${RED}✗ Not accessible (HTTP $http_code)${NC}"
+            echo -e "  ${YELLOW}⚠ Endpoint not ready${NC}"
         fi
         
-        # Check API proxy
         echo ""
-        echo -e "  ${BLUE}Testing API proxy...${NC}"
-        local api_response=$(curl -s -w "\n%{http_code}" "${frontend_endpoint}/api/health" 2>/dev/null || echo "000")
-        local api_http_code=$(echo "$api_response" | tail -n1)
-        local api_body=$(echo "$api_response" | head -n-1)
         
-        if [ "$api_http_code" == "200" ]; then
-            echo -e "  ${GREEN}✓ API proxy working (HTTP $api_http_code)${NC}"
-            echo -e "  Response: $api_body"
+        echo -e "${MAGENTA}Frontend Health:${NC}"
+        if [ "$endpoint" != "provisioning" ]; then
+            local response=$(curl -s -w "\n%{http_code}" "${endpoint}/" 2>/dev/null || echo "000")
+            local http_code=$(echo "$response" | tail -n1)
+            
+            if [ "$http_code" == "200" ]; then
+                echo -e "  ${GREEN}✓ Accessible (HTTP $http_code)${NC}"
+            else
+                echo -e "  ${RED}✗ Not accessible (HTTP $http_code)${NC}"
+            fi
         else
-            echo -e "  ${RED}✗ API proxy not working (HTTP $api_http_code)${NC}"
+            echo -e "  ${YELLOW}⚠ Endpoint not ready${NC}"
         fi
     else
-        echo -e "  ${YELLOW}⚠ Endpoint not ready${NC}"
+        # Separate services
+        local backend_endpoint=$(get_service_endpoint "$BACKEND_SERVICE_NAME")
+        local frontend_endpoint=$(get_service_endpoint "$FRONTEND_SERVICE_NAME")
+        
+        # Check backend
+        echo -e "${CYAN}Backend Health:${NC}"
+        if [ "$backend_endpoint" != "provisioning" ]; then
+            local response=$(curl -s -w "\n%{http_code}" "${backend_endpoint}/api/health" 2>/dev/null || echo "000")
+            local http_code=$(echo "$response" | tail -n1)
+            local body=$(echo "$response" | head -n-1)
+            
+            if [ "$http_code" == "200" ]; then
+                echo -e "  ${GREEN}✓ Healthy (HTTP $http_code)${NC}"
+                echo -e "  Response: $body"
+            else
+                echo -e "  ${RED}✗ Unhealthy (HTTP $http_code)${NC}"
+            fi
+        else
+            echo -e "  ${YELLOW}⚠ Endpoint not ready${NC}"
+        fi
+        
+        echo ""
+        
+        # Check frontend
+        echo -e "${MAGENTA}Frontend Health:${NC}"
+        if [ "$frontend_endpoint" != "provisioning" ]; then
+            local response=$(curl -s -w "\n%{http_code}" "${frontend_endpoint}/" 2>/dev/null || echo "000")
+            local http_code=$(echo "$response" | tail -n1)
+            
+            if [ "$http_code" == "200" ]; then
+                echo -e "  ${GREEN}✓ Accessible (HTTP $http_code)${NC}"
+            else
+                echo -e "  ${RED}✗ Not accessible (HTTP $http_code)${NC}"
+            fi
+            
+            # Check API proxy
+            echo ""
+            echo -e "  ${BLUE}Testing API proxy...${NC}"
+            local api_response=$(curl -s -w "\n%{http_code}" "${frontend_endpoint}/api/health" 2>/dev/null || echo "000")
+            local api_http_code=$(echo "$api_response" | tail -n1)
+            local api_body=$(echo "$api_response" | head -n-1)
+            
+            if [ "$api_http_code" == "200" ]; then
+                echo -e "  ${GREEN}✓ API proxy working (HTTP $api_http_code)${NC}"
+                echo -e "  Response: $api_body"
+            else
+                echo -e "  ${RED}✗ API proxy not working (HTTP $api_http_code)${NC}"
+            fi
+        else
+            echo -e "  ${YELLOW}⚠ Endpoint not ready${NC}"
+        fi
     fi
     
     echo ""
