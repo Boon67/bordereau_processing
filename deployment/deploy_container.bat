@@ -15,8 +15,13 @@ for %%i in ("%SCRIPT_DIR%..") do set "PROJECT_ROOT=%%~fi"
 cd /d "%PROJECT_ROOT%"
 
 REM Configuration
+if "%SNOWFLAKE_CONNECTION%"=="" (
+    REM Try to detect default connection
+    for /f "tokens=*" %%i in ('snow connection list --format json 2^>nul ^| jq -r ".[] | select(.is_default == true) | .connection_name" 2^>nul') do set "SNOWFLAKE_CONNECTION=%%i"
+    if "!SNOWFLAKE_CONNECTION!"=="" set "SNOWFLAKE_CONNECTION=default"
+)
 if "%SNOWFLAKE_ACCOUNT%"=="" (
-    REM Try to detect account from connections.toml
+    REM Try to detect account from connection
     call :detect_snowflake_account
 )
 if "%SNOWFLAKE_USER%"=="" set "SNOWFLAKE_USER=DEMO_SVC"
@@ -76,9 +81,9 @@ if errorlevel 1 (
     echo [WARNING] jq not found (optional but recommended)
 )
 
-snow connection test --connection DEPLOYMENT >nul 2>&1
+snow connection test --connection %SNOWFLAKE_CONNECTION% >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Snowflake connection test failed
+    echo [ERROR] Snowflake connection test failed for connection: %SNOWFLAKE_CONNECTION%
     exit /b 1
 )
 
@@ -101,7 +106,7 @@ if errorlevel 1 exit /b 1
 
 REM Docker login
 echo [5/10] Logging into Docker registry...
-snow spcs image-registry login --connection DEPLOYMENT
+snow spcs image-registry login --connection %SNOWFLAKE_CONNECTION%
 if errorlevel 1 (
     echo [ERROR] Docker login failed
     exit /b 1
@@ -146,7 +151,7 @@ REM Functions
 REM ============================================
 
 :create_compute_pool
-snow sql -q "SHOW COMPUTE POOLS LIKE '%COMPUTE_POOL_NAME%'" --connection DEPLOYMENT --format json >nul 2>&1
+snow sql -q "SHOW COMPUTE POOLS LIKE '%COMPUTE_POOL_NAME%'" --connection %SNOWFLAKE_CONNECTION% --format json >nul 2>&1
 if not errorlevel 1 (
     echo [INFO] Compute pool already exists: %COMPUTE_POOL_NAME%
     exit /b 0
@@ -165,7 +170,7 @@ echo     AUTO_RESUME = TRUE >> %TEMP%\create_pool.sql
 echo     AUTO_SUSPEND_SECS = 3600 >> %TEMP%\create_pool.sql
 echo     COMMENT = 'Compute pool for Bordereau unified service'; >> %TEMP%\create_pool.sql
 
-snow sql -f %TEMP%\create_pool.sql --connection DEPLOYMENT >nul 2>&1
+snow sql -f %TEMP%\create_pool.sql --connection %SNOWFLAKE_CONNECTION% >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Failed to create compute pool
     exit /b 1
@@ -176,7 +181,7 @@ echo [SUCCESS] Compute pool created: %COMPUTE_POOL_NAME%
 exit /b 0
 
 :create_image_repository
-snow sql -q "SHOW IMAGE REPOSITORIES LIKE '%REPOSITORY_NAME%'" --connection DEPLOYMENT --format json >nul 2>&1
+snow sql -q "SHOW IMAGE REPOSITORIES LIKE '%REPOSITORY_NAME%'" --connection %SNOWFLAKE_CONNECTION% --format json >nul 2>&1
 if not errorlevel 1 (
     echo [INFO] Image repository already exists: %REPOSITORY_NAME%
     exit /b 0
@@ -190,7 +195,7 @@ echo USE SCHEMA %SCHEMA_NAME%; >> %TEMP%\create_repo.sql
 echo CREATE IMAGE REPOSITORY %REPOSITORY_NAME% >> %TEMP%\create_repo.sql
 echo     COMMENT = 'Container images for Bordereau unified service'; >> %TEMP%\create_repo.sql
 
-snow sql -f %TEMP%\create_repo.sql --connection DEPLOYMENT >nul 2>&1
+snow sql -f %TEMP%\create_repo.sql --connection %SNOWFLAKE_CONNECTION% >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Failed to create image repository
     exit /b 1
@@ -201,7 +206,7 @@ echo [SUCCESS] Image repository created: %REPOSITORY_NAME%
 exit /b 0
 
 :get_repository_url
-for /f "tokens=*" %%i in ('snow spcs image-repository url "%REPOSITORY_NAME%" --connection DEPLOYMENT --database "%DATABASE_NAME%" --schema "%SCHEMA_NAME%" 2^>nul') do set "REPOSITORY_URL=%%i"
+for /f "tokens=*" %%i in ('snow spcs image-repository url "%REPOSITORY_NAME%" --connection %SNOWFLAKE_CONNECTION% --database "%DATABASE_NAME%" --schema "%SCHEMA_NAME%" 2^>nul') do set "REPOSITORY_URL=%%i"
 
 REM Convert to lowercase
 for %%L in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do (
@@ -366,14 +371,14 @@ exit /b 0
 
 :deploy_service
 echo [INFO] Creating stage for service specifications...
-snow sql -q "USE DATABASE %DATABASE_NAME%; USE SCHEMA %SCHEMA_NAME%; CREATE STAGE IF NOT EXISTS SERVICE_SPECS COMMENT = 'Stage for Snowpark Container Service specifications';" --connection DEPLOYMENT >nul 2>&1
+snow sql -q "USE DATABASE %DATABASE_NAME%; USE SCHEMA %SCHEMA_NAME%; CREATE STAGE IF NOT EXISTS SERVICE_SPECS COMMENT = 'Stage for Snowpark Container Service specifications';" --connection %SNOWFLAKE_CONNECTION% >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Failed to create stage
     exit /b 1
 )
 
 echo [INFO] Uploading service specification...
-snow sql -q "USE DATABASE %DATABASE_NAME%; USE SCHEMA %SCHEMA_NAME%; PUT file://%TEMP:\=/%/unified_service_spec.yaml @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE;" --connection DEPLOYMENT >nul 2>&1
+snow sql -q "USE DATABASE %DATABASE_NAME%; USE SCHEMA %SCHEMA_NAME%; PUT file://%TEMP:\=/%/unified_service_spec.yaml @SERVICE_SPECS AUTO_COMPRESS=FALSE OVERWRITE=TRUE;" --connection %SNOWFLAKE_CONNECTION% >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Failed to upload service specification
     exit /b 1
@@ -425,7 +430,7 @@ if not errorlevel 1 (
     echo     MAX_INSTANCES = 3 >> %TEMP%\create_service.sql
     echo     COMMENT = 'Bordereau unified service (Frontend + Backend)'; >> %TEMP%\create_service.sql
     
-    snow sql -f %TEMP%\create_service.sql --connection DEPLOYMENT
+    snow sql -f %TEMP%\create_service.sql --connection %SNOWFLAKE_CONNECTION%
     if errorlevel 1 (
         echo [ERROR] Failed to create service
         exit /b 1

@@ -874,7 +874,12 @@ get_service_endpoint() {
             local ingress_url=$(echo "$endpoints" | jq -r '.[] | select(.name == "app") | .ingress_url // empty' 2>/dev/null)
             
             if [ -n "$ingress_url" ] && [ "$ingress_url" != "null" ] && [ "$ingress_url" != "" ]; then
-                SERVICE_ENDPOINT="$ingress_url"
+                # Add https:// prefix if not present
+                if [[ "$ingress_url" != http* ]]; then
+                    SERVICE_ENDPOINT="https://${ingress_url}"
+                else
+                    SERVICE_ENDPOINT="$ingress_url"
+                fi
                 log_success "Public endpoint URL obtained: $SERVICE_ENDPOINT"
                 
                 # Also get internal DNS name for reference

@@ -141,16 +141,23 @@ is_unified_service() {
 
 get_service_endpoint() {
     local service_name=$1
-    local endpoint_output=$(snow sql -q "
-        USE DATABASE ${DATABASE_NAME};
-        USE SCHEMA ${SCHEMA_NAME};
-        SHOW ENDPOINTS IN SERVICE ${service_name};
-    " --connection DEPLOYMENT --format json 2>/dev/null)
     
-    local endpoint=$(echo "$endpoint_output" | jq -r '.[2][0].ingress_url // empty' 2>/dev/null | tr -d '\n' | sed 's/ //g')
+    # Use snow spcs command to get endpoints directly
+    local endpoint_output=$(snow spcs service list-endpoints "${service_name}" \
+        --database "${DATABASE_NAME}" \
+        --schema "${SCHEMA_NAME}" \
+        --format json 2>/dev/null)
     
-    if [ -n "$endpoint" ] && [ "$endpoint" != "null" ] && [[ ! "$endpoint" =~ "provisioning" ]]; then
-        echo "https://${endpoint}"
+    # Extract ingress_url from the JSON array
+    local endpoint=$(echo "$endpoint_output" | jq -r '.[0].ingress_url // empty' 2>/dev/null | tr -d '\n' | sed 's/ //g')
+    
+    if [ -n "$endpoint" ] && [ "$endpoint" != "null" ] && [ "$endpoint" != "" ] && [[ ! "$endpoint" =~ "provisioning" ]]; then
+        # Add https:// prefix if not present
+        if [[ "$endpoint" != http* ]]; then
+            echo "https://${endpoint}"
+        else
+            echo "$endpoint"
+        fi
     else
         echo "provisioning"
     fi

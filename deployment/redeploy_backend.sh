@@ -81,12 +81,18 @@ echo -e "${BLUE}Checking logs for warehouse setup...${NC}"
 
 echo
 echo -e "${BLUE}Testing API endpoint...${NC}"
-ENDPOINT="https://f2cmn2pb-sfsenorthamerica-tboon-aws2.snowflakecomputing.app"
-echo "Testing: $ENDPOINT/api/health"
-curl -s "$ENDPOINT/api/health" | jq . || echo "Health check response"
-
-echo
-echo "Testing: $ENDPOINT/api/tpas"
+# Get endpoint dynamically from service
+ENDPOINT=$(cd "$(dirname "$0")" && ./manage_services.sh status 2>/dev/null | grep -o 'https://[^[:space:]]*snowflakecomputing.app' | head -1)
+if [ -z "$ENDPOINT" ]; then
+    echo -e "${YELLOW}Could not detect endpoint automatically${NC}"
+    echo "Please check endpoint with: ./manage_services.sh status"
+else
+    echo "Testing: $ENDPOINT/api/health"
+    curl -s "$ENDPOINT/api/health" | jq . || echo "Health check response"
+    
+    echo
+    echo "Testing: $ENDPOINT/api/tpas"
+fi
 curl -s "$ENDPOINT/api/tpas" | jq . || echo "TPAs response"
 
 echo
