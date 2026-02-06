@@ -88,30 +88,28 @@ class SnowflakeLogHandler(logging.Handler):
         try:
             sf_service = SnowflakeService()
             
-            # Build multi-row INSERT statement
-            values = []
+            # Build multi-row INSERT ... SELECT statement
+            # (Snowflake does not allow PARSE_JSON inside a VALUES clause)
+            selects = []
             for log in batch:
                 # Escape strings for SQL
                 level = log['level'].replace("'", "''")
                 source = log['source'].replace("'", "''")
                 message = log['message'].replace("'", "''")[:4000]  # Truncate long messages
                 
-                # For JSON, we need to escape for SQL string literal
-                # Convert to JSON string and escape for SQL
+                # Convert details to JSON string
                 details_json_str = json.dumps(log['details'])
-                # Escape single quotes for SQL string literal
-                details_escaped = details_json_str.replace("'", "''")
                 
-                values.append(
-                    f"('{level}', '{source}', '{message}', TO_VARIANT(PARSE_JSON($${details_json_str}$$)), CURRENT_USER(), NULL)"
+                selects.append(
+                    f"SELECT '{level}', '{source}', '{message}', TO_VARIANT(PARSE_JSON($${details_json_str}$$)), CURRENT_USER(), NULL"
                 )
             
-            values_str = ',\n'.join(values)
+            selects_str = '\nUNION ALL\n'.join(selects)
             
             query = f"""
                 INSERT INTO {settings.BRONZE_SCHEMA_NAME}.APPLICATION_LOGS 
                 (LOG_LEVEL, LOG_SOURCE, LOG_MESSAGE, LOG_DETAILS, USER_NAME, TPA_CODE)
-                VALUES {values_str}
+                {selects_str}
             """
             
             # Execute synchronously in background thread
@@ -160,7 +158,8 @@ async def log_api_request(
             # Use $$ delimiter to avoid escaping issues
             return f"TO_VARIANT(PARSE_JSON($${json_str}$$))"
         
-        # Build the query with properly escaped values
+        # Build the query using SELECT instead of VALUES
+        # (Snowflake does not allow PARSE_JSON inside a VALUES clause)
         query = f"""
             INSERT INTO {settings.BRONZE_SCHEMA_NAME}.API_REQUEST_LOGS (
                 REQUEST_METHOD,
@@ -174,7 +173,7 @@ async def log_api_request(
                 CLIENT_IP,
                 USER_AGENT,
                 TPA_CODE
-            ) VALUES (
+            ) SELECT
                 {escape_str(method)},
                 {escape_str(path)},
                 {escape_json(params)},
@@ -186,7 +185,6 @@ async def log_api_request(
                 {escape_str(client_ip)},
                 {escape_str(user_agent[:500] if user_agent else None)},
                 {escape_str(tpa_code)}
-            )
         """
         
         await sf_service.execute_query(query)
@@ -221,6 +219,8 @@ async def log_error(
         # Build context value using $$ delimiter
         context_val = f"TO_VARIANT(PARSE_JSON($${context_json_str}$$))" if context_json_str else 'NULL'
         
+        # Use SELECT instead of VALUES
+        # (Snowflake does not allow PARSE_JSON inside a VALUES clause)
         query = f"""
             INSERT INTO {settings.BRONZE_SCHEMA_NAME}.ERROR_LOGS (
                 ERROR_LEVEL,
@@ -231,7 +231,7 @@ async def log_error(
                 ERROR_CONTEXT,
                 USER_NAME,
                 TPA_CODE
-            ) VALUES (
+            ) SELECT
                 'ERROR',
                 '{source}',
                 '{error_type}',
@@ -240,7 +240,6 @@ async def log_error(
                 {context_val},
                 {f"'{user}'" if user_name else 'NULL'},
                 {f"'{tpa}'" if tpa_code else 'NULL'}
-            )
         """
         
         await sf_service.execute_query(query)
