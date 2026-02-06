@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Typography, Table, Button, Select, Space, message, Tag, Progress, Modal, Form, Input, Popconfirm, Drawer, Alert, Slider, InputNumber, Collapse, Radio, Spin } from 'antd'
-import { ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, RobotOutlined, ThunderboltOutlined, PlusOutlined, ExclamationCircleOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons'
+import { ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, RobotOutlined, ThunderboltOutlined, PlusOutlined, ExclamationCircleOutlined, SearchOutlined, FilterOutlined, WarningOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { FieldMapping } from '../services/api'
 import type { TPA } from '../types'
@@ -38,6 +38,8 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [mappingFilter, setMappingFilter] = useState<'all' | 'with-mappings' | 'no-mappings'>('all')
+  const [checkingSourceData, setCheckingSourceData] = useState(false)
+  const [sourceDataAvailability, setSourceDataAvailability] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     // Load all created tables and mappings (not filtered by TPA)
@@ -176,6 +178,70 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
     } finally {
       setLoadingCortexModels(false)
     }
+  }
+
+  const checkSourceDataAvailable = async (tpa: string): Promise<boolean> => {
+    // Check cache first
+    if (sourceDataAvailability[tpa] !== undefined) {
+      return sourceDataAvailability[tpa]
+    }
+    
+    setCheckingSourceData(true)
+    try {
+      const fields = await apiService.getSourceFields(tpa)
+      const hasData = fields.length > 0
+      setSourceDataAvailability(prev => ({ ...prev, [tpa]: hasData }))
+      return hasData
+    } catch (error) {
+      console.error('Failed to check source data availability:', error)
+      // On error, don't block - let the backend handle validation
+      return true
+    } finally {
+      setCheckingSourceData(false)
+    }
+  }
+
+  const handleMLButtonClick = async (e: React.MouseEvent, tableInfo: any) => {
+    e.stopPropagation()
+    setSelectedTable(tableInfo.physicalName)
+    
+    const hasData = await checkSourceDataAvailable(tableInfo.tpa)
+    if (!hasData) {
+      message.warning({
+        content: `No source data found for TPA "${tableInfo.tpaName}" in the RAW table. Please upload data files first using the Bronze Upload feature before running auto-mapping.`,
+        duration: 8,
+        icon: <WarningOutlined style={{ color: '#faad14' }} />,
+      })
+      return
+    }
+    
+    autoMLForm.setFieldsValue({ 
+      source_table: 'RAW_DATA_TABLE',
+      target_table: tableInfo.name 
+    })
+    setIsAutoMLDrawerVisible(true)
+  }
+
+  const handleLLMButtonClick = async (e: React.MouseEvent, tableInfo: any) => {
+    e.stopPropagation()
+    setSelectedTable(tableInfo.physicalName)
+    
+    const hasData = await checkSourceDataAvailable(tableInfo.tpa)
+    if (!hasData) {
+      message.warning({
+        content: `No source data found for TPA "${tableInfo.tpaName}" in the RAW table. Please upload data files first using the Bronze Upload feature before running auto-mapping.`,
+        duration: 8,
+        icon: <WarningOutlined style={{ color: '#faad14' }} />,
+      })
+      return
+    }
+    
+    autoLLMForm.setFieldsValue({ 
+      source_table: 'RAW_DATA_TABLE',
+      target_table: tableInfo.name 
+    })
+    setIsAutoLLMDrawerVisible(true)
+    loadCortexModels()
   }
 
   const handleApproveMapping = async (mappingId: number) => {
@@ -766,40 +832,36 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
                         <Button 
                           icon={<RobotOutlined />} 
                           size="small"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedTable(tableInfo.physicalName)
-                            autoMLForm.setFieldsValue({ 
-                              source_table: 'RAW_DATA_TABLE',
-                              target_table: tableInfo.name 
-                            })
-                            setIsAutoMLDrawerVisible(true)
-                          }}
+                          loading={checkingSourceData}
+                          onClick={(e) => handleMLButtonClick(e, tableInfo)}
                         >
                           ML
                         </Button>
                         <Button 
                           icon={<ThunderboltOutlined />} 
                           size="small"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedTable(tableInfo.physicalName)
-                            autoLLMForm.setFieldsValue({ 
-                              source_table: 'RAW_DATA_TABLE',
-                              target_table: tableInfo.name 
-                            })
-                            setIsAutoLLMDrawerVisible(true)
-                            loadCortexModels()
-                          }}
+                          loading={checkingSourceData}
+                          onClick={(e) => handleLLMButtonClick(e, tableInfo)}
                         >
                           LLM
                         </Button>
                         <Button 
                           icon={<PlusOutlined />} 
                           size="small"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation()
                             setSelectedTable(tableInfo.physicalName)
+                            
+                            const hasData = await checkSourceDataAvailable(tableInfo.tpa)
+                            if (!hasData) {
+                              message.warning({
+                                content: `No source data found for TPA "${tableInfo.tpaName}" in the RAW table. Please upload data files first using the Bronze Upload feature before creating mappings.`,
+                                duration: 8,
+                                icon: <WarningOutlined style={{ color: '#faad14' }} />,
+                              })
+                              return
+                            }
+                            
                             manualForm.resetFields()
                             manualForm.setFieldsValue({ 
                               source_table: 'RAW_DATA_TABLE',

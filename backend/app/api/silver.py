@@ -858,6 +858,50 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
     try:
         logger.info(f"Starting ML auto-mapping: source={mapping_request.source_table}, target={mapping_request.target_table}, tpa={mapping_request.tpa}")
         sf_service = SnowflakeService(caller_token=get_caller_token(request))
+        
+        # Escape single quotes for SQL safety
+        safe_table = mapping_request.target_table.replace("'", "''")
+        safe_tpa = mapping_request.tpa.replace("'", "''")
+        safe_source = mapping_request.source_table.replace("'", "''")
+        
+        # PRE-FLIGHT CHECK 1: Verify Bronze data exists for this TPA
+        logger.info(f"Pre-flight check: Checking Bronze data for TPA '{mapping_request.tpa}'")
+        bronze_check = await sf_service.execute_query_dict(f"""
+            SELECT COUNT(*) as record_count,
+                   COUNT(DISTINCT f.key) as field_count
+            FROM {settings.BRONZE_SCHEMA_NAME}.{safe_source},
+            LATERAL FLATTEN(input => RAW_DATA) f
+            WHERE RAW_DATA IS NOT NULL
+              AND TPA = '{safe_tpa}'
+            LIMIT 1000
+        """)
+        if not bronze_check or bronze_check[0].get('RECORD_COUNT', 0) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No source data found for TPA '{mapping_request.tpa}' in Bronze table '{mapping_request.source_table}'. Please upload data files first using the Bronze upload feature."
+            )
+        field_count = bronze_check[0].get('FIELD_COUNT', 0)
+        record_count = bronze_check[0].get('RECORD_COUNT', 0)
+        logger.info(f"✓ Found {record_count} records with {field_count} unique fields for TPA '{mapping_request.tpa}'")
+        
+        # PRE-FLIGHT CHECK 2: Verify target schema exists
+        logger.info(f"Pre-flight check: Verifying target schema for table '{mapping_request.target_table}'")
+        schema_check = await sf_service.execute_query_dict(f"""
+            SELECT COUNT(*) as column_count
+            FROM {settings.SILVER_SCHEMA_NAME}.target_schemas
+            WHERE table_name = '{safe_table}'
+              AND active = TRUE
+        """)
+        if not schema_check or schema_check[0].get('COLUMN_COUNT', 0) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No schema definition found for table '{mapping_request.target_table}'. Please create the table schema first using the Silver Schemas page."
+            )
+        logger.info(f"✓ Target schema '{mapping_request.target_table}' has {schema_check[0].get('COLUMN_COUNT', 0)} columns defined")
+        
+        # All pre-flight checks passed - proceed with ML mapping
+        logger.info(f"✓ Pre-flight checks passed. Proceeding with ML auto-mapping...")
+        
         result = await sf_service.execute_procedure(
             "auto_map_fields_ml",
             mapping_request.source_table,
@@ -911,6 +955,8 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
             "mappings_created": mappings_created,
             "success": mappings_created > 0 or (result and "successfully" in result.lower())
         }
+    except HTTPException:
+        raise
     except asyncio.TimeoutError:
         logger.error(f"ML auto-mapping timed out for TPA {mapping_request.tpa}")
         raise HTTPException(
