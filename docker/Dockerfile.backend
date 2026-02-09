@@ -6,6 +6,10 @@ ARG ALLOWED_LLM_MODELS="CLAUDE-4-SONNET,OPENAI-GPT-4.1"
 
 # Environment variables
 ENV ALLOWED_LLM_MODELS=${ALLOWED_LLM_MODELS}
+# Ensure Python output is sent directly to the container logs without buffering
+# Critical for capturing error output before a crash
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 

@@ -720,11 +720,12 @@ async def clear_all_data(request: Request):
             show_tables_query = f"SHOW TABLES IN SCHEMA {settings.SILVER_SCHEMA_NAME}"
             tables_result = await sf_service.execute_query(show_tables_query)
             
-            # Metadata tables to preserve
+            # Metadata tables to preserve (NEVER drop these)
             metadata_tables = [
                 'TARGET_SCHEMAS', 'FIELD_MAPPINGS', 'TRANSFORMATION_RULES',
                 'DATA_QUALITY_RULES', 'VALIDATION_RESULTS', 'TRANSFORMATION_HISTORY',
-                'CREATED_TABLES'
+                'CREATED_TABLES', 'LLM_PROMPT_TEMPLATES', 'SILVER_PROCESSING_LOG',
+                'DATA_QUALITY_METRICS', 'QUARANTINE_RECORDS', 'PROCESSING_WATERMARKS'
             ]
             
             for row in tables_result:

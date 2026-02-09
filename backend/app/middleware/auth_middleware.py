@@ -32,6 +32,12 @@ class SnowflakeAuthMiddleware(BaseHTTPMiddleware):
         # Log all headers for debugging
         logger.info(f"Request headers: {dict(request.headers)}")
         
+        # IMPORTANT: Consume request body before call_next to prevent
+        # Starlette BaseHTTPMiddleware RuntimeError: "Unexpected message received: http.request"
+        # This is a known Starlette bug when error responses are sent before the body is consumed
+        if request.method in ("POST", "PUT", "PATCH"):
+            await request.body()
+        
         # Extract Snowflake ingress auth token from cookies
         token = self._extract_ingress_token(request)
         

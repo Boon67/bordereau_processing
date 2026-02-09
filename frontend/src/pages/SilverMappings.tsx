@@ -305,19 +305,17 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
       // Reload all mappings to show any new ones
       await loadAllMappings()
       
-      // Table is already selected (we used selectedTable to get the TPA)
-      // No need to switch tables
+      // Determine success from multiple signals
+      const hasCount = result.mappings_created > 0
+      const hasSuccessFlag = result.success === true
+      const messageIndicatesSuccess = typeof result.message === 'string' && result.message.toLowerCase().includes('successfully')
       
-      // Check if mapping was successful and show appropriate message
-      if (result.mappings_created > 0) {
-        message.success(`Created ${result.mappings_created} ML-based mappings for ${schemaTableName}`)
-      } else if (result.success) {
-        // If success flag is true but mappings_created is 0, show the message
-        message.success(result.message || `Auto-mapping completed for ${schemaTableName}`)
+      if (hasCount || hasSuccessFlag || messageIndicatesSuccess) {
+        const countText = result.mappings_created > 0 ? `${result.mappings_created} ` : ''
+        message.success(`Created ${countText}ML-based mappings for ${schemaTableName}`)
       } else {
-        // Show the actual error/info message from the procedure
-        const errorMsg = result.message || result.result || 'No mappings created'
-        message.warning(errorMsg, 10) // Show for 10 seconds
+        const errorMsg = result.message || result.result || 'No new mappings were created. The source fields may already be mapped.'
+        message.warning(errorMsg, 10)
       }
     } catch (error: any) {
       setIsAutoMLDrawerVisible(false)
@@ -368,19 +366,17 @@ const SilverMappings: React.FC<SilverMappingsProps> = ({ tpas }) => {
       // Reload all mappings to show any new ones
       await loadAllMappings()
       
-      // Table is already selected (we used selectedTable to get the TPA)
-      // No need to switch tables
+      // Determine success from multiple signals
+      const hasCount = result.mappings_created > 0
+      const hasSuccessFlag = result.success === true
+      const messageIndicatesSuccess = typeof result.message === 'string' && result.message.toLowerCase().includes('successfully')
       
-      // Check if mapping was successful and show appropriate message
-      if (result.mappings_created > 0) {
-        message.success(`Created ${result.mappings_created} LLM-based mappings for ${schemaTableName}`)
-      } else if (result.success) {
-        // If success flag is true but mappings_created is 0, show the message
-        message.success(result.message || `Auto-mapping completed for ${schemaTableName}`)
+      if (hasCount || hasSuccessFlag || messageIndicatesSuccess) {
+        const countText = result.mappings_created > 0 ? `${result.mappings_created} ` : ''
+        message.success(`Created ${countText}LLM-based mappings for ${schemaTableName}`)
       } else {
-        // Show the actual error/info message from the procedure
-        const errorMsg = result.message || result.result || 'No mappings created'
-        message.warning(errorMsg, 10) // Show for 10 seconds
+        const errorMsg = result.message || result.result || 'No new mappings were created. The LLM may not have found confident matches.'
+        message.warning(errorMsg, 10)
       }
     } catch (error: any) {
       setIsAutoLLMDrawerVisible(false)

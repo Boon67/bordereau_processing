@@ -63,9 +63,18 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
                 body_bytes = await request.body()
                 if body_bytes:
                     request_body = json.loads(body_bytes.decode())
-                # Re-create request with body
+                # Re-create receive that properly handles body + disconnect sequence
+                # BaseHTTPMiddleware expects: first call returns body, subsequent calls return disconnect
+                body_sent = False
                 async def receive():
-                    return {"type": "http.request", "body": body_bytes}
+                    nonlocal body_sent
+                    if not body_sent:
+                        body_sent = True
+                        return {"type": "http.request", "body": body_bytes, "more_body": False}
+                    # After body is sent, wait indefinitely (middleware will handle disconnect)
+                    import asyncio
+                    await asyncio.sleep(3600)
+                    return {"type": "http.disconnect"}
                 request._receive = receive
             except:
                 pass

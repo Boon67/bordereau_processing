@@ -58,12 +58,20 @@ class SnowflakeService:
         else:
             logger.info(f"Initialized Snowflake service for account: {self.connection_params.get('account')}")
     
-    def get_connection(self):
-        """Get Snowflake connection with timeout settings"""
+    def get_connection(self, long_running: bool = False):
+        """Get Snowflake connection with timeout settings
+        
+        Args:
+            long_running: If True, uses extended timeouts suitable for stored procedures
+                         and long-running operations (e.g., Cortex AI calls)
+        """
         try:
             # Add timeout parameters to prevent hanging
             connection_params = self.connection_params.copy()
-            connection_params['network_timeout'] = 60  # 60 seconds for network operations
+            # Use extended timeout for long-running operations (stored procedures, Cortex AI)
+            # Default 60s is too short for LLM calls which can take 2-5 minutes
+            network_timeout = 600 if long_running else 120
+            connection_params['network_timeout'] = network_timeout
             connection_params['login_timeout'] = 30    # 30 seconds for login
             
             # Disable SSL certificate validation for stage operations
@@ -163,10 +171,24 @@ class SnowflakeService:
         return await asyncio.to_thread(self._execute_queries_same_session_sync, queries, timeout)
     
     def _execute_procedure_sync(self, procedure_name: str, *args) -> Any:
-        """Execute a stored procedure synchronously (internal use)"""
+        """Execute a stored procedure synchronously (internal use)
+        
+        Uses extended timeouts since stored procedures (especially those calling
+        Cortex AI) can take several minutes to complete.
+        """
+        import sys
         try:
-            with self.get_connection() as conn:
+            # Use long_running=True for extended network timeout (600s vs 120s)
+            # This is critical for LLM procedures that call Cortex AI
+            logger.info(f"Opening long-running connection for procedure: {procedure_name}")
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+            with self.get_connection(long_running=True) as conn:
                 with conn.cursor() as cursor:
+                    # Set extended statement timeout for procedures (10 minutes)
+                    cursor.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 600")
+                    
                     # Set database and schema context first (critical for SPCS OAuth)
                     logger.info(f"Setting database context to: {settings.DATABASE_NAME}")
                     cursor.execute(f"USE DATABASE {settings.DATABASE_NAME}")
@@ -192,7 +214,12 @@ class SnowflakeService:
                     call_stmt = f"CALL {procedure_name}({params_str})"
                     
                     logger.info(f"Executing procedure: {call_stmt}")
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    
                     cursor.execute(call_stmt)
+                    
+                    logger.info(f"Procedure {procedure_name} completed, fetching result")
                     
                     # Fetch the result
                     result = cursor.fetchone()
@@ -201,6 +228,8 @@ class SnowflakeService:
                     return None
         except Exception as e:
             logger.error(f"Procedure execution failed: {str(e)}", exc_info=True)
+            sys.stdout.flush()
+            sys.stderr.flush()
             raise
     
     async def execute_procedure(self, procedure_name: str, *args) -> Any:

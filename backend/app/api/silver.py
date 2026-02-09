@@ -902,6 +902,22 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
         # All pre-flight checks passed - proceed with ML mapping
         logger.info(f"✓ Pre-flight checks passed. Proceeding with ML auto-mapping...")
         
+        # Count existing mappings BEFORE the procedure runs (for reliable delta)
+        count_before = 0
+        try:
+            before_query = f"""
+                SELECT COUNT(*) as count 
+                FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
+                WHERE TARGET_TABLE = '{safe_table}' 
+                AND TPA = '{safe_tpa}'
+                AND MAPPING_METHOD LIKE 'ML%'
+            """
+            before_result = await sf_service.execute_query_dict(before_query)
+            count_before = before_result[0].get('COUNT', 0) if before_result else 0
+            logger.info(f"ML mappings before procedure: {count_before}")
+        except Exception as e:
+            logger.warning(f"Could not count existing ML mappings: {e}")
+        
         result = await sf_service.execute_procedure(
             "auto_map_fields_ml",
             mapping_request.source_table,
@@ -912,48 +928,36 @@ async def auto_map_fields_ml(request: Request, mapping_request: AutoMapMLRequest
         )
         logger.info(f"ML auto-mapping completed. Result type: {type(result)}, Result value: {result}")
         
-        # Parse the result string to extract number of mappings created
-        # Result format: "Successfully generated X ML-based field mappings..."
+        # Count mappings AFTER the procedure to get reliable delta
         mappings_created = 0
-        if result and isinstance(result, str):
-            import re
-            match = re.search(r'generated (\d+)', result)
-            if match:
-                mappings_created = int(match.group(1))
-                logger.info(f"Extracted mappings_created from result: {mappings_created}")
-            else:
-                logger.warning(f"Could not extract mapping count from result string: {result}")
-        
-        # If result is None or empty, check if mappings were actually created by querying
-        if not result or mappings_created == 0:
-            # Query to check if mappings exist for this table/TPA
-            # Escape single quotes in table name and TPA to prevent SQL errors
-            safe_table = mapping_request.target_table.replace("'", "''")
-            safe_tpa = mapping_request.tpa.replace("'", "''")
-            
-            check_query = f"""
+        try:
+            after_query = f"""
                 SELECT COUNT(*) as count 
                 FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
                 WHERE TARGET_TABLE = '{safe_table}' 
                 AND TPA = '{safe_tpa}'
                 AND MAPPING_METHOD LIKE 'ML%'
             """
-            try:
-                mapping_check = await sf_service.execute_query_dict(check_query)
-                if mapping_check and len(mapping_check) > 0:
-                    actual_count = mapping_check[0].get('COUNT', 0)
-                    if actual_count > 0:
-                        mappings_created = actual_count
-                        result = f"Successfully generated {actual_count} ML-based field mappings"
-                        logger.info(f"Verified {actual_count} ML mappings in database")
-            except Exception as check_error:
-                logger.warning(f"Could not verify mapping count: {check_error}")
+            after_result = await sf_service.execute_query_dict(after_query)
+            count_after = after_result[0].get('COUNT', 0) if after_result else 0
+            mappings_created = max(0, count_after - count_before)
+            logger.info(f"ML mappings after procedure: {count_after}, new mappings created: {mappings_created}")
+        except Exception as e:
+            logger.warning(f"Could not count ML mappings after procedure: {e}")
+        
+        # Fallback: try to parse the result string if DB count failed
+        if mappings_created == 0 and result and isinstance(result, str):
+            import re
+            match = re.search(r'generated (\d+)', result)
+            if match:
+                mappings_created = int(match.group(1))
+                logger.info(f"Extracted mappings_created from result string: {mappings_created}")
         
         return {
-            "message": result if result else "ML auto-mapping completed",
+            "message": result if result else f"ML auto-mapping completed ({mappings_created} mappings created)",
             "result": result,
             "mappings_created": mappings_created,
-            "success": mappings_created > 0 or (result and "successfully" in result.lower())
+            "success": mappings_created > 0 or (result and isinstance(result, str) and "successfully" in result.lower())
         }
     except HTTPException:
         raise
@@ -1087,6 +1091,23 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
         logger.info(f"  - Target: {mapping_request.target_table} ({column_count} columns)")
         logger.info(f"  - Model: {mapping_request.model_name}")
         
+        # Count existing LLM mappings BEFORE the procedure runs (for reliable delta)
+        count_before = 0
+        try:
+            before_query = f"""
+                SELECT COUNT(*) as count 
+                FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
+                WHERE TARGET_TABLE = '{safe_table}' 
+                AND TPA = '{safe_tpa}'
+                AND MAPPING_METHOD LIKE 'LLM%'
+                AND ACTIVE = TRUE
+            """
+            before_result = await sf_service.execute_query_dict(before_query)
+            count_before = before_result[0].get('COUNT', 0) if before_result else 0
+            logger.info(f"LLM mappings before procedure: {count_before}")
+        except Exception as e:
+            logger.warning(f"Could not count existing LLM mappings: {e}")
+        
         result = await sf_service.execute_procedure(
             "auto_map_fields_llm",
             mapping_request.source_table,
@@ -1127,64 +1148,37 @@ async def auto_map_fields_llm(request: Request, mapping_request: AutoMapLLMReque
                     # Generic error from procedure
                     raise HTTPException(status_code=500, detail=f"LLM mapping failed: {result}")
         
-        # Parse the result string to extract number of mappings created
-        # Result format: "Successfully generated X LLM-based field mappings..."
+        # Count mappings AFTER the procedure to get reliable delta
         mappings_created = 0
-        if result and isinstance(result, str):
+        try:
+            after_query = f"""
+                SELECT COUNT(*) as count 
+                FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
+                WHERE TARGET_TABLE = '{safe_table}' 
+                AND TPA = '{safe_tpa}'
+                AND MAPPING_METHOD LIKE 'LLM%'
+                AND ACTIVE = TRUE
+            """
+            after_result = await sf_service.execute_query_dict(after_query)
+            count_after = after_result[0].get('COUNT', 0) if after_result else 0
+            mappings_created = max(0, count_after - count_before)
+            logger.info(f"LLM mappings after procedure: {count_after}, new mappings created: {mappings_created}")
+        except Exception as e:
+            logger.warning(f"Could not count LLM mappings after procedure: {e}")
+        
+        # Fallback: try to parse the result string if DB count failed
+        if mappings_created == 0 and result and isinstance(result, str):
             import re
             match = re.search(r'generated (\d+)', result)
             if match:
                 mappings_created = int(match.group(1))
-                logger.info(f"✓ Successfully created {mappings_created} LLM-based field mappings")
-            else:
-                logger.warning(f"Could not extract mapping count from result string: '{result}'")
-        
-        # Always verify actual mappings in database (more reliable than parsing string)
-        logger.info(f"Verifying actual mappings in database for table='{mapping_request.target_table}', tpa='{mapping_request.tpa}'")
-        safe_table = mapping_request.target_table.replace("'", "''")
-        safe_tpa = mapping_request.tpa.replace("'", "''")
-        
-        check_query = f"""
-            SELECT COUNT(*) as count 
-            FROM {settings.SILVER_SCHEMA_NAME}.FIELD_MAPPINGS 
-            WHERE TARGET_TABLE = '{safe_table}' 
-            AND TPA = '{safe_tpa}'
-            AND MAPPING_METHOD LIKE 'LLM%'
-            AND ACTIVE = TRUE
-        """
-        try:
-            mapping_check = await sf_service.execute_query_dict(check_query)
-            if mapping_check and len(mapping_check) > 0:
-                actual_count = mapping_check[0].get('COUNT', 0)
-                logger.info(f"Database verification: Found {actual_count} LLM mappings")
-                
-                # If we found mappings in DB but didn't parse them from result, use DB count
-                if actual_count > 0 and mappings_created == 0:
-                    mappings_created = actual_count
-                    if not result or not result.strip():
-                        result = f"Successfully generated {actual_count} LLM-based field mappings"
-                    logger.info(f"Updated mappings_created from database: {actual_count}")
-                
-                # If result says 0 but DB has mappings, something is wrong
-                if mappings_created == 0 and actual_count == 0:
-                    logger.error(f"Procedure completed but no mappings were created. Result: '{result}'")
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"LLM procedure completed but no mappings were created. The LLM may have returned an unexpected response format. Please check the logs or try again."
-                    )
-        except HTTPException:
-            raise
-        except Exception as check_error:
-            logger.warning(f"Could not verify mapping count: {check_error}")
-            # If we can't verify but have a result, trust the result
-            if mappings_created == 0 and result:
-                logger.error(f"Cannot verify mappings and result shows 0: '{result}'")
+                logger.info(f"Extracted mappings_created from result string: {mappings_created}")
         
         return {
-            "message": result if result else "LLM auto-mapping completed",
+            "message": result if result else f"LLM auto-mapping completed ({mappings_created} mappings created)",
             "result": result,
             "mappings_created": mappings_created,
-            "success": mappings_created > 0
+            "success": mappings_created > 0 or (result and isinstance(result, str) and "successfully" in result.lower())
         }
     except asyncio.TimeoutError:
         logger.error(f"LLM auto-mapping timed out for TPA {mapping_request.tpa}")
