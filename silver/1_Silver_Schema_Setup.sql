@@ -218,9 +218,9 @@ COMMENT = 'Incremental processing state per TPA. Tracks last processed record fo
 -- METADATA TABLE 8: llm_prompt_templates
 -- ============================================
 
--- Using HYBRID TABLE for fast template lookups
-CREATE HYBRID TABLE IF NOT EXISTS llm_prompt_templates (
-    template_id VARCHAR(100) PRIMARY KEY,
+-- Regular table for LLM prompt templates (small config table, hybrid not needed)
+CREATE TABLE IF NOT EXISTS llm_prompt_templates (
+    template_id VARCHAR(100) NOT NULL,
     template_name VARCHAR(500) NOT NULL,
     template_text VARCHAR(10000) NOT NULL,
     model_name VARCHAR(100),
@@ -229,7 +229,7 @@ CREATE HYBRID TABLE IF NOT EXISTS llm_prompt_templates (
     created_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     updated_timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     created_by VARCHAR(500) DEFAULT CURRENT_USER(),
-    INDEX idx_llm_templates_active (active)
+    CONSTRAINT pk_llm_prompt_templates PRIMARY KEY (template_id)
 )
 COMMENT = 'LLM prompt templates for field mapping. Stores prompts used by Cortex AI for semantic field mapping.';
 
